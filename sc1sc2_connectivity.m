@@ -6,7 +6,7 @@ type=[];
 % % (1) Directories
 % rootDir           = '/Users/jdiedrichsen/Data/super_cerebellum';
 % rootDir           = '/Volumes/MotorControl/data/super_cerebellum_new/';
-rootDir         = '/Users/maedbhking/Documents/Cerebellum_Cognition'; 
+rootDir         = '/Users/maedbhking/Documents/Cerebellum_Cognition';
 sc1Dir            = [rootDir '/sc1'];
 sc2Dir            = [rootDir '/sc2'];
 behavDir        =['data'];
@@ -149,13 +149,15 @@ switch(what)
         for s=1:subjs,
             glmDirSubj=fullfile(glmDir, subj_name{sn(s)});
             load(fullfile(glmDirSubj,'SPM_light.mat'));
-%            load(fullfile(glmDirSubj,'SPM.mat')); 
+            %            load(fullfile(glmDirSubj,'SPM.mat'));
             T=load(fullfile(glmDirSubj,'SPM_info.mat'));
             
             % load data
             tic;
             load(fullfile(sc1Dir,regDir,'data',subj_name{sn(s)},sprintf('regions_%s.mat',type))); % 'regions' are defined in 'ROI_define'
-            SPM=spmj_move_rawdata(SPM,fullfile(rootDir,'sc1',imagingDir,subj_name{sn(s)}));
+%             SPM=spmj_move_rawdata(SPM,fullfile(rootDir,'sc1',imagingDir,subj_name{sn(s)}));
+            SPM=spmj_move_rawdata(SPM,fullfile('/Volumes/Seagate Backup Plus Drive/sc1/imaging_data',subj_name{sn(s)}));
+            
             % Get the raw data files
             V=SPM.xY.VY;
             VresMS = spm_vol(fullfile(glmDirSubj,'ResMS.nii'));
@@ -207,14 +209,15 @@ switch(what)
         for s=1:subjs,
             glmDirSubj=fullfile(glmDir, subj_name{sn(s)});
             load(fullfile(glmDirSubj,'SPM_light.mat'));
-%             load(fullfile(glmDirSubj,'SPM.mat'));
+            %             load(fullfile(glmDirSubj,'SPM.mat'));
             T=load(fullfile(glmDirSubj,'SPM_info.mat'));
             
             % load data
             tic;
             load(fullfile(sc1Dir,regDir,'data',subj_name{sn(s)},sprintf('regions_%s.mat',type))); % 'regions' are defined in 'ROI_define'
-            SPM=spmj_move_rawdata(SPM,fullfile(rootDir,'sc1',imagingDir,subj_name{sn(s)}));
-%             % all imaging_data saved in 'sc1'
+%             SPM=spmj_move_rawdata(SPM,fullfile(rootDir,'sc1',imagingDir,subj_name{sn(s)}));
+            %             % all imaging_data saved in 'sc1'
+            SPM=spmj_move_rawdata(SPM,fullfile('/Volumes/Seagate Backup Plus Drive/sc1/imaging_data',subj_name{sn(s)}));
             % Get the raw data files
             V=SPM.xY.VY;
             VresMS = spm_vol(fullfile(glmDirSubj,'ResMS.nii'));

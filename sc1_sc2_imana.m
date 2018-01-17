@@ -7,12 +7,14 @@ numTRs    = 601;                                                            % pe
 
 %========================================================================================================================
 % (1) Directories
-baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
-% baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
+% baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+baseDir          = '/Volumes/Seagate Backup Plus Drive';
+% baseDir        = '/Volumes/MotorControl/data/super_cerebellum_new';
+% baseDir        = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
 studyDir{2}     =fullfile(baseDir,'sc2');
+restDir         =fullfile(baseDir,'restingState'); 
 behavDir        ='/data';
 imagingDir      ='/imaging_data';
 imagingDirNA    ='/imaging_data_nonaggr';
@@ -35,12 +37,15 @@ encodeDir       ='/encoding';
 % Subjs 1-22 were preprocessed using this script. The naming convention for
 % the dicom files changed after s22 so subjs 23-31 were preprocessed with
 % sc1_sc2_imana_ch (exact same preprocessing steps)
+% this script was used to process resting state data
 
 % MANUAL INPUT REQUIRED FOR THE FOLLOWING VARIABLES:
-% DicomName:  find this in imaging_data_dicom
-% NiiRawName: find this in imaging_data_dicom (numbers before series number)
-% saccRun:    runs to be included for saccade analysis
-% anatNum:    one scan per subject (collected in session 1 of study 1 - usually series 2)
+% DicomName:     find this in imaging_data_dicom
+% rs_DicomName:  find this in restingState
+% NiiRawName:    find this in imaging_data_dicom (numbers before series number)
+% rs_NiiRawName: find this in restingState (numbers before series number)
+% saccRun:       runs to be included for saccade analysis
+% anatNum:       one scan per subject (collected in session 1 of study 1 - usually series 2)
 
 subj_name = {'s01','s02','s03','s04','s05','s06','s07','s08','s09','s10','s11',...
     's12','s13','s14','s15','s16','s17','s18','s19','s20','s21','s22','s23','s24',...
@@ -140,6 +145,40 @@ DicomName{2} = {'',...%s01
     '2017_04_28_VE14.MR.DIEDRICHSEN_MCC',...%s22
     };
 
+rs_DicomName = {'',... %s01
+    '2017_09_07_IO11.MR.DIEDRICHSEN_MCC',...%s02
+    '2017_09_13_UH11.MR.DIEDRICHSEN_MCC',...%s03
+    '',...%s04
+    '',...%s05
+    '2017_08_24_MO28.MR.DIEDRICHSEN_MCC',...%s06
+    '2017_09_05_HI15.MR.DIEDRICHSEN_MCC',...%s07
+    '2017_09_07_NL20.MR.DIEDRICHSEN_MCC',...%s08
+    '',...%s09
+    '2017_08_15_RV14.MR.DIEDRICHSEN_MCC',...%s10
+    '',...%s11
+    '2017_08_11_RM20.MR.DIEDRICHSEN_MCC',...%s12
+    '',...%s13
+    '2017_09_07_SR12.MR.DIEDRICHSEN_MCC',...%s14
+    '',...%s15
+    '',...%s16
+    '',...%s17
+    '2017_09_07_AO21.MR.DIEDRICHSEN_MCC',...%s18
+    '',...%s19
+    '2017_08_24_ML24.MR.DIEDRICHSEN_MCC',...%s20
+    '',...%s21
+    '2017_09_07_VE14.MR.DIEDRICHSEN_MCC',...%s22
+    '2017_09_12_HO21.MR.Diedrichsen_MCC',...%s23
+    '2017_11_01_NA14.MR.Diedrichsen_MCC',...%s24
+    '2017_09_12_DA18.MR.Diedrichsen_MCC',...%s25
+    '2017_11_03_ME01.MR.Diedrichsen_MCC',...%s26
+    '2017_10_25_VI14.MR.Diedrichsen_MCC',...%s27
+    '2017_11_24_ME06.MR.Diedrichsen_MCC',...%s28
+    '2017_11_02_MA19.MR.Diedrichsen_MCC',...%s29
+    '2017_11_01_AV10.MR.Diedrichsen_MCC',...%s30
+    '2017_11_03_MA18.MR.Diedrichsen_MCC',...%s31
+    };
+
+
 NiiRawName{1} = {'160315140823DST131221107524367007',...%s01
     '160323140933DST131221107524367007',...%s01
     '160413101535DST131221107524367007',...%s02
@@ -233,6 +272,39 @@ NiiRawName{2} =  {'',...%s01
     '170427102053DST131221107524367007',...%s22
     };
 
+rs_NiiRawName = {'',...%s01
+    'IO11',...%s02
+    'UH11',...%s03
+    '',...%s04
+    '',...%s05
+    'MO28',...%s06
+    '2017_09_05_HI15',...%s07 (strange formatting for this subject)
+    'NL20',...%s08
+    '',...%s09
+    'RV14',...%s10
+    '',...%s11
+    'RM20',...%s12
+    '',...%s13
+    'SR12',...%s14
+    '',...%s15
+    '',...%s16
+    '',...%s17
+    'AO21',...%s18
+    '',...%s19
+    'ML24',...%s20
+    '',...%s21
+    'VE14',...%s22
+    'HO21',...%s23
+    '171101121712DST131221107524367007',...%s24
+    'DA18',...%s25
+    '171103143826DST131221107524367007',...%s26
+    'VI14',...%s27
+    '171124115601STD131221107524367007',...%s28
+    'MA19',...%s29
+    '171101113420DST131221107524367007',...%s30
+    '171103100256DST131221107524367007',...%s31
+    };
+
 fscanNum{1} = {[3,4,5,6,8,9,10,11],...%s01
     [2,3,4,5,6,7,8,9],...    %s01
     [3,4,5,6,8,10,11,12],... %s02
@@ -324,6 +396,40 @@ fscanNum{2}   = {[],...%s01 functional scans (series number)
     [3,5,7,9,11,13,15,17],...% s22_1
     [2,4,6,8,10,12,14,16],...% s22_2
     };
+
+rs_fscanNum   = {[],...%s01 functional scans (series number)
+    [2,4],...%s02
+    [2,4],...%s03
+    [],...%s04
+    [],...%s05
+    [2,4],...%s06
+    [2,4],...%s07
+    [2,4],...%s08
+    [],...%s09
+    [2,4],...%s10
+    [],...%s11
+    [2,4],...% s12
+    [],...%s13
+    [2,4],...%s14
+    [],...%s15
+    [],...%s16
+    [],...%s17
+    [2,4],...%s18
+    [],...%s19
+    [2,4],...% s20
+    [],...% s21
+    [2,4],...% s22
+    [2,4],...%s23
+    [2,4],...%s24
+    [2,4],...%s25
+    [23,25],...%s26
+    [2,4],...%s27
+    [20,22],...%s28
+    [],...%s29 % need to fix this one
+    [3,5],...%s30
+    [2,4],...%s31
+    };
+ 
 
 saccRun{1} = {[],...%s01
     [1],...      %s02
@@ -454,7 +560,7 @@ hemName   = {'LeftHem','RightHem'};
 
 switch(what)
     
-    case 'ANAT:dicom_import'                 % STEP 1.2: Import anat dicom
+    case 'ANAT:dicom_import'                 % STEP 1.1: Import anat dicom
         % STUDY 1 ONLY
         % converts dicom to nifti files w/ spm_dicom_convert
         % anatomical always collected in study 1, sess 1
@@ -491,7 +597,7 @@ switch(what)
         
         % MAKE SURE TO FIND ANATOMICAL AFTER THIS STEP AND MOVE TO FOLDER
         % Rename to 'anatomical_raw
-    case 'ANAT:reslice_LPI'                  % STEP 1.3: Reslice anatomical image within LPI coordinate systems
+    case 'ANAT:reslice_LPI'                  % STEP 1.2: Reslice anatomical image within LPI coordinate systems
         % STUDY 1 ONLY
         sn  = varargin{1}; % subjNum
         % example: sc1_sc2_imana('ANAT:reslice_LPI',1)
@@ -512,7 +618,7 @@ switch(what)
             spm_write_vol(V,dat);
             display 'Manually retrieve the location of the anterior commissure (x,y,z) before continuing'
         end
-    case 'ANAT:centre_AC'                    % STEP 1.4: Re-centre AC
+    case 'ANAT:centre_AC'                    % STEP 1.3: Re-centre AC
         % STUDY 1 ONLY
         % Set origin of anatomical to anterior commissure (must provide
         % coordinates in section (4)).
@@ -528,7 +634,7 @@ switch(what)
             spm_write_vol(V,dat);
             fprintf('Done for %s',subj_name{sn(s)})
         end
-    case 'ANAT:segmentation'                 % STEP 1.5: Segmentation + Normalisation
+    case 'ANAT:segmentation'                 % STEP 1.4: Segmentation + Normalisation
         % STUDY 1 ONLY
         % example: sc1_imana('ANAT:segmentation',1)
         sn=varargin{1}; % subjNum
@@ -578,7 +684,7 @@ switch(what)
             fprintf('Check segmentation results for %s\n', subj_name{sn(s)})
         end;
         
-    case 'SURF:run_all'                      % STEP 3.3-3.6: enter sn - runs all surface constructions (freesurfer + caret format transformation)
+    case 'SURF:run_all'                      % STEP 2.1-2.5: enter sn - runs all surface constructions (freesurfer + caret format transformation)
         sn=varargin{1};
         
         subjs=length(sn) ;
@@ -588,7 +694,7 @@ switch(what)
             sc1_sc2_imana('SURF:map_ico',sn(s));
             sc1_sc2_imana('SURF:make_caret',sn(s));
         end
-    case 'SURF:recon_all'                    % STEP 1.6: Calls recon_all
+    case 'SURF:recon_all'                    % STEP 2.2: Calls recon_all
         % STUDY 1 ONLY
         % Calls recon-all, which performs, all of the
         % FreeSurfer cortical reconstruction process
@@ -598,7 +704,7 @@ switch(what)
         for i=sn
             freesurfer_reconall(fullfile(studyDir{1},freesurferDir),subj_name{i},fullfile(anatomicalDir,subj_name{i},['anatomical.nii']));
         end
-    case 'SURF:xhemireg'                     % STEP 1.7: cross-register surfaces left / right hem
+    case 'SURF:xhemireg'                     % STEP 2.3: cross-register surfaces left / right hem
         % STUDY 1 ONLY
         % surface-based interhemispheric registration
         % example: sc1_imana('surf_xhemireg',1)
@@ -607,7 +713,7 @@ switch(what)
         for i=s
             freesurfer_registerXhem({subj_name{i}},fullfile(studyDir{1},freesurferDir),'hemisphere',[1 2]); % For debug... [1 2] orig
         end;
-    case 'SURF:map_ico'                      % STEP 1.8: Align to the new atlas surface (map icosahedron)
+    case 'SURF:map_ico'                      % STEP 2.4: Align to the new atlas surface (map icosahedron)
         % STUDY 1 ONLY
         % Resampels a registered subject surface to a regular isocahedron
         % This allows things to happen in atlas space - each vertex number
@@ -621,7 +727,7 @@ switch(what)
         for i=sn
             freesurfer_mapicosahedron_xhem(subj_name{i},fullfile(studyDir{1},freesurferDir),'smoothing',1,'hemisphere',[1:2]);
         end;
-    case 'SURF:make_caret'                   % STEP 1.9: Translate into caret format
+    case 'SURF:make_caret'                   % STEP 2.5: Translate into caret format
         % STUDY 1 ONLY
         % Imports a surface reconstruction from Freesurfer automatically into Caret
         % Makes a new spec file and moves the coord-files to respond to World,
@@ -633,9 +739,9 @@ switch(what)
             caret_importfreesurfer(['x' subj_name{i}],fullfile(studyDir{1},freesurferDir),fullfile(studyDir{1},caretDir));
         end;
         
-    case 'FUNC:func_dicom_import'            % STEP 2.1: Import func dicom
+    case 'FUNC:func_dicom_import'            % STEP 3.1: Import func dicom
         % converts dicom to nifti files w/ spm_dicom_convert
-        % example: sc1_sc2_imana('func_dicom_import',1,1,1)
+        % example: sc1_sc2_imana('FUNC:func_dicom_import',1,1,1)
         sn=varargin{1}; % subjNum
         sess=varargin{2}; % sessNum
         study=varargin{1}; % studyNum
@@ -673,12 +779,12 @@ switch(what)
             end;
             fprintf('Functional runs have been imported. Be sure to copy the unique .nii name for subj files and place into section (4).\n')
         end
-    case 'FUNC:make_4dNifti'                 % STEP 2.2: Make 4dNifti
+    case 'FUNC:make_4dNifti'                 % STEP 3.2: Make 4dNifti
         % merges nifti files for each image into a 4-d nifti (time is 4th
         % dimension) w/ spm_file_merge
         % all imaging data (raw and realigned) for both sc1 and sc2 is
         % saved in sc1
-        % example: sc1_sc2_imana('make_4dNifti',1,1,1)
+        % example: sc1_sc2_imana('FUNC:make_4dNifti',1,1,1)
         sn=varargin{1}; % subjNum
         sess=varargin{2}; % sessNum
         study=varargin{3}; % studyNum
@@ -701,7 +807,7 @@ switch(what)
                 fprintf('Run %d done for %s \n',runs{study}{sess}(i),subj_name{sn(s)});
             end;
         end
-    case 'FUNC:realign'                      % STEP 2.3: Realign functional images (both sessions)
+    case 'FUNC:realign'                      % STEP 3.3: Realign functional images (both sessions)
         % SPM realigns first volume in each run to first volume of first
         % run, and then registers each image in that run to the first
         % volume of that run. Hence also why it's often better to run
@@ -720,7 +826,7 @@ switch(what)
         % to the transformation parameters. This is for functional only!
         
         % all of the imaging data for both sc1 and sc2 are saved sc1 folder
-        % example: sc1_sc2_imana('realign',1,[1:32])
+        % example: sc1_sc2_imana('FUNC:realign',1,[1:32])
         
         sn=varargin{1}; %subjNum
         runs=varargin{2}; % runNum
@@ -741,10 +847,10 @@ switch(what)
             spmj_realign(data);
             fprintf('runsrealigned for %s\n',subj_name{sn(s)});
         end
-    case 'FUNC:move_data'                    % STEP 2.4: Move realigned data
+    case 'FUNC:move_data'                    % STEP 3.4: Move realigned data
         % Moves image data from imaging_dicom_raw into a "working dir":
         % imaging_dicom.
-        % example: sc1_sc2_imana('move_data',1,[1:32])
+        % example: sc1_sc2_imana('FUNC:move_data',1,[1:32])
         sn=varargin{1}; % subjNum
         runs=varargin{2}; % runNum
         
@@ -770,13 +876,13 @@ switch(what)
             
             fprintf('realigned epi''s moved for %s \n',subj_name{sn(s)})
         end
-    case 'FUNC:coreg'                        % STEP 3: STUDY 1:Adjust meanepi to anatomical image REQUIRES USER INPUT
+    case 'FUNC:coreg'                        % STEP 3:5  STUDY 1:Adjust meanepi to anatomical image REQUIRES USER INPUT
         % (1) Manually seed the functional/anatomical registration
         % - Do "coregtool" on the matlab command window
         % - Select anatomical image and meanepi image to overlay
         % - Manually adjust meanepi image and save result as rmeanepi image
         % - Coregistration is done for study 1 only
-        % example: sc1_sc2_imana('coreg',1)
+        % example: sc1_sc2_imana('FUNC:coreg',1)
         sn=varargin{1};% subjNum
         step=varargin{2}; % 'manual' or 'auto'
         
@@ -812,10 +918,10 @@ switch(what)
         % alignment by appending the prefix 'r' to the current file
         % So if you continually update rmeanepi, you'll end up with a file
         % called r...rrrmeanepi.
-    case 'FUNC:make_samealign'               % STEP 4.1: Align functional images to rmeanepi of study 1
+    case 'FUNC:make_samealign'               % STEP 3.6: Align functional images to rmeanepi of study 1
         % Aligns all functional images from both sessions (each study done separately)
         % to rmeanepi of study 1
-        % example: sc1_sc2_imana('make_samealign',1,[1:32])
+        % example: sc1_sc2_imana('FUNC:make_samealign',1,[1:32])
         sn=varargin{1}; % subjNum
         runs=varargin{2}; % runNum
         
@@ -845,9 +951,9 @@ switch(what)
         end
         
         %spmj_checksamealign
-    case 'FUNC:make_maskImage'               % STEP 4.2: STUDY 1:Make mask images (noskull and grey_only)
+    case 'FUNC:make_maskImage'               % STEP 3.7: STUDY 1:Make mask images (noskull and grey_only)
         % Make maskImage meanepi
-        % example: sc1_sc2_imana('make_maskImage',1)
+        % example: sc1_sc2_imana('FUNC:make_maskImage',1)
         sn=varargin{1}; % subjNum
         
         subjs=length(sn);
@@ -881,7 +987,236 @@ switch(what)
             spm_imcalc(nam, 'rmask_noskullEyes.nii', 'i1>2000 & (i2+i3+i4+i5)>0.2')
         end
         
-    case 'GLM:study1_glm4'                   % STEP 7.2c:FAST glm w/out hpf (complex:rest as baseline) - model one instruct period
+    case 'RS:func_dicom_import'              % STEP 4.1: Import rs dicom 
+        % converts dicom to nifti files w/ spm_dicom_convert
+        % example: sc1_sc2_imana('RS:func_dicom_import',2)
+        sn=varargin{1}; % subjNum
+        
+        subjs=length(sn);
+
+        for s=1:subjs,
+            
+            % different saving format for subjs 23-31:
+            if sn(s)>22,
+                fileEnd='dcm';
+            else
+                fileEnd='IMA'; 
+            end
+            
+            cd(fullfile(restDir,dicomDir,[subj_name{sn(s)}]));
+            
+            for i=1:length(rs_fscanNum{sn(s)})
+                r=rs_fscanNum{sn(s)}(i);
+                DIR=dir(sprintf('%s.%4.4d.*.%s',rs_DicomName{sn(s)},r,fileEnd));      % Get DICOM FILE NAMES
+                Names=vertcat(DIR.name);
+                if (~isempty(Names))
+                    HDR=spm_dicom_headers(Names,1);                             % Load dicom headers
+                    dirname{r}=sprintf('series%2.2d',r);
+                    if (~exist(dirname{r}))
+                        mkdir(dirname{r});                                      % make dir for series{r} for .nii file output
+                    end;
+                    dircheck(fullfile(restDir,dicomDir,[subj_name{sn(s)}],dirname{r}));
+                    cd(fullfile(restDir,dicomDir,[subj_name{sn(s)}],dirname{r}));
+                    
+                    spm_dicom_convert(HDR,'all','flat','nii');                  % Convert the data to nifti
+                    cd ..
+                end;
+                display(sprintf('Series %d done \n',rs_fscanNum{sn(s)}(i)))
+            end;
+            fprintf('Functional runs have been imported. Be sure to copy the unique .nii name for subj files and place into section (4).\n')
+        end
+    case 'RS:make_4dNifti'                   % STEP 4.2: Make 4dNifti
+        % merges nifti files for each image into a 4-d nifti (time is 4th
+        % dimension) w/ spm_file_merge
+        % all imaging data (raw and realigned) for both sc1 and sc2 is
+        % saved in sc1
+        % example: sc1_sc2_imana('RS:make_4dNifti',2)
+        sn=varargin{1}; % subjNum
+        
+        subjs=length(sn);
+        for s=1:subjs,
+            dircheck(fullfile(restDir,imagingDirRaw,subj_name{sn(s)}));
+            for i=1:length(rs_fscanNum{sn(s)}),  % run number
+                outfilename = fullfile(restDir,imagingDirRaw,subj_name{sn(s)},sprintf('run_%2.2d.nii',i));
+                for j=1:numTRs-numDummys    % doesn't include dummy scans in .nii file
+                    P{j}=fullfile(restDir,dicomDir,[subj_name{sn(s)}],sprintf('series%2.2d',rs_fscanNum{sn(s)}(i)),...
+                        sprintf('f%s-%4.4d-%5.5d-%6.6d-01.nii',rs_NiiRawName{sn(s)},rs_fscanNum{sn(s)}(i),j+numDummys,j+numDummys));
+                end;
+                spm_file_merge(char(P),outfilename);
+                fprintf('Run %d done for %s \n',(i),subj_name{sn(s)});
+            end;
+        end
+    case 'RS:realign'                        % STEP 4.3: Realign functional images for rs
+        % SPM realigns first volume in each run to first volume of first
+        % run, and then registers each image in that run to the first
+        % volume of that run. Hence also why it's often better to run
+        % anatomical before functional scans.
+        
+        % SPM does this with 4x4 affine transformation matrix in nifti
+        % header (see function 'coords'). These matrices convert from voxel
+        % space to world space(mm). If the first image has an affine
+        % transformation matrix M1, and image two has one (M2), the mapping
+        % from 1 to 2 is: M2/M1 (map image 1 to world space-mm - and then
+        % mm to voxel space of image 2).
+        
+        % Registration determines the 6 parameters that determine the rigid
+        % body transformation for each image (described above). Reslice
+        % conducts these transformations; resampling each image according
+        % to the transformation parameters. This is for functional only!
+        sn=varargin{1}; %subjNum
+        
+        subjs=length(sn);
+        
+        for s=1:subjs,
+            
+            cd(fullfile(restDir,imagingDirRaw,subj_name{sn(s)}));
+            spm_jobman % run this step first
+            
+            data={};
+            for i = 1:length(rs_fscanNum{sn(s)}),
+                for j=1:numTRs-numDummys;
+                    data{i}{j,1}=sprintf('run_%2.2d.nii,%d',i,j);
+                end;
+            end;
+            spmj_realign(data);
+            fprintf('rs runs realigned for %s\n',subj_name{sn(s)});
+        end
+    case 'RS:move_data'                      % STEP 4.4: Move realigned data
+        % Moves image data from imaging_dicom_raw into a "working dir":
+        % imaging_dicom.
+        % example: sc1_sc2_imana('RS:move_data',1)
+        sn=varargin{1}; % subjNum
+        
+        subjs=length(sn);
+        
+        for s=1:subjs,
+            dircheck(fullfile(restDir,imagingDir,subj_name{sn(s)}))
+            for r=1:length(rs_fscanNum{sn(s)});
+                % move realigned data for each run
+                source = fullfile(restDir,imagingDirRaw,subj_name{sn(s)},sprintf('rrun_%2.2d.nii',r));
+                dest = fullfile(restDir,imagingDir,subj_name{sn(s)},sprintf('rrun_%2.2d.nii',r));
+                copyfile(source,dest);
+                
+                % move realignment parameter files for each run
+                source = fullfile(restDir,imagingDirRaw,subj_name{sn(s)},sprintf('rp_run_%2.2d.txt',r));
+                dest = fullfile(restDir,imagingDir,subj_name{sn(s)},sprintf('rp_run_%2.2d.txt',r));
+                copyfile(source,dest);
+            end;
+            % move mean_epis
+            source = fullfile(restDir,imagingDirRaw,subj_name{sn(s)},'meanrun_01.nii');
+            dest = fullfile(restDir,imagingDir,subj_name{sn(s)},'meanepi.nii');
+            copyfile(source,dest);
+            
+            fprintf('realigned epi''s moved for %s \n',subj_name{sn(s)})
+        end
+    case 'RS:coreg'                          % STEP 4.5: Coreg to anat
+        % (1) Manually seed the functional/anatomical registration
+        % - Do "coregtool" on the matlab command window
+        % - Select anatomical image and meanepi image to overlay
+        % - Manually adjust meanepi image and save result as rmeanepi image
+        % - Coregistration is done for study 1 only
+        % example: sc1_sc2_imana('RS:coreg',1)
+        sn=varargin{1};% subjNum
+        step=varargin{2}; % 'manual' or 'auto'
+        
+        cd(fullfile(studyDir{1},anatomicalDir,subj_name{sn}));
+        
+        switch step,
+            case 'manual'
+                coregtool;
+                keyboard();
+            case 'auto'
+                % do nothing
+        end
+        
+        % (2) Automatically co-register functional and anatomical images for study 1
+        J.ref = {fullfile(studyDir{1},anatomicalDir,subj_name{sn},['anatomical.nii'])};
+        J.source = {fullfile(studyDir{1},imagingDir,subj_name{sn},['rmeanepi.nii'])};
+        J.other = {''};
+        J.eoptions.cost_fun = 'nmi';
+        J.eoptions.sep = [4 2];
+        J.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
+        J.eoptions.fwhm = [7 7];
+        matlabbatch{1}.spm.spatial.coreg.estimate=J;
+        spm_jobman('run',matlabbatch);
+        
+        % (3) Manually check again
+        %         coregtool;
+        %         keyboard();
+        
+        % NOTE:
+        % Overwrites meanepi, unless you update in step one, which saves it
+        % as rmeanepi.
+        % Each time you click "update" in coregtool, it saves current
+        % alignment by appending the prefix 'r' to the current file
+        % So if you continually update rmeanepi, you'll end up with a file
+        % called r...rrrmeanepi.
+    case 'RS:make_samealign'                 % STEP 4.6: Align rs func images to rmeanepi
+        % Aligns all functional images from both sessions (each study done separately)
+        % to rmeanepi of study 1
+        % example: sc1_sc2_imana('RS:make_samealign',1)
+        sn=varargin{1}; % subjNum
+        
+        prefix='r';
+        subjs=length(sn);
+        
+        for s=1:subjs,
+            
+            cd(fullfile(restDir,imagingDir,subj_name{sn(s)}));
+            
+            % Select image for reference
+            P{1} = fullfile(restDir,imagingDir,subj_name{sn(s)},'rmeanepi.nii');
+            
+            % Select images to be realigned
+            Q={};
+            for r=1:numel(runs)
+                for i=1:numTRs-numDummys;
+                    Q{end+1}    = fullfile(restDir,imagingDir,subj_name{sn(s)},...
+                        sprintf('%srun_%2.2d.nii,%d',prefix,r,i));
+                end;
+            end;
+            
+            % Run spmj_makesamealign_nifti
+            spmj_makesamealign_nifti(char(P),char(Q));
+            fprintf('functional images realigned for %s',subj_name{sn(s)})
+        end
+    case 'RS:make_maskImage'
+        % Make maskImage meanepi
+        % example: sc1_sc2_imana('RS:make_maskImage',1)
+        sn=varargin{1}; % subjNum
+        
+        subjs=length(sn);
+        
+        for s=1:subjs,
+            cd(fullfile(restDir,imagingDir,subj_name{sn(s)}));
+            
+            nam{1}  = fullfile(restDir,imagingDir,subj_name{sn(s)}, 'rmeanepi.nii');
+            nam{2}  = fullfile(studyDir{1},anatomicalDir, subj_name{sn(s)}, 'c1anatomical.nii');
+            nam{3}  = fullfile(studyDir{1},anatomicalDir, subj_name{sn(s)}, 'c2anatomical.nii');
+            nam{4}  = fullfile(studyDir{1},anatomicalDir, subj_name{sn(s)}, 'c3anatomical.nii');
+            spm_imcalc(nam, 'rmask_noskull.nii', 'i1>1 & (i2+i3+i4)>0.2')
+            
+            nam={};
+            nam{1}  = fullfile(restDir,imagingDir,subj_name{sn(s)}, 'rmeanepi.nii');
+            nam{2}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c1anatomical.nii');
+            spm_imcalc(nam, 'rmask_gray.nii', 'i1>2 & i2>0.4')
+            
+            nam={};
+            nam{1}  = fullfile(restDir,imagingDir,subj_name{sn(s)}, 'rmeanepi.nii');
+            nam{2}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c1anatomical.nii');
+            nam{3}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c5anatomical.nii');
+            spm_imcalc(nam, 'rmask_grayEyes.nii', 'i1>2400 & i2+i3>0.4')
+            
+            nam={};
+            nam{1}  = fullfile(restDir,imagingDir,subj_name{sn(s)}, 'rmeanepi.nii');
+            nam{2}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c5anatomical.nii');
+            nam{3}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c1anatomical.nii');
+            nam{4}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c2anatomical.nii');
+            nam{5}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c3anatomical.nii');
+            spm_imcalc(nam, 'rmask_noskullEyes.nii', 'i1>2000 & (i2+i3+i4+i5)>0.2')
+        end
+        
+    case 'GLM:study1_glm4'                   % STEP 5.1c:FAST glm w/out hpf (complex:rest as baseline) - model one instruct period
         % GLM with FAST and no high pass filtering
         % 'spm_get_defaults' code modified to allow for -v7.3 switch (to save
         % >2MB FAST GLM struct)
@@ -990,7 +1325,7 @@ switch(what)
             save(fullfile(J.dir{1},'SPM_info.mat'),'-struct','T');
             fprintf('glm_%d has been saved for %s \n',glm, subj_name{sn(s)});
         end
-    case 'GLM:study1_glm5'                   % STEP 7.2c:FAST glm w/out hpf (complex:rest as baseline) - model one instruct period - nonAggr!
+    case 'GLM:study1_glm5'                   % STEP 5.2c:FAST glm w/out hpf (complex:rest as baseline) - model one instruct period - nonAggr!
         % GLM with FAST and no high pass filtering
         % 'spm_get_defaults' code modified to allow for -v7.3 switch (to save
         % >2MB FAST GLM struct)
@@ -1099,7 +1434,7 @@ switch(what)
             save(fullfile(J.dir{1},'SPM_info.mat'),'-struct','T');
             fprintf('glm_%d has been saved for %s \n',glm, subj_name{sn(s)});
         end
-    case 'GLM:study1_glm6'                   % STEP 7.2c:FAST glm w/out hpf (complex:rest as baseline) - model one instruct period - Aggr!
+    case 'GLM:study1_glm6'                   % STEP 5.3c:FAST glm w/out hpf (complex:rest as baseline) - model one instruct period - Aggr!
         % GLM with FAST and no high pass filtering
         % 'spm_get_defaults' code modified to allow for -v7.3 switch (to save
         % >2MB FAST GLM struct)
@@ -1208,7 +1543,7 @@ switch(what)
             save(fullfile(J.dir{1},'SPM_info.mat'),'-struct','T');
             fprintf('glm_%d has been saved for %s \n',glm, subj_name{sn(s)});
         end
-    case 'GLM:study2_glm4'                   % STEP 6.2: FAST glm w/out hpf (complex:rest as baseline) - model one instruct period
+    case 'GLM:study2_glm4'                   % STEP 5.4: FAST glm w/out hpf (complex:rest as baseline) - model one instruct period
         % GLM with FAST and no high pass filtering
         % 'spm_get_defaults' code modified to allow for -v7.3 switch (to save
         % >2MB FAST GLM struct)
@@ -1293,7 +1628,7 @@ switch(what)
             save(fullfile(J.dir{1},'SPM_info.mat'),'-struct','T');
             fprintf('glm_%d has been saved for %s \n',glm, subj_name{sn(s)});
         end
-    case 'GLM:study2_glm5'                   % STEP 6.2: FAST glm w/out hpf (complex:rest as baseline) - model one instruct period - nonAggr!
+    case 'GLM:study2_glm5'                   % STEP 5.5: FAST glm w/out hpf (complex:rest as baseline) - model one instruct period - nonAggr!
         % GLM with FAST and no high pass filtering
         % 'spm_get_defaults' code modified to allow for -v7.3 switch (to save
         % >2MB FAST GLM struct)
@@ -1378,7 +1713,7 @@ switch(what)
             save(fullfile(J.dir{1},'SPM_info.mat'),'-struct','T');
             fprintf('glm_%d has been saved for %s \n',glm, subj_name{sn(s)});
         end
-    case 'GLM:study2_glm6'                   % STEP 6.2: FAST glm w/out hpf (complex:rest as baseline) - model one instruct period - Aggr!
+    case 'GLM:study2_glm6'                   % STEP 5.6: FAST glm w/out hpf (complex:rest as baseline) - model one instruct period - Aggr!
         % GLM with FAST and no high pass filtering
         % 'spm_get_defaults' code modified to allow for -v7.3 switch (to save
         % >2MB FAST GLM struct)
@@ -1463,7 +1798,7 @@ switch(what)
             save(fullfile(J.dir{1},'SPM_info.mat'),'-struct','T');
             fprintf('glm_%d has been saved for %s \n',glm, subj_name{sn(s)});
         end
-    case 'GLM:estimate_glm'                  % STEP 7.3: Enter subjNum & glmNum Takes approx 70 minutes!!
+    case 'GLM:estimate_glm'                  % STEP 5.7: Enter subjNum & glmNum Takes approx 70 minutes!!
         % example: sc1_sc2_imana('estimate_glm',1,4,1)
         sn=varargin{1};
         glm=varargin{2};
@@ -1477,7 +1812,7 @@ switch(what)
             SPM.swd=glmDir;
             spm_rwls_spm(SPM);
         end
-    case 'GLM:contrast'                      % STEP 7.4: Define linear contrasts
+    case 'GLM:contrast'                      % STEP 5.8: Define linear contrasts
         % 'SPM_light' is created in this step (xVi is removed as it slows
         % down code for FAST GLM)
         % example: sc1_sc2_imana('contrast',1,4,1)
@@ -1519,7 +1854,7 @@ switch(what)
             end
         end
         
-    case 'SUIT:run_all'                      % STEP 8.1-8.5
+    case 'SUIT:run_all'                      % STEP 9.1-8.5
         % example: sc1_sc2_imana('SUIT:run_all',2,4)
         sn = varargin{1}; % subjNum
         glm = varargin{2}; % glmNum
@@ -1540,7 +1875,7 @@ switch(what)
             sc1_sc2_imana('SUIT:reslice',s,2,glm,'betas','cereb_prob_corr_grey');
             fprintf('suit data processed for %s',subj_name{s})
         end
-    case 'SUIT:isolate_segment'              % STEP 1.10:Segment cerebellum into grey and white matter
+    case 'SUIT:isolate_segment'              % STEP 9.2:Segment cerebellum into grey and white matter
         % STUDY 1 ONLY
         sn=varargin{1};
         %         spm fmri
@@ -1552,7 +1887,7 @@ switch(what)
             cd(fullfile(suitSubjDir));
             suit_isolate_seg({fullfile(suitSubjDir,'anatomical.nii')},'keeptempfiles',1);
         end
-    case 'SUIT:make_mask_cortex'
+    case 'SUIT:make_mask_cortex'             % STEP 9.3:
         % STUDY 1
         sn=varargin{1};
         
@@ -1585,7 +1920,7 @@ switch(what)
             cd(fullfile(studyDir{1},regDir,'data',subj_name{sn(s)}))
             region_saveasimg(R{1},R{1}.file);
         end
-    case 'SUIT:corr_cereb_cortex_mask'
+    case 'SUIT:corr_cereb_cortex_mask'       % STEP 9.4:
         sn=varargin{1};
         % STUDY 1
         
@@ -1612,7 +1947,7 @@ switch(what)
             % remove buffer from cortex
             spm_imcalc({cortexGrey,bufferVox},cortexGrey2,'i1-i2')
         end
-    case 'SUIT:normalise_dartel'             % STEP 8.2: Normalise the cerebellum into the SUIT template.
+    case 'SUIT:normalise_dartel'             % STEP 9.5: Normalise the cerebellum into the SUIT template.
         % STUDY 1
         % Normalise an individual cerebellum into the SUIT atlas template
         % Dartel normalises the tissue segmentation maps produced by suit_isolate
@@ -1642,7 +1977,7 @@ switch(what)
         % directory for 'u_a_anatomical_segment1.nii' file - previously it
         % was giving a 'file2mat' error because it mistakenly believed that
         % this file had been created
-    case 'SUIT:normalise_dentate'            % STEP 8.3: Uses an ROI from the dentate nucleus to improve the overlap of the DCN
+    case 'SUIT:normalise_dentate'            % STEP 9.6: Uses an ROI from the dentate nucleus to improve the overlap of the DCN
         % STUDY 1
         sn=varargin{1}; %subjNum
         type=varargin{2}; % 'grey' or 'whole'
@@ -1660,7 +1995,7 @@ switch(what)
         end
         
         suit_normalize_dentate(job);
-    case 'SUIT:make_mask'                    % STEP 8.4: Make cerebellar mask using SUIT
+    case 'SUIT:make_mask'                    % STEP 9.7: Make cerebellar mask using SUIT
         % STUDY 1 ONLY
         % example: sc1_sc2_imana('SUIT:make_mask',1,4,'grey')
         sn=varargin{1}; % subjNum
@@ -1684,7 +2019,7 @@ switch(what)
             cd(fullfile(studyDir{1},suitDir,'anatomicals',subj_name{sn(s)}));
             spm_imcalc({mask,suit},omask,'i1>0 & i2>0.7',{});
         end
-    case 'SUIT:reslice'                      % STEP 8.5: Reslice the contrast images from first-level GLM
+    case 'SUIT:reslice'                      % STEP 9.8: Reslice the contrast images from first-level GLM
         % Reslices the functional data (betas, contrast images or ResMS)
         % from the first-level GLM using deformation from
         % 'suit_normalise_dartel'.
@@ -1781,7 +2116,7 @@ switch(what)
                 %             sc1_SC2_imana('ROI:RDM_stability',s,glm,type)
             end
         end
-    case 'ROI:define'                        % STEP 9.1: Enter subjNum and glmNum. Defines ROIs that are referenced in (2) at start of sc1_sc2_imana
+    case 'ROI:define'                        % STEP 10.1: Enter subjNum and glmNum. Defines ROIs that are referenced in (2) at start of sc1_sc2_imana
         % STUDY 1 ONLY
         
         % Run FREESURFER before this step!
@@ -2024,7 +2359,7 @@ switch(what)
             save(fullfile(studyDir{1},regDir,'data',subj_name{sn(s)},sprintf('regions_%s.mat',type)),'R');
             fprintf('ROIs have been defined for %s for %s \n',type,subj_name{sn(s)})
         end
-    case 'ROI:betas'                         % STEP 9.4: Extract betas and prewhiten (apply none, uni and multi noise normalisation)
+    case 'ROI:betas'                         % STEP 10.2: Extract betas and prewhiten (apply none, uni and multi noise normalisation)
         % Betas are not multivariately noise-normalised in this version of
         % the code. See 'sc1_imana_backUp' code for this option
         % Betas are computed for all regions (both hemispheres for cortical ROIs).
@@ -2075,7 +2410,7 @@ switch(what)
             save(fullfile(studyDir{study},regDir,sprintf('glm%d',glm),subj_name{sn(s)},outfile),'B');
             fprintf('betas computed and saved for %s (%s) for study%d %s \n',subj_name{sn(s)},sprintf('glm%d',glm),study,type);
         end
-    case 'ROI:stats'                         % STEP 9.5: Calculate G/second-moment matrix,distance estimates (Mahalanobis),pattern consistencies for all regions
+    case 'ROI:stats'                         % STEP 10.3: Calculate G/second-moment matrix,distance estimates (Mahalanobis),pattern consistencies for all regions
         sn=varargin{1}; % subjNum
         study=varargin{2}; % studyNum
         glm =varargin{3}; % glmNum
@@ -2164,7 +2499,7 @@ switch(what)
             save(fullfile(studyDir{study},regDir,sprintf('glm%d',glm),subj_name{sn(s)},sprintf('Ttasks_%s.mat',type)),'Ts'); % used to visualise RDMs and MDS
             fprintf('GLM %d stats are done for study%d %s (%s). \n',glm,study,subj_name{sn(s)},type)
         end
-    case 'ROI:RDM_stability'                 % STEP 9.6: Pearson's corr for split-half reliability of LDC distances
+    case 'ROI:RDM_stability'                 % STEP 10.4: Pearson's corr for split-half reliability of LDC distances
         % example: sc1_imana('ROI_RDM_stability',1,1)
         sn=varargin{1}; % subjNum
         glm=varargin{2}; % glmNum
@@ -2216,7 +2551,7 @@ switch(what)
             fprintf('Correlation stats are done for %s (%s) for %s \n',subj_name{sn(s)}, sprintf('glm%d',glm),type)
         end
         
-    case 'PREP:run_indiv'
+    case 'PREP:run_indiv'                    % STEP 11.1: 
         sn=varargin{1}; % subjNum. use 'returnSubjs' for the 'PREP:voxels_all' and 'PREP:avrg_betas' cases
         study=varargin{2};
         glm=varargin{3}; % glmNum
@@ -2231,7 +2566,7 @@ switch(what)
                 sc1_sc2_imana('PREP:cortex:surface_betas',sn,study,glm,'ResMS')
                 sc1_sc2_imana('PREP:cortex:indiv_vertices',sn,study,glm)
         end
-    case 'PREP:run_allSubj'
+    case 'PREP:run_allSubj'                  % STEP 11.2: 
         study=varargin{1};
         glm=varargin{2}; % glmNum
         type=varargin{3}; % 'cereb' or 'cortex'
@@ -2243,8 +2578,8 @@ switch(what)
             case 'cortex'
                 sc1_sc2_imana('PREP:betas_all',returnSubjs,glm,'cortex',[1:2])
                 sc1_sc2_imana('PREP:avrg_betas',returnSubjs,study,glm,'cortex',[1:2])
-        end    
-    case 'PREP:avrgMask_cereb'
+        end
+    case 'PREP:avrgMask_cereb'               % STEP 11.3: 
         sn=varargin{1};
         
         subjs=length(sn);
@@ -2256,7 +2591,7 @@ switch(what)
         spm_imcalc(nam,'cerebellarGreySUIT.nii','mean(X)',opt);
         
         fprintf('averaged cerebellar grey mask in SUIT space has been computed \n')
-    case 'PREP:cereb:suit_betas'             % STEP 10.1: Reslice univar pre-whitened betas into suit space
+    case 'PREP:cereb:suit_betas'             % STEP 11.4: Reslice univar pre-whitened betas into suit space
         sn=varargin{1};
         study=varargin{2};
         glm=varargin{3};
@@ -2301,7 +2636,7 @@ switch(what)
             save(fullfile(studyDir{study},suitDir,sprintf('glm%d',glm),subj_name{sn(s)},'wdBetas_UW.mat'),'D');
             fprintf('UW betas resliced into suit space for %s \n',subj_name{sn(s)});
         end
-    case 'PREP:cortex:surface_betas'         % STEP 10.1: Map betas and ResMS (.nii) onto surface (.metric)
+    case 'PREP:cortex:surface_betas'         % STEP 11.5: Map betas and ResMS (.nii) onto surface (.metric)
         % Run FREESURFER before this step!
         % map volume images to metric file and save them in individual
         % surface folder
@@ -2345,7 +2680,7 @@ switch(what)
                 fprintf('%s map to surface for %s:%s \n',contrast,subj_name{sn(s)},hemName{h});
             end;
         end
-    case 'PREP:cereb:indiv_voxels'           % STEP 10.2: Get UW cerebellar data (voxels)
+    case 'PREP:cereb:indiv_voxels'           % STEP 11.6: Get UW cerebellar data (voxels)
         sn=varargin{1};
         study=varargin{2};
         glm=varargin{3};
@@ -2427,7 +2762,7 @@ switch(what)
             fprintf('cerebellar voxels (%s) computed for %s \n',data,subj_name{sn(s)});
             clear B1 idx Bb indx
         end
-    case 'PREP:cortex:indiv_vertices'        % STEP 10.3: Get UW cortical data( vertices)
+    case 'PREP:cortex:indiv_vertices'        % STEP 11.7: Get UW cortical data( vertices)
         sn=varargin{1};
         study=varargin{2};
         glm=varargin{3};
@@ -2466,7 +2801,7 @@ switch(what)
                 clear B R Y
             end
         end
-    case 'PREP:betas_all'
+    case 'PREP:betas_all'                    % STEP 11.8
         sn=varargin{1};
         glm=varargin{2};
         type=varargin{3}; % 'cortex' or 'cerebellum'
@@ -2558,7 +2893,7 @@ switch(what)
         else
             save(fullfile(studyDir{2},regDir,sprintf('glm%d',glm),sprintf('G_hat_sc1_sc2_sess_%s.mat',type)),'G_hat_sc1','G_hat_sc2');
         end
-    case 'PREP:avrg_betas'
+    case 'PREP:avrg_betas'                   % STEP 11.9
         sn=varargin{1};
         study=varargin{2}; % studyNum
         glm=varargin{3}; % glmNum

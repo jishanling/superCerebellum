@@ -3,7 +3,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
 % baseDir            = '/Volumes/MotorControl/data/super_cerebellum';
-baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
+% baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
 studyDir{2}     =fullfile(baseDir,'sc2');
@@ -23,6 +23,8 @@ removeFeats={[],... % SC1_Sess1
     [],... % SC1_Sess2
     [],... % SC2_Sess1
     []};   % SC2_Sess2
+
+studyNum=[1;2]; 
 
 switch what
     
@@ -47,6 +49,7 @@ switch what
                 sc1_sc2_functionalAtlas('ICA:funcBound:GROUP','SC2',var*100,'func2');
         end
     case 'EVAL:runIndiv'
+        routine=varargin{1}; % 'ICA' or 'SNN'
         var={.80,.95}; % 80% for SC1 and 95% for SC2
         
         for s=1:length(returnSubjs),
@@ -68,6 +71,7 @@ switch what
             sc1_sc2_functionalAtlas('ICA:funcBound:LEAVEONEOUT',returnSubjs(s),1,var{1},'func2')
             sc1_sc2_functionalAtlas('ICA:funcBound:LEAVEONEOUT',returnSubjs(s),2,var{2},'func1')
         end
+        
     case 'EVAL:get_data'
         sn=varargin{1}; % Subje numbers to include
         study=varargin{2}; % 1 or 2 or [1,2]
@@ -161,25 +165,24 @@ switch what
         K=varargin{3}; % number of clusters
         type=varargin{4}; % 'group','indiv','leaveOneOut'
         
-        vararginoptions({varargin{5:end}},{'var'}); % var explained. (.95,.90,.80 etc)
-        
         % figure out if individual or group or leave one out
         switch type,
             case 'group'
                 sn=returnSubjs;
-                outDir=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));
+                outDir=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir); 
                 outName=fullfile(outDir,'SNN.mat');
             case 'indiv'
                 outDir=fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn});
                 outName=fullfile(outDir,sprintf('SNN_SC%d_%dcluster.mat',study,K));
             case 'leaveOneOut'
-                outDir=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));
+                outDir=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K)); dircheck(outDir); 
                 outName=fullfile(outDir,sprintf('SNN_leaveOut_%s.mat',subj_name{sn}));
                 sn=returnSubjs(returnSubjs~=sn);
         end
         
         [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study);
         [F,G,Err1]=semiNonNegMatFac(X_C,K,'threshold',0.01);
+        fprintf('SNN map (%d clusters) created for %s \n',K,type)
         save(fullfile(outName),'F','G','volIndx','V');
     case 'EVAL:visualise_ICA_map'
         sn=varargin{1}; % [2] or 'group'
@@ -280,7 +283,7 @@ switch what
         sn=varargin{1}; % [2] or 'group'
         study=varargin{2}; % 1 or 2 or [1,2]
         K=varargin{3}; % number of clusters
-        type=varargin{4};
+        type=varargin{4}; % 'group','indiv',or 'leaveOneOut'
         
         % figure out if individual or group
         switch type,
@@ -312,22 +315,37 @@ switch what
         X.fname=outName;
         X.private.dat.fname=V.fname;
         spm_write_vol(X,Vv{1}.dat);
-    case 'EVAL:funcBound:GROUP'
-        study=varargin{1}; 
-        mapType=varargin{2}; % look in sc2/encoding/glm4 for map names (options are: 'lob10','lob26','SC1_95POV', 'SC1SC2_95POV' etc)
-        data=varargin{3};
+        
+        figure()
+        title(sprintf('%d clusters',K))
+        M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
+        suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
+        
+    case 'EVAL:bounds:GROUP' 
+        % code is written now so that func map from sc1 is always evaluated
+        % on sc2 data (and vice versa)
+        study=varargin{1}; % is map built on study [1] or [2] ?
+        mapType=varargin{2}; % options are 'lob10','lob26','bucknerRest','SC2_5cluster', or 'SC2_50POV'. (For func options - look in encoding/glm4)
+        data=varargin{3}; % evaluating data from study [1] or [2] ?
+        eval=varargin{4}; % 'unique' or 'all'. Are we evaluating on all taskConds or just those unique to either sc1 or sc2 ?
         
         % load in map
-        mapName=fullfile(studyDir{study},encodeDir,'glm4',mapType,'map.nii');
+        mapName=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
+
+        % load in func data to test (e.g. if map is sc1; func data should
+        % be sc2)
+        load(fullfile(studyDir{data},'encoding','glm4','cereb_avrgDataStruct.mat'));
         
-        % load in func data to test
-        switch data
-            case 'func1'
-                load(fullfile(studyDir{1},'encoding','glm4','cereb_avrgDataStruct.mat'));
-            case 'func2'
-                load(fullfile(studyDir{2},'encoding','glm4','cereb_avrgDataStruct.mat'));
+        switch eval,
+            case 'unique'
+                % if funcMap - only evaluate unique tasks in sc1 or sc2
+                D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+                D1=getrow(D,D.StudyNum==data); 
+                idx=D1.condNum(D1.overlap==0); % get index for unique tasks
+            case 'all'
+                idx=D1.condNum; 
         end
-        
+
         % Now get the parcellation sampled into the same space
         [i,j,k]=ind2sub(V.dim,volIndx);
         [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
@@ -341,12 +359,14 @@ switch what
         RR=[];
         [BIN,R]=mva_spatialCorrBin(XYZ(:,voxIn),'Parcel',Parcel(1,voxIn));
         clear XYZ i k l x y z i1 j1 k1 VA Parcel; % Free memory
-        % Now calucalte the uncrossvalidated and crossvalidated
+        % Now calculate the uncrossvalidated and crossvalidated
         % Estimation of the correlation for each subject
+        i1=idx;
+        i2=idx+length(unique(T.cond)); % these indices are the same for every subj
         for sn=unique(T.SN)';
-            i1 = find(T.SN==sn & T.sess==1);
-            i2 = find(T.SN==sn & T.sess==2);
-            D=(T.data(i1,voxIn)+T.data(i2,voxIn))/2; % why divide by 2 ?
+%             i1 = find(T.SN==sn & T.sess==1);
+%             i2 = find(T.SN==sn & T.sess==2);
+            B=(T.data(i1,voxIn)+T.data(i2,voxIn))/2; % why divide by 2 ?
             
             fprintf('%d cross\n',sn);
             R.SN = ones(length(R.N),1)*sn;
@@ -355,13 +375,12 @@ switch what
             R.crossval = ones(length(R.corr),1);
             RR = addstruct(RR,R);
             fprintf('%d correl\n',sn);
-            R.corr=mva_spatialCorr(D,BIN);
+            R.corr=mva_spatialCorr(B,BIN);
             R.crossval = zeros(length(R.corr),1);
             RR = addstruct(RR,R);
         end;
-        save(fullfile(studyDir{study},'encoding','glm4',mapType,sprintf('spatialBound%s.mat',data)),'-struct','RR');
-   
-    case 'EVAL:funcBound:INDIV' % NEED TO UPDATE FOR SNN !!
+        save(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d.mat',data)),'-struct','RR');
+    case 'EVAL:bounds:INDIV' % NEED TO UPDATE FOR SNN !!
         sn=varargin{1}; % [2]
         study=varargin{2}; % 1 or 2
         var=varargin{3}; % .95
@@ -410,7 +429,7 @@ switch what
             RR = addstruct(RR,R);
         end;
         save(outName,'-struct','RR');
-    case 'EVAL:funcBound:LEAVEONEOUT' % NEED TO UPDATE FOR SNN !!
+    case 'EVAL:bounds:LEAVEONEOUT' % NEED TO UPDATE FOR SNN !!
         sn=varargin{1}; % [2]
         study=varargin{2}; % 1 or 2
         var=varargin{3}; % .95
@@ -457,6 +476,7 @@ switch what
         R.crossval = zeros(length(R.corr),1);
         RR = addstruct(RR,R);
         save(outName,'-struct','RR');
+        
     case 'ICA:PLOT:POV' % NEED TO UPDATE FOR SNN !!
         study=varargin{1}; % 1 or 2
         var=varargin{2}; % {95,90,85,80,75,70,65,60,55,50}
