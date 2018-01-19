@@ -24,58 +24,63 @@ removeFeats={[],... % SC1_Sess1
     [],... % SC2_Sess1
     []};   % SC2_Sess2
 
-studyNum=[1;2]; 
-
 switch what
     
     case 'TASKSPACE:overlap'
     case 'TASKSPACE:contrasts'
         
-    case 'EVAL:runGroup'
-        study=varargin{1}; % 1 or 2 or [1,2]
-        var=varargin{2};% examples: .95 or .90
-        type=varargin{3}; % 'generalisability' or 'reliability'
+    case 'ATLAS:finalMap'
+        % example: 'sc1_sc2_functionalAtlas('ATLAS:finalMap',[2],1,13,'leaveOneOut')
+        K=varargin{1}; % number of clusters
         
-        sc1_sc2_functionalAtlas('ICA:make_map','group',study,var*100,'group')
-        sc1_sc2_functionalAtlas('ICA:visualise_map','group',study,var*100,'group')
-        switch type
-            case 'generalisability'
-                % Generalisability
-                sc1_sc2_functionalAtlas('ICA:funcBound:GROUP','SC1',var*100,'func2');
-                sc1_sc2_functionalAtlas('ICA:funcBound:GROUP','SC2',var*100,'func1');
-            case 'reliability'
-                % Reliability
-                sc1_sc2_functionalAtlas('ICA:funcBound:GROUP','SC1',var*100,'func1');
-                sc1_sc2_functionalAtlas('ICA:funcBound:GROUP','SC2',var*100,'func2');
-        end
-    case 'EVAL:runIndiv'
-        routine=varargin{1}; % 'ICA' or 'SNN'
-        var={.80,.95}; % 80% for SC1 and 95% for SC2
+        sn=returnSubjs;
+        outName=fullfile(studyDir{2},encodeDir,'glm4','atlasFinal.nii');
         
-        for s=1:length(returnSubjs),
-            for study=1:2,
-                sc1_sc2_functionalAtlas('ICA:make_map',returnSubjs(s),study,var{study},'indiv')
-                sc1_sc2_functionalAtlas('ICA:visualise_map',returnSubjs(s),study,var{study},'indiv')
-            end
-            sc1_sc2_functionalAtlas('ICA:funcBound:INDIV',returnSubjs(s),1,var{1},'func2')
-            sc1_sc2_functionalAtlas('ICA:funcBound:INDIV',returnSubjs(s),2,var{2},'func1')
-        end
-    case 'EVAL:runLeaveOneOut'
-        var={.80,.95};
+        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,[1,2]);
+        [F,G,Err1]=semiNonNegMatFac(X_C,K,'threshold',0.01);
+        fprintf('final atlas created for %s \n',K)
         
-        for s=1:length(returnSubjs),
-            for study=1:2,
-                sc1_sc2_functionalAtlas('ICA:make_map',returnSubjs(s),study,var{study},'leaveOneOut')
-                sc1_sc2_functionalAtlas('ICA:visualise_map',returnSubjs(s),study,var{study},'leaveOneOut')
-            end
-            sc1_sc2_functionalAtlas('ICA:funcBound:LEAVEONEOUT',returnSubjs(s),1,var{1},'func2')
-            sc1_sc2_functionalAtlas('ICA:funcBound:LEAVEONEOUT',returnSubjs(s),2,var{2},'func1')
-        end
+        [~,groupFeat]=max(G,[],2);
+        
+        % map features on group
+        Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
+        Yy(1,volIndx)=groupFeat;
+        Yy=reshape(Yy,[V.dim(1),V.dim(2),V.dim(3)]);
+        Yy(Yy==0)=NaN;
+        Vv{1}.dat=Yy;
+        Vv{1}.dim=V.dim;
+        Vv{1}.mat=V.mat;
+        
+        % save out vol of feats
+        exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
+        X=spm_vol(exampleVol);
+        X.fname=outName;
+        X.private.dat.fname=V.fname;
+        spm_write_vol(X,Vv{1}.dat);
+        
+        % save out metric file
+        % map vol 2 surf
+        M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode','type','paint');
+        M.column_name={'atlasFinal'};
+        
+        caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','atlasFinal.paint'),M);
+        
+        % make areacolour
+        cmap=load(fullfile(studyDir{2},caretDir,'suit_flat','glm4','features.txt'));
+        M.column_name=M.paintnames;
+        M.column_color_mapping=repmat([-5 5],length(M.column_name),1);
+        M.data=cmap(1:length(M.column_name),2:4);
+        caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','atlasFinal.areacolor'),M);
+        
+        figure()
+        title('final atlas')
+        M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
+        suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
         
     case 'EVAL:get_data'
         sn=varargin{1}; % Subje numbers to include
         study=varargin{2}; % 1 or 2 or [1,2]
-
+        
         % load data
         UFullAvrgAll=[];
         for f=1:length(study),
@@ -157,9 +162,9 @@ switch what
         [S_PW,A_PW,W_PW] = fastica(X_C,'pcaE',E,'pcaD',D,'whiteSig',X_PW,'whiteMat',whiteningMatrix,'dewhiteMat',dewhiteningMatrix);
         
         dircheck(fullfile(outDir));
-        save(fullfile(outName),'S_PW','A_PW','W_PW','X_PW','whiteningMatrix','dewhiteningMatrix','volIndx','V');   
+        save(fullfile(outName),'S_PW','A_PW','W_PW','X_PW','whiteningMatrix','dewhiteningMatrix','volIndx','V');
     case 'EVAL:make_SNN_map'
-       % example: 'sc1_sc2_functionalAtlas('EVAL:make_SNN_map',[2],1,13,'leaveOneOut')
+        % example: 'sc1_sc2_functionalAtlas('EVAL:make_SNN_map',[2],1,13,'leaveOneOut')
         sn=varargin{1}; % subjNum or 'group'
         study=varargin{2}; % 1 or 2 or [1,2]
         K=varargin{3}; % number of clusters
@@ -169,13 +174,13 @@ switch what
         switch type,
             case 'group'
                 sn=returnSubjs;
-                outDir=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir); 
+                outDir=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir);
                 outName=fullfile(outDir,'SNN.mat');
             case 'indiv'
                 outDir=fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn});
                 outName=fullfile(outDir,sprintf('SNN_SC%d_%dcluster.mat',study,K));
             case 'leaveOneOut'
-                outDir=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K)); dircheck(outDir); 
+                outDir=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K)); dircheck(outDir);
                 outName=fullfile(outDir,sprintf('SNN_leaveOut_%s.mat',subj_name{sn}));
                 sn=returnSubjs(returnSubjs~=sn);
         end
@@ -189,7 +194,6 @@ switch what
         study=varargin{2}; % 1 or 2 or [1,2]
         var=varargin{3}; % {.95,.90} etc
         type=varargin{4};
-        metric=varargin{5}; % save out metric file: 'yes' or 'no'
         
         feat=1;
         
@@ -259,26 +263,6 @@ switch what
         X.fname=outName;
         X.private.dat.fname=V.fname;
         spm_write_vol(X,Vv{1}.dat);
-        
-        switch metric,
-            case 'yes'
-                % map vol 2 surf
-                M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode','type','paint');
-                M.paintnames=featNames;
-                M.num_paintnames=length(featNum);
-                M.column_name={sprintf('SC%d-%d%%',study,var*100)};
-                
-                caret_save(fullfile(studyDir{study},caretDir,'suit_flat','glm4',sprintf('funcMap_SC%d_sess%d_%s.paint',study,sess,parcelType)),M);
-                
-                %         % make areacolour
-                cmap=load(fullfile(studyDir{1},encodeDir,'glm4','features.txt'));
-                M.column_name=M.paintnames;
-                M.column_color_mapping=repmat([-5 5],length(featNum),1);
-                M.data=cmap(1:length(featNum),2:4);
-                caret_save(fullfile(studyDir{1},caretDir,'suit_flat','glm4','ICA_features.areacolor'),M);
-            case 'no'
-                % do nothing
-        end
     case 'EVAL:visualise_SNN_map'
         sn=varargin{1}; % [2] or 'group'
         study=varargin{2}; % 1 or 2 or [1,2]
@@ -319,19 +303,18 @@ switch what
         figure()
         title(sprintf('%d clusters',K))
         M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
-        suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
-        
-    case 'EVAL:bounds:GROUP' 
+        suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))   
+    case 'EVAL:bounds:GROUP'
         % code is written now so that func map from sc1 is always evaluated
         % on sc2 data (and vice versa)
         study=varargin{1}; % is map built on study [1] or [2] ?
-        mapType=varargin{2}; % options are 'lob10','lob26','bucknerRest','SC2_5cluster', or 'SC2_50POV'. (For func options - look in encoding/glm4)
+        mapType=varargin{2}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
         data=varargin{3}; % evaluating data from study [1] or [2] ?
         eval=varargin{4}; % 'unique' or 'all'. Are we evaluating on all taskConds or just those unique to either sc1 or sc2 ?
         
         % load in map
         mapName=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
-
+        
         % load in func data to test (e.g. if map is sc1; func data should
         % be sc2)
         load(fullfile(studyDir{data},'encoding','glm4','cereb_avrgDataStruct.mat'));
@@ -340,12 +323,12 @@ switch what
             case 'unique'
                 % if funcMap - only evaluate unique tasks in sc1 or sc2
                 D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
-                D1=getrow(D,D.StudyNum==data); 
+                D1=getrow(D,D.StudyNum==data);
                 idx=D1.condNum(D1.overlap==0); % get index for unique tasks
             case 'all'
-                idx=D1.condNum; 
+                idx=D1.condNum;
         end
-
+        
         % Now get the parcellation sampled into the same space
         [i,j,k]=ind2sub(V.dim,volIndx);
         [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
@@ -364,8 +347,8 @@ switch what
         i1=idx;
         i2=idx+length(unique(T.cond)); % these indices are the same for every subj
         for sn=unique(T.SN)';
-%             i1 = find(T.SN==sn & T.sess==1);
-%             i2 = find(T.SN==sn & T.sess==2);
+            %             i1 = find(T.SN==sn & T.sess==1);
+            %             i2 = find(T.SN==sn & T.sess==2);
             B=(T.data(i1,voxIn)+T.data(i2,voxIn))/2; % why divide by 2 ?
             
             fprintf('%d cross\n',sn);
@@ -477,69 +460,74 @@ switch what
         RR = addstruct(RR,R);
         save(outName,'-struct','RR');
         
-    case 'ICA:PLOT:POV' % NEED TO UPDATE FOR SNN !!
-        study=varargin{1}; % 1 or 2
-        var=varargin{2}; % {95,90,85,80,75,70,65,60,55,50}
-        data=varargin{3}; % 'func1' or 'func2'
+    case 'EVAL:PLOT:allMaps'
+        study=varargin{1};% is map built on study [1] or [2] ?
+        mapType=varargin{2}; % {'lob10','bucknerRest','SC1_5cluster'}
+        data=varargin{3}; % evaluating data from study [1] or [2] ?
         
         P=[];
-        for t=1:length(var),
-            T=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_SC%d_%dPOV',study,var{t}*100),sprintf('spatialBound%s.mat',data)));
+        for m=1:length(mapType),
+            T=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d.mat',data)));
             
-            W=getrow(T,T.crossval==1 & T.bwParcel==0); % crossVal + within
-            B=getrow(T,T.crossval==1 & T.bwParcel==1); % crossVal + between
-            
-            S.wDist=unique(W.dist);
-            S.bDist=unique(B.dist);
-            for d=1:length(S.wDist),
-                w=tapply(W,{'SN','corr'},{'bin','mean','subset',W.dist==S.wDist(d),'name','mBin'});
-                b=tapply(B,{'SN','corr'},{'bin','mean','subset',B.dist==S.bDist(d),'name','mBin'});
-                [S.t(d),S.p(d)]=ttest(w.corr,b.corr,2,'paired');
-            end
-            S.t=S.t'; S.p=S.p';
-            S.POV=repmat(var{t},length(S.wDist),1);
-            P=addstruct(P,S);
-            clear S
+            A=getrow(T,T.crossval==1);
+            A.type=repmat({mapType{m}},length(A.SN),1);
+            A.m=repmat(m,length(A.SN),1);
+            P=addstruct(P,A);
+            clear A
         end
         
-        figure('rend','painters','pos',[20 20 1000 800])
-        lineplot(P.wDist,P.t,'split',P.POV,'leg','auto','style_shade')
-        axis auto 
-    case 'ICA:PLOT:GROUP' % NEED TO UPDATE FOR SNN !!
-        study=varargin{1};
-        var=varargin{2};
-        data=varargin{3};
-        type=varargin{4}; % 'group or 'leaveOneOut' or 'Indiv'
+        % plot correlations (across clusters) for within
+        figure('name','within')
+        xyplot(P.dist,P.corr,P.bin,'split',P.type,'leg','auto','subset',P.bwParcel==0,'style_thickline');
+        
+        % plot correlations (across clusters) for between
+        figure('name','between')
+        xyplot(P.dist,P.corr,P.bin,'split',P.type,'leg','auto','subset',P.bwParcel==1,'style_thickline');
+        
+        % plot boxplot of different clusters
+        W=getrow(P,P.bwParcel==0); % within
+        B=getrow(P,P.bwParcel==1); % between
+        W.diff=W.corr-B.corr;
+        
+        figure()
+        myboxplot(W.m,W.diff) % within-between diff
+        figure()
+        lineplot(W.m,W.diff) % within-between diff
+    case 'EVAL:PLOT:GROUP'
+        study=varargin{1};% is map built on study [1] or [2] ?
+        mapType=varargin{2}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
+        data=varargin{3}; % evaluating data from study [1] or [2] ?
+        type=varargin{4}; % 'group' or 'leaveOneOut'
         
         switch type,
             case 'group'
-                T=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100),sprintf('spatialBound%s.mat',data)));
+                T=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d.mat',data)));
             case 'leaveOneOut'
                 T=[];
                 for s=1:length(returnSubjs),
-                    P=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100),sprintf('spatialBound%s_eval_%s.mat',data,subj_name{returnSubjs(s)})));
+                    P=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_eval_%s.mat',data,subj_name{returnSubjs(s)})));
                     T=addstruct(T,P);
                 end
             otherwise
                 fprintf('no such case')
         end
         
-        figure('Name',type)
+        figure()
         subplot(2,1,1);
         xyplot(T.dist,T.corr,T.bin,'split',T.bwParcel,'leg',{'within Parcel','between Parcels'},'subset',T.crossval==0 ,'style_thickline');
         set(gca,'YLim',[0 0.5],'XLim',[0 76]);
         xlabel('Spatial Distance (mm)');
         ylabel('Activity correlation');
-        title(sprintf('SC%d(%dPOV)-%s-without crossval',study,var*100,data));
+        title(sprintf('%s-func%d-without crossval',mapType,data));
         subplot(2,1,2);
         xyplot(T.dist,T.corr,T.bin,'split',T.bwParcel,'leg',{'within Parcel','between Parcels'},'subset',T.crossval==1,'style_thickline');
         set(gca,'YLim',[0 0.5],'XLim',[0 76]);
         xlabel('Spatial Distance (mm)');
         ylabel('Activity correlation');
-        title(sprintf('SC%d(%dPOV)-%s-with crossval',study,var*100,data));
+        title(sprintf('%s-func%d-with crossval',mapType,data));
         set(gcf,'PaperPosition',[2 4 10 12]);
         wysiwyg;
-    case 'ICA:PLOT:INDIV' % NEED TO UPDATE FOR SNN !!
+    case 'EVAL:PLOT:INDIV' % NEED TO UPDATE FOR SNN !!
         study=varargin{1};
         var=varargin{2};
         data=varargin{3};
