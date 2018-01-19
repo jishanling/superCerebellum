@@ -14,7 +14,7 @@ baseDir          = '/Volumes/Seagate Backup Plus Drive';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
 studyDir{2}     =fullfile(baseDir,'sc2');
-restDir         =fullfile(baseDir,'restingState'); 
+restDir         =fullfile(baseDir,'restingState');
 behavDir        ='/data';
 imagingDir      ='/imaging_data';
 imagingDirNA    ='/imaging_data_nonaggr';
@@ -429,7 +429,7 @@ rs_fscanNum   = {[],...%s01 functional scans (series number)
     [3,5],...%s30
     [2,4],...%s31
     };
- 
+
 
 saccRun{1} = {[],...%s01
     [1],...      %s02
@@ -987,20 +987,20 @@ switch(what)
             spm_imcalc(nam, 'rmask_noskullEyes.nii', 'i1>2000 & (i2+i3+i4+i5)>0.2')
         end
         
-    case 'RS:func_dicom_import'              % STEP 4.1: Import rs dicom 
+    case 'RS:func_dicom_import'              % STEP 4.1: Import rs dicom
         % converts dicom to nifti files w/ spm_dicom_convert
         % example: sc1_sc2_imana('RS:func_dicom_import',2)
         sn=varargin{1}; % subjNum
         
         subjs=length(sn);
-
+        
         for s=1:subjs,
             
             % different saving format for subjs 23-31:
             if sn(s)>22,
                 fileEnd='dcm';
             else
-                fileEnd='IMA'; 
+                fileEnd='IMA';
             end
             
             cd(fullfile(restDir,dicomDir,[subj_name{sn(s)}]));
@@ -1119,7 +1119,7 @@ switch(what)
         sn=varargin{1};% subjNum
         step=varargin{2}; % 'manual' or 'auto'
         
-        cd(fullfile(studyDir{1},anatomicalDir,subj_name{sn}));
+        cd(fullfile(baseDir,'sc1',anatomicalDir,subj_name{sn}));
         
         switch step,
             case 'manual'
@@ -1130,8 +1130,8 @@ switch(what)
         end
         
         % (2) Automatically co-register functional and anatomical images for study 1
-        J.ref = {fullfile(studyDir{1},anatomicalDir,subj_name{sn},['anatomical.nii'])};
-        J.source = {fullfile(studyDir{1},imagingDir,subj_name{sn},['rmeanepi.nii'])};
+        J.ref = {fullfile(baseDir,'sc1',anatomicalDir,subj_name{sn},['anatomical.nii'])};
+        J.source = {fullfile(restDir,imagingDir,subj_name{sn},['rmeanepi.nii'])};
         J.other = {''};
         J.eoptions.cost_fun = 'nmi';
         J.eoptions.sep = [4 2];
@@ -1191,28 +1191,28 @@ switch(what)
             cd(fullfile(restDir,imagingDir,subj_name{sn(s)}));
             
             nam{1}  = fullfile(restDir,imagingDir,subj_name{sn(s)}, 'rmeanepi.nii');
-            nam{2}  = fullfile(studyDir{1},anatomicalDir, subj_name{sn(s)}, 'c1anatomical.nii');
-            nam{3}  = fullfile(studyDir{1},anatomicalDir, subj_name{sn(s)}, 'c2anatomical.nii');
-            nam{4}  = fullfile(studyDir{1},anatomicalDir, subj_name{sn(s)}, 'c3anatomical.nii');
+            nam{2}  = fullfile(baseDir,'sc1',anatomicalDir, subj_name{sn(s)}, 'c1anatomical.nii');
+            nam{3}  = fullfile(baseDir,'sc1',anatomicalDir, subj_name{sn(s)}, 'c2anatomical.nii');
+            nam{4}  = fullfile(baseDir,'sc1',anatomicalDir, subj_name{sn(s)}, 'c3anatomical.nii');
             spm_imcalc(nam, 'rmask_noskull.nii', 'i1>1 & (i2+i3+i4)>0.2')
             
             nam={};
             nam{1}  = fullfile(restDir,imagingDir,subj_name{sn(s)}, 'rmeanepi.nii');
-            nam{2}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c1anatomical.nii');
+            nam{2}  = fullfile(baseDir,'sc1', anatomicalDir, subj_name{sn(s)}, 'c1anatomical.nii');
             spm_imcalc(nam, 'rmask_gray.nii', 'i1>2 & i2>0.4')
             
             nam={};
             nam{1}  = fullfile(restDir,imagingDir,subj_name{sn(s)}, 'rmeanepi.nii');
-            nam{2}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c1anatomical.nii');
-            nam{3}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c5anatomical.nii');
+            nam{2}  = fullfile(baseDir,'sc1', anatomicalDir, subj_name{sn(s)}, 'c1anatomical.nii');
+            nam{3}  = fullfile(baseDir,'sc1', anatomicalDir, subj_name{sn(s)}, 'c5anatomical.nii');
             spm_imcalc(nam, 'rmask_grayEyes.nii', 'i1>2400 & i2+i3>0.4')
             
             nam={};
             nam{1}  = fullfile(restDir,imagingDir,subj_name{sn(s)}, 'rmeanepi.nii');
-            nam{2}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c5anatomical.nii');
-            nam{3}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c1anatomical.nii');
-            nam{4}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c2anatomical.nii');
-            nam{5}  = fullfile(studyDir{1}, anatomicalDir, subj_name{sn(s)}, 'c3anatomical.nii');
+            nam{2}  = fullfile(baseDir,'sc1', anatomicalDir, subj_name{sn(s)}, 'c5anatomical.nii');
+            nam{3}  = fullfile(baseDir,'sc1', anatomicalDir, subj_name{sn(s)}, 'c1anatomical.nii');
+            nam{4}  = fullfile(baseDir,'sc1', anatomicalDir, subj_name{sn(s)}, 'c2anatomical.nii');
+            nam{5}  = fullfile(baseDir,'sc1', anatomicalDir, subj_name{sn(s)}, 'c3anatomical.nii');
             spm_imcalc(nam, 'rmask_noskullEyes.nii', 'i1>2000 & (i2+i3+i4+i5)>0.2')
         end
         
@@ -2551,7 +2551,7 @@ switch(what)
             fprintf('Correlation stats are done for %s (%s) for %s \n',subj_name{sn(s)}, sprintf('glm%d',glm),type)
         end
         
-    case 'PREP:run_indiv'                    % STEP 11.1: 
+    case 'PREP:run_indiv'                    % STEP 11.1:
         sn=varargin{1}; % subjNum. use 'returnSubjs' for the 'PREP:voxels_all' and 'PREP:avrg_betas' cases
         study=varargin{2};
         glm=varargin{3}; % glmNum
@@ -2566,7 +2566,7 @@ switch(what)
                 sc1_sc2_imana('PREP:cortex:surface_betas',sn,study,glm,'ResMS')
                 sc1_sc2_imana('PREP:cortex:indiv_vertices',sn,study,glm)
         end
-    case 'PREP:run_allSubj'                  % STEP 11.2: 
+    case 'PREP:run_allSubj'                  % STEP 11.2:
         study=varargin{1};
         glm=varargin{2}; % glmNum
         type=varargin{3}; % 'cereb' or 'cortex'
@@ -2579,7 +2579,7 @@ switch(what)
                 sc1_sc2_imana('PREP:betas_all',returnSubjs,glm,'cortex',[1:2])
                 sc1_sc2_imana('PREP:avrg_betas',returnSubjs,study,glm,'cortex',[1:2])
         end
-    case 'PREP:avrgMask_cereb'               % STEP 11.3: 
+    case 'PREP:avrgMask_cereb'               % STEP 11.3:
         sn=varargin{1};
         
         subjs=length(sn);
