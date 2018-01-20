@@ -96,33 +96,34 @@ switch(what)
         end;
         varargout={RR};
     case 'intersubjectCorrPlot'
-        xlabels={'overall','0-0.5','0.5-1','1-1.5','1.5-2','>2'}
+        xlabels={'0-0.5','0.5-1','1-1.5','1.5-2','>2'}
         T=varargin{1}; % Input from case 'intersubjectCorrSpatial'
         T=tapply(T,{'subj','freq'},{'withinSubj'},{'betweenSubj'},{'totSS'},'subset',ismember(T.subj,returnSubjs));
-        T.freqK = T.freq>0; 
         [ss,sn]=pivottable(T.subj,[],T.totSS,'mean','subset',T.freq==0);
         a(sn,1)=ss;
         T.relSS=T.totSS./a(T.subj);
         subplot(2,1,1);
-        lineplot([T.freqK T.freq],[T.relSS],'style_thickline');
+        lineplot([T.freq],[T.relSS],'subset',T.freq>0,'style_thickline');
         set(gca,'XTickLabel',xlabels,'YLim',[0 0.35]);
         ylabel('Relative Power');
         xlabel('Cycles/cm');
         title('Relative amount of Variance per Frequency band');
         subplot(2,1,2);
-        lineplot([T.freqK T.freq],[T.withinSubj T.betweenSubj],'style_thickline','leg',{'within','between'});
+        lineplot([T.freq],[T.withinSubj T.betweenSubj],'subset',T.freq>0,'style_thickline','leg',{'within','between'});
+        a=mean(T.withinSubj(T.freq==0));
+        b=mean(T.betweenSubj(T.freq==0));
+        drawline([0 a b],'dir','horz');
         ylabel('Correlationa');
         xlabel('Cycles/cm');
-        drawline(0,'dir','horz'); 
         set(gca,'XTickLabel',xlabels);
         title('Within and between-subject correlation');
-        set(gcf,'PaperPosition',[2 2 4.5 5.5]);
+        set(gcf,'PaperPosition',[2 2 4 6]);
         wysiwyg;
-    case 'freqPlot'
+    case 'freqPLot'
         exper= varargin{1};
         sn   = [26 26 27];
         se   = [1 2 1]; 
-        con  = varargin{2}; 
+        con  = varargin{3}; 
         
         frequencyBands  = [0 0.5 1.5 2 inf];
         load(fullfile(studyDir{exper},'encoding','glm4','cereb_avrgDataStruct.mat'));
@@ -134,10 +135,8 @@ switch(what)
             X(volIndx)=S.data;
             X(isnan(X))=0;
                     % Y=mva_frequency3D(X,frequencyBands,'Voxelsize',[2 2 2],'plotSlice',15);
-            figure(i); 
-            set(gcf,'PaperPosition',[2 2 4 12]); 
-            wysiwyg; 
-            Y=mva_frequency3D(X,frequencyBands,'Voxelsize',[2 2 2],'plotSlice',22,'numRows',5);
+                    figure(
+            Y=mva_frequency3D(X,frequencyBands,'Voxelsize',[2 2 2],'plotSlice',15,'numRows',1);
         end;
     case 'functionalBounds'
         suitDir=fileparts(which('spm_suit'));

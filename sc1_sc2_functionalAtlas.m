@@ -2,7 +2,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-% baseDir            = '/Volumes/MotorControl/data/super_cerebellum';
+% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
@@ -223,8 +223,13 @@ switch what
         % Estimation of the correlation for each subject
         for sn=unique(T.SN)';
             for c=1:length(idx),
+<<<<<<< HEAD
                 i1(c) = find(T.SN==sn & T.sess==1 & T.cond==idx(c));
                 i2(c) = find(T.SN==sn & T.sess==2 & T.cond==idx(c));
+=======
+            i1(c) = find(T.SN==sn & T.sess==1 & T.cond==idx(c));
+            i2(c) = find(T.SN==sn & T.sess==2 & T.cond==idx(c));
+>>>>>>> ac957374445521af364006761f048ef4939ba70d
             end
             B=(T.data(i1,voxIn)+T.data(i2,voxIn))/2; % why divide by 2 ?
             
@@ -389,16 +394,26 @@ switch what
                 fprintf('no such case')
         end
         
+<<<<<<< HEAD
         figure()
         xyplot(T.dist,T.corr,T.bin,'split',T.bwParcel,'leg',{'within Parcel','between Parcels'},...
             'subset',T.crossval==1 & T.dist<=35,'style_symbols4*2','markersize',10,'markertype','^');
+=======
+        xyplot(T.dist,T.corr,T.bin,'split',T.bwParcel,'leg',{'within Parcel','between Parcels'},...
+            'subset',T.crossval==1 & T.dist<=35,'style_symbols4*2','markersize',8,'markertype','^',...
+            'linewidth',2,'linecolor','k','errorcolor','k');
+>>>>>>> ac957374445521af364006761f048ef4939ba70d
         set(gca,'YLim',[0 0.6],'XLim',[0 35]);
         xlabel('Spatial Distance (mm)');
         ylabel('Activity correlation');
         title(sprintf('%s-func%d-with crossval',mapType,data));
+<<<<<<< HEAD
         set(gcf,'PaperPosition',[2 4 10 12]);
         wysiwyg;
         
+=======
+  
+>>>>>>> ac957374445521af364006761f048ef4939ba70d
     case 'EVAL:PLOT:INDIV' % NEED TO UPDATE FOR SNN !!
         study=varargin{1};
         var=varargin{2};
@@ -434,6 +449,15 @@ switch what
         ylabel('Activity correlation');
         title(sprintf('SC%d(%dPOV)-%s-with crossval',study,var*100,data));
         set(gcf,'PaperPosition',[2 4 10 12]);
+        wysiwyg;
+    case 'EVAL:PLOT:CORRFIGURE' % Makes the summary figure of within / between correlations 
+        toPlot = {'lob10','SC1_9cluster','bucknerRest'}; 
+        numPlots = numel(toPlot);   
+        for i=1:numPlots 
+            subplot(1,numPlots,i); 
+            sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',1,toPlot{i},2,'group'); 
+        end; 
+        set(gcf,'PaperPosition',[2 4 12 3]);
         wysiwyg;
         
     case 'ENCODE:project_taskSpace'
