@@ -78,7 +78,7 @@ switch what
         suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
         
     case 'EVAL:get_data'
-        sn=varargin{1}; % Subje numbers to include
+        sn=varargin{1}; % Subjects numbers to include
         study=varargin{2}; % 1 or 2 or [1,2]
         
         % load data
@@ -295,6 +295,9 @@ switch what
         
         % save out vol of SNN feats
         exampleVol=fullfile(studyDir{study},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
+        % Yes there is a better way: Saving is not necessary. 
+        % See 'SNN:visualise_map' in sc1sc2_spatialAnalysis! TODO: Apply
+        % change here! 
         X=spm_vol(exampleVol);
         X.fname=outName;
         X.private.dat.fname=V.fname;

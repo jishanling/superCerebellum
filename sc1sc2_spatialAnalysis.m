@@ -10,19 +10,20 @@ regDir          ='/RegionOfInterest/';
 encodeDir       ='/encoding';
 % rootDir = '/Users/jdiedrichsen/Projects/SuperCerebellum/';
 
-returnSubjs=[2,3,4,6,7,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
+returnSubjs=[2,3,4,6,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
 
 switch(what)
     case 'avrgDataStruct_freq'
+        exper= varargin{1}; 
         frequencyBands  = [0 0.5 1 1.5 2 inf];
-        load(fullfile(baseDir,'sc2','encoding','glm4','cereb_avrgDataStruct.mat'));
+        load(fullfile(studyDir{exper},'encoding','glm4','cereb_avrgDataStruct.mat'));
         RR=[];
         sn=unique(T.SN);
         for s = 1:length(sn)
             fprintf('subject %d\n',sn(s));
             for se=1:2
                 S=getrow(T,T.SN == sn(s) & T.sess==se);
-                for c=1:29
+                for c=1:max(T.cond)
                     X=zeros(V.dim);
                     X(volIndx)=S.data(c,:);
                     X(isnan(X))=0;
@@ -39,13 +40,22 @@ switch(what)
                 end;
             end;
         end;
-        save(fullfile(baseDir,'sc1','encoding','glm4','cereb_avrgDataStruct_freq.mat'),'-struct','RR');
+        save(fullfile(studyDir{exper},'encoding','glm4','cereb_avrgDataStruct_freq.mat'),'-struct','RR');
     case 'intersubjectCorrSpatial'
-        T=load(fullfile(baseDir,'sc1','encoding','glm4','cereb_avrgDataStruct_freq.mat'));
-        D=load(fullfile(baseDir,'sc1','encoding','glm4','cereb_avrgDataStruct.mat'));
-        D.T.freq = ones(length(D.T.SN),1)*0;
-        D.T.freqLow = -1*ones(length(D.T.SN),1);
-        T=addstruct(T,D.T);
+        exper = [1 2]; % %experiment 
+        glm   = 'glm4'; 
+        vararginoptions(varargin,{'exper','glm'}); 
+        A=[]; 
+        for e=exper 
+            T=load(fullfile(studyDir{e},'encoding',glm,'cereb_avrgDataStruct_freq.mat'));
+            D=load(fullfile(studyDir{e},'encoding',glm,'cereb_avrgDataStruct.mat'));
+            D.T.freq = ones(length(D.T.SN),1)*0;
+            D.T.freqLow = -1*ones(length(D.T.SN),1);
+            T=addstruct(T,D.T);
+            T.study = ones(length(T.SN),1)*e;
+            A=addstruct(A,T); 
+        end; 
+        
         D=[];
         sn=unique(T.SN);
         numSubj = length(sn);
