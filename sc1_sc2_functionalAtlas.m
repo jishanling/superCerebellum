@@ -396,8 +396,7 @@ switch what
         xlabel('Spatial Distance (mm)');
         ylabel('Activity correlation');
         title(sprintf('%s-func%d-with crossval',mapType,data));
-        set(gcf,'PaperPosition',[2 4 10 12]);
-        wysiwyg;
+  
     case 'EVAL:PLOT:INDIV' % NEED TO UPDATE FOR SNN !!
         study=varargin{1};
         var=varargin{2};
