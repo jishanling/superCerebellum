@@ -77,11 +77,11 @@ switch what
         study=varargin{2}; % 1 or 2 or [1,2]
         
         D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
-
+        
         % load data
         UFullAvrgAll=[];
         for f=1:length(study),
-            load(fullfile(studyDir{study(f)},encodeDir,'glm4','cereb_avrgDataStruct.mat')); 
+            load(fullfile(studyDir{study(f)},encodeDir,'glm4','cereb_avrgDataStruct.mat'));
             
             D1=getrow(D,D.StudyNum==f);
             idx=D1.condNum(D1.overlap==1); % get index for unique tasks
@@ -99,9 +99,9 @@ switch what
             
             % if group - get mean
             UFull=nanmean(UFullAvrg,3);
-  
+            
             % remove mean of shared tasks
-             UFullAvrg_C=bsxfun(@minus,UFull,mean(UFull(idx,:))); 
+            UFullAvrg_C=bsxfun(@minus,UFull,mean(UFull(idx,:)));
             
             % if func1+func2 - concatenate
             if length(study)>1,
@@ -110,7 +110,7 @@ switch what
                 UFullAvrgAll=UFullAvrg_C;
             end
         end
-
+        
         % center the data (remove overall mean)
         X_C=bsxfun(@minus,UFullAvrgAll,mean(UFullAvrgAll));
         varargout={X_C,volIndx,V};
@@ -180,7 +180,7 @@ switch what
         figure()
         title(sprintf('%d clusters',K))
         M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
-        suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))   
+        suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
     case 'EVAL:bounds:GROUP'
         % code is written now so that func map from sc1 is always evaluated
         % on sc2 data (and vice versa)
@@ -221,11 +221,11 @@ switch what
         clear XYZ i k l x y z i1 j1 k1 VA Parcel; % Free memory
         % Now calculate the uncrossvalidated and crossvalidated
         % Estimation of the correlation for each subject
-        i1=idx;
-        i2=idx+length(unique(T.cond)); % these indices are the same for every subj
         for sn=unique(T.SN)';
-            %             i1 = find(T.SN==sn & T.sess==1);
-            %             i2 = find(T.SN==sn & T.sess==2);
+            for c=1:length(idx),
+                i1(c) = find(T.SN==sn & T.sess==1 & T.cond==idx(c));
+                i2(c) = find(T.SN==sn & T.sess==2 & T.cond==idx(c));
+            end
             B=(T.data(i1,voxIn)+T.data(i2,voxIn))/2; % why divide by 2 ?
             
             fprintf('%d cross\n',sn);
@@ -337,9 +337,9 @@ switch what
         RR = addstruct(RR,R);
         save(outName,'-struct','RR');
         
-    case 'EVAL:PLOT:allMaps'
+    case 'EVAL:PLOT:DIFF'
         study=varargin{1};% is map built on study [1] or [2] ?
-        mapType=varargin{2}; % {'lob10','bucknerRest','SC1_5cluster'}
+        mapType=varargin{2}; % {'lob10','bucknerRest','SC1_9cluster'}
         data=varargin{3}; % evaluating data from study [1] or [2] ?
         
         P=[];
@@ -354,12 +354,12 @@ switch what
         end
         
         % plot correlations (across clusters) for within
-        figure('name','within')
-        xyplot(P.dist,P.corr,P.bin,'split',P.type,'leg','auto','subset',P.bwParcel==0,'style_thickline');
-        
-        % plot correlations (across clusters) for between
-        figure('name','between')
-        xyplot(P.dist,P.corr,P.bin,'split',P.type,'leg','auto','subset',P.bwParcel==1,'style_thickline');
+        %         figure('name','within')
+        %         xyplot(P.dist,P.corr,P.bin,'split',P.type,'leg','auto','subset',P.bwParcel==0,'style_thickline');
+        %
+        %         % plot correlations (across clusters) for between
+        %         figure('name','between')
+        %         xyplot(P.dist,P.corr,P.bin,'split',P.type,'leg','auto','subset',P.bwParcel==1,'style_thickline');
         
         % plot boxplot of different clusters
         W=getrow(P,P.bwParcel==0); % within
@@ -370,7 +370,7 @@ switch what
         myboxplot(W.m,W.diff) % within-between diff
         figure()
         lineplot(W.m,W.diff) % within-between diff
-    case 'EVAL:PLOT:GROUP'
+    case 'EVAL:PLOT:CURVES'
         study=varargin{1};% is map built on study [1] or [2] ?
         mapType=varargin{2}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
         data=varargin{3}; % evaluating data from study [1] or [2] ?
@@ -390,20 +390,15 @@ switch what
         end
         
         figure()
-        subplot(2,1,1);
-        xyplot(T.dist,T.corr,T.bin,'split',T.bwParcel,'leg',{'within Parcel','between Parcels'},'subset',T.crossval==0 ,'style_thickline');
-        set(gca,'YLim',[0 0.5],'XLim',[0 76]);
-        xlabel('Spatial Distance (mm)');
-        ylabel('Activity correlation');
-        title(sprintf('%s-func%d-without crossval',mapType,data));
-        subplot(2,1,2);
-        xyplot(T.dist,T.corr,T.bin,'split',T.bwParcel,'leg',{'within Parcel','between Parcels'},'subset',T.crossval==1,'style_thickline');
-        set(gca,'YLim',[0 0.5],'XLim',[0 76]);
+        xyplot(T.dist,T.corr,T.bin,'split',T.bwParcel,'leg',{'within Parcel','between Parcels'},...
+            'subset',T.crossval==1 & T.dist<=35,'style_symbols4*2','markersize',10,'markertype','^');
+        set(gca,'YLim',[0 0.6],'XLim',[0 35]);
         xlabel('Spatial Distance (mm)');
         ylabel('Activity correlation');
         title(sprintf('%s-func%d-with crossval',mapType,data));
         set(gcf,'PaperPosition',[2 4 10 12]);
         wysiwyg;
+        
     case 'EVAL:PLOT:INDIV' % NEED TO UPDATE FOR SNN !!
         study=varargin{1};
         var=varargin{2};
@@ -445,7 +440,7 @@ switch what
         
         % load raw Y (cereb)
         [Y,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,[1,2]);
-       
+        
         % load clusters for cereb
         load(fullfile(studyDir{2},encodeDir,'glm4','atlasFinal_parcel.mat'));
         
@@ -481,8 +476,8 @@ switch what
         %         scatterplot(X(:,14),X(:,10),'label',allCondNames,'CAT',CAT,'regression','linear','intercept',0,'printcorr','draworig')
         %         xlabel('right hand tasks');ylabel('left hand tasks');
     case 'ENCODE:features'
-        D=dload(fullfile(rootDir,'featureTable_jd.txt'));        % Read feature table
-        S=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));      % List of task conditions
+        D=dload(fullfile(baseDir,'featureTable_jd.txt'));        % Read feature table
+        S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));      % List of task conditions
         load(fullfile(studyDir{2},encodeDir,'glm4','atlasFinal_condLoads.mat'));
         W=pivottablerow(S.condNumUni,T.taskWeights,'mean(x,1)');
         
@@ -493,9 +488,9 @@ switch what
         set(gca,'YTick',[1:47],'YTickLabel',D.conditionName,'XTickLabel',T.featNames,'FontSize',6);
         
         % Make the feature matrix
-        D.LeftHand    = D.LeftHand ./D.duration;
-        D.RightHand   = D.RightHand ./D.duration;
-        D.Saccade    = D.Saccade./D.duration;
+        D.LeftHand    = D.leftHandPresses ./D.duration;
+        D.RightHand   = D.rightHandPresses ./D.duration;
+        D.Saccade    = D.saccades./D.duration;
         f=fieldnames(D);
         FeatureNames = f(5:end);
         F=[];
@@ -505,7 +500,7 @@ switch what
         F= bsxfun(@rdivide,F,sum(F.^2,1));
         numCond = length(D.conditionName);
         numFeat = length(FeatureNames);
-        numClusters = length(T.featNames);
+        numClusters = length(T.featNames)-1;
         
         subplot(2,2,2);
         C=corr(F,W);
@@ -517,7 +512,7 @@ switch what
         set(gca,'YTick',[1:numCond],'YTickLabel',D.conditionName,'XTick',[1:numFeat],'XTickLabel',FeatureNames,'FontSize',6);
         set(gca,'XTickLabelRotation',60);
         
-        % Run a multiple regression analysis on clustesr onto features
+        % Run a multiple regression analysis on clusters onto features
         lambda = [0.001 0.001];
         X=bsxfun(@minus,F,mean(F,1));
         Y=bsxfun(@minus,W,mean(W,1));
@@ -528,12 +523,13 @@ switch what
         A = -eye(numFeat);
         b = zeros(numFeat,1);
         for p=1:numClusters,
-            U(:,p) = cplexqp(XX+lambda(2)*eye(numFeat),ones(numFeat,1)*lambda(1)-XY(:,p),A,b);
+            % U(:,p) = cplexqp(XX+lambda(2)*eye(numFeat),ones(numFeat,1)*lambda(1)-XY(:,p),A,b); 
+            U(:,p) = (XX + eye(numFeat)*lambda(2))\(XY(:,p));
         end;
-
+        
         % Present the list of the highest three correlation for each
         % cluster
-        for i=1:numICAs
+        for i=1:numClusters,
             [a,b]=sort(C(:,i),'descend');
             fprintf('%s: %s(%2.2f) %s(%2.2f) %s(%2.2f)\n',T.featNames{i},...
                 FeatureNames{b(1)},a(1),...
