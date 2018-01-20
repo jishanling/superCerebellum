@@ -16,13 +16,7 @@ subj_name = {'s01','s02','s03','s04','s05','s06','s07','s08','s09','s10','s11',.
     's12','s13','s14','s15','s16','s17','s18','s19','s20','s21','s22','s23','s24',...
     's25','s26','s27','s28','s29','s30','s31'};
 
-returnSubjs=[2,3,4,6,7,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
-
-% Remove feats for functional maps
-removeFeats={[],... % SC1_Sess1
-    [],... % SC1_Sess2
-    [],... % SC2_Sess1
-    []};   % SC2_Sess2
+returnSubjs=[2,3,4,6,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
 
 switch what
     
@@ -38,6 +32,7 @@ switch what
         
         [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,[1,2]);
         [F,G,Err1]=semiNonNegMatFac(X_C,K,'threshold',0.01);
+        save(fullfile(studyDir{2},encodeDir,'glm4','atlasFinal_parcel.mat'),'F','G','volIndx','V');
         fprintf('final atlas created for %s \n',K)
         
         [~,groupFeat]=max(G,[],2);
@@ -81,11 +76,15 @@ switch what
         sn=varargin{1}; % Subje numbers to include
         study=varargin{2}; % 1 or 2 or [1,2]
         
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+
         % load data
         UFullAvrgAll=[];
         for f=1:length(study),
-            load(fullfile(studyDir{study(f)},encodeDir,'glm4','cereb_avrgDataStruct.mat')); % JD Bug here: f instead of study(f)
+            load(fullfile(studyDir{study(f)},encodeDir,'glm4','cereb_avrgDataStruct.mat')); 
             
+            D1=getrow(D,D.StudyNum==f);
+            idx=D1.condNum(D1.overlap==1); % get index for unique tasks
             % format data
             for s=1:length(sn),
                 indx=T.SN==sn(s);
@@ -98,71 +97,23 @@ switch what
                 end
             end
             
+            % if group - get mean
+            UFull=nanmean(UFullAvrg,3);
+  
+            % remove mean of shared tasks
+             UFullAvrg_C=bsxfun(@minus,UFull,mean(UFull(idx,:))); 
+            
             % if func1+func2 - concatenate
             if length(study)>1,
-                UFullAvrgAll=[UFullAvrgAll;UFullAvrg];
+                UFullAvrgAll=[UFullAvrgAll;UFullAvrg_C];
             else
-                UFullAvrgAll=UFullAvrg;
+                UFullAvrgAll=UFullAvrg_C;
             end
         end
-        
-        % if group - get mean
-        UFull=nanmean(UFullAvrgAll,3);
-        
-        % center the data
-        X_C=bsxfun(@minus,UFull,mean(UFull));
+
+        % center the data (remove overall mean)
+        X_C=bsxfun(@minus,UFullAvrgAll,mean(UFullAvrgAll));
         varargout={X_C,volIndx,V};
-    case 'EVAL:make_ICA_map'
-        % example: 'sc1_sc2_functionalAtlas('EVAL:make_ICA_map',[2],1,.95)
-        sn=varargin{1}; % subjNum or 'group'
-        study=varargin{2}; % 1 or 2 or [1,2]
-        var=varargin{3}; % var explained. (.95,.90,.80 etc)
-        type=varargin{4}; % 'group','indiv','leaveOneOut'
-        
-        vararginoptions({varargin{5:end}},{'var'}); % var explained. (.95,.90,.80 etc)
-        
-        % figure out if individual or group or leave one out
-        switch type,
-            case 'group'
-                sn=returnSubjs;
-                outDir=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100));
-                outName=fullfile(outDir,'ICAs.mat');
-            case 'indiv'
-                outDir=fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn});
-                outName=fullfile(outDir,sprintf('ICAs_SC%d_%dPOV.mat',study,var*100));
-            case 'leaveOneOut'
-                outDir=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100));
-                outName=fullfile(outDir,sprintf('ICAs_leaveOut_%s.mat',subj_name{sn}));
-                sn=returnSubjs(returnSubjs~=sn);
-        end
-        
-        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('ICA:get_data',sn,study);
-        % calculate the pca for data
-        [E,D] = pcamat(X_C,1,size(X_C,1),'off','off'); % JD: Where is pcamat?
-        
-        % get PCs explaining <var> of POV
-        [EV,I]=sort(diag(D),'descend');
-        for i=1:length(EV),
-            POV(i)=EV(i)/trace(D);
-        end
-        EVindx=find(cumsum(POV)<=var);
-        
-        % reconstruct E and D
-        E=E(:,I);
-        D=D(I,I);
-        E=E(:,EVindx);
-        D=D(EVindx,EVindx);
-        
-        % prewhiten the data
-        whiteningMatrix = inv(sqrt (D)) * E';
-        dewhiteningMatrix = E * sqrt (D);
-        X_PW =  whiteningMatrix * X_C;
-        
-        % run ICA faster on centered data
-        [S_PW,A_PW,W_PW] = fastica(X_C,'pcaE',E,'pcaD',D,'whiteSig',X_PW,'whiteMat',whiteningMatrix,'dewhiteMat',dewhiteningMatrix);
-        
-        dircheck(fullfile(outDir));
-        save(fullfile(outName),'S_PW','A_PW','W_PW','X_PW','whiteningMatrix','dewhiteningMatrix','volIndx','V');
     case 'EVAL:make_SNN_map'
         % example: 'sc1_sc2_functionalAtlas('EVAL:make_SNN_map',[2],1,13,'leaveOneOut')
         sn=varargin{1}; % subjNum or 'group'
@@ -189,80 +140,6 @@ switch what
         [F,G,Err1]=semiNonNegMatFac(X_C,K,'threshold',0.01);
         fprintf('SNN map (%d clusters) created for %s \n',K,type)
         save(fullfile(outName),'F','G','volIndx','V');
-    case 'EVAL:visualise_ICA_map'
-        sn=varargin{1}; % [2] or 'group'
-        study=varargin{2}; % 1 or 2 or [1,2]
-        var=varargin{3}; % {.95,.90} etc
-        type=varargin{4};
-        
-        feat=1;
-        
-        % figure out if individual or group
-        switch type,
-            case 'group'
-                outName=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100),'map.nii');
-                load(fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100),'ICAs.mat'));
-            case 'indiv'
-                outName=fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn},sprintf('map_SC%d_%dPOV.nii',study,var*100));
-                load(fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn},sprintf('ICAs_SC%d_%dPOV.mat',study,var*100)));
-            case 'leaveOneOut'
-                outName=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100),sprintf('map_leaveOut_%s.nii',subj_name{sn}));
-                load(fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100),sprintf('ICAs_leaveOut_%s.mat',subj_name{sn})));
-        end
-        
-        numFeat=size(S_PW,1);
-        
-        % get pos and neg comps
-        for p=1:size(S_PW,2),
-            signIdx=find(S_PW(:,p)>0);
-            pwS=abs(S_PW(:,p));
-            [~,i]=sort(pwS,'descend');
-            % sort 'winner' into pos or neg group
-            if find(signIdx==i(1)),
-                groupFeat(p,:)=i(1);
-            else
-                groupFeat(p,:)=i(1)+numFeat;
-            end
-            % reassign some ICs
-            if find(removeFeats{feat}==groupFeat(p,:)),
-                if groupFeat(p,:)>numFeat,
-                    groupFeat(p,:)=groupFeat(p,:)-numFeat;
-                else
-                    groupFeat(p,:)=groupFeat(p,:)+numFeat;
-                end
-            end
-        end
-        
-        % rename data points
-        featNum=unique(groupFeat);
-        newFeat=[1:length(featNum)];
-        for ff=1:length(featNum),
-            groupFeat(groupFeat==featNum(ff))=newFeat(ff);
-        end
-        
-        for f=1:length(featNum),
-            if featNum(f)>numFeat,
-                featNames(f)={sprintf('ICA%d:neg',featNum(f)-numFeat)};
-            else
-                featNames(f)={sprintf('ICA%d:pos',featNum(f))};
-            end
-        end
-        
-        % map features on group
-        Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
-        Yy(1,volIndx)=groupFeat;
-        Yy=reshape(Yy,[V.dim(1),V.dim(2),V.dim(3)]);
-        Yy(Yy==0)=NaN;
-        Vv{1}.dat=Yy;
-        Vv{1}.dim=V.dim;
-        Vv{1}.mat=V.mat;
-        
-        % save out vol of ICA feats
-        exampleVol=fullfile(studyDir{study},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
-        X=spm_vol(exampleVol);
-        X.fname=outName;
-        X.private.dat.fname=V.fname;
-        spm_write_vol(X,Vv{1}.dat);
     case 'EVAL:visualise_SNN_map'
         sn=varargin{1}; % [2] or 'group'
         study=varargin{2}; % 1 or 2 or [1,2]
@@ -564,42 +441,35 @@ switch what
         set(gcf,'PaperPosition',[2 4 10 12]);
         wysiwyg;
         
-    case 'ENCODING:project_taskSpace'
-        removeFeats=[1,2,6,12,8];
+    case 'ENCODE:project_taskSpace'
         
         % load raw Y (cereb)
-        load(fullfile(encodeDir,'glm4','cereb_avrgDataStruct_sc1_sc2.mat'));
+        [Y,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,[1,2]);
+       
+        % load clusters for cereb
+        load(fullfile(studyDir{2},encodeDir,'glm4','atlasFinal_parcel.mat'));
         
-        % load ICs for cereb
-        load(fullfile(regDir,'glm4','ICA_comps_cerebellum.mat'));
-        
-        % get pos + neg IC's
-        S_PW=[S_PW;S_PW*-1];
-        
-        % make model
-        Y=nanmean(Y,3); % get group
-        [Y_C, ~]=remmean(Y); % center data
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         
         % project back to task-space
-        Uica=Y_C*S_PW'; % get U * S
-        L=Uica'*Uica;
+        U=Y*G; % get U * S
+        L=U'*U;
         S=diag(diag(sqrt(L)));
-        X=Uica/S;
-        Q=setdiff([1:size(S_PW,1)],removeFeats);
+        X=U/S;
         
-        % visualise ICc in task-space
-        P=caret_load(fullfile(caretDir,'suit_flat','glm4','ICA_features.paint'));
-        figure();imagesc_rectangle(X(:,Q),'YDir','reverse');
+        % visualise clusters in task-space
+        P=caret_load(fullfile(caretDir,'suit_flat','glm4','atlasFinal.paint'));
+        figure();imagesc_rectangle(X,'YDir','reverse');
         caxis([0 1]);
-        t=set(gca,'Ytick', 1:length(allCondNames),'YTickLabel',allCondNames,'FontSize',12,'FontWeight','bold',...
-            'Xtick',1:length(Q),'XTickLabel',P.paintnames);
+        t=set(gca,'Ytick', 1:length(D.condNames),'YTickLabel',D.condNames,'FontSize',12,'FontWeight','bold',...
+            'Xtick',1:size(X,2),'XTickLabel',P.paintnames);
         t.Color='white';
         
-        T.taskWeights=X(:,Q);
-        T.taskNames=allCondNames;
+        T.taskWeights=X;
+        T.taskNames=D.condNames;
         T.featNames=P.paintnames;
         
-        save(fullfile(regDir,'glm4','ICA_taskLoadings.mat'),'T')
+        save(fullfile(studyDir{2},encodeDir,'glm4','atlasFinal_condLoads.mat'),'T')
         
         % Plot left/right hands
         
@@ -610,11 +480,10 @@ switch what
         %         % plot left/right hands
         %         scatterplot(X(:,14),X(:,10),'label',allCondNames,'CAT',CAT,'regression','linear','intercept',0,'printcorr','draworig')
         %         xlabel('right hand tasks');ylabel('left hand tasks');
-    case 'ENCODING:features'
+    case 'ENCODE:features'
         D=dload(fullfile(rootDir,'featureTable_jd.txt'));        % Read feature table
-        S=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));   % List of task conditions
-        % load(fullfile(sc2Dir,regDir,'glm4','ICA_taskLoadings.mat'));
-        load(fullfile(rootDir,'ICA_taskLoadings.mat'));
+        S=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));      % List of task conditions
+        load(fullfile(studyDir{2},encodeDir,'glm4','atlasFinal_condLoads.mat'));
         W=pivottablerow(S.condNumUni,T.taskWeights,'mean(x,1)');
         
         figure(1);
@@ -636,7 +505,7 @@ switch what
         F= bsxfun(@rdivide,F,sum(F.^2,1));
         numCond = length(D.conditionName);
         numFeat = length(FeatureNames);
-        numICAs = length(T.featNames);
+        numClusters = length(T.featNames);
         
         subplot(2,2,2);
         C=corr(F,W);
@@ -648,7 +517,7 @@ switch what
         set(gca,'YTick',[1:numCond],'YTickLabel',D.conditionName,'XTick',[1:numFeat],'XTickLabel',FeatureNames,'FontSize',6);
         set(gca,'XTickLabelRotation',60);
         
-        % Run a multiple regression analysis on ICAComp onto Features
+        % Run a multiple regression analysis on clustesr onto features
         lambda = [0.001 0.001];
         X=bsxfun(@minus,F,mean(F,1));
         Y=bsxfun(@minus,W,mean(W,1));
@@ -658,12 +527,12 @@ switch what
         XY=X'*Y;
         A = -eye(numFeat);
         b = zeros(numFeat,1);
-        for p=1:numICAs
+        for p=1:numClusters,
             U(:,p) = cplexqp(XX+lambda(2)*eye(numFeat),ones(numFeat,1)*lambda(1)-XY(:,p),A,b);
         end;
-        
-        
-        % Present the list of the highest three correlation for each ICA
+
+        % Present the list of the highest three correlation for each
+        % cluster
         for i=1:numICAs
             [a,b]=sort(C(:,i),'descend');
             fprintf('%s: %s(%2.2f) %s(%2.2f) %s(%2.2f)\n',T.featNames{i},...
