@@ -29,9 +29,10 @@ switch what
         metric=varargin{2}; % 'yes' or 'no'
         
         sn=returnSubjs;
+        dircheck(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_atlasFinal%d',K))); 
         outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_atlasFinal%d',K),'map.nii');
         
-        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,[1,2]);
+        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,[1,2],'yes');
         [F,G,Err1]=semiNonNegMatFac(X_C,K,'threshold',0.01);
         save(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_atlasFinal%d',K),'parcels.mat'),'F','G','volIndx','V');
         fprintf('final atlas created for %s \n',K)
@@ -126,7 +127,7 @@ switch what
     case 'EVAL:unCrossval:GROUP'
         % code is written now so that func map is built on sc1+sc2 (allConds) and
         % evaluated on sc1+sc2 (allConds)
-        mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>' or 'atlasFinal'
+        mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest', or 'atlasFinal<num>'
         
         % load in map
         mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
@@ -594,7 +595,7 @@ switch what
         set(gcf,'PaperPosition',[1 1 60 30]);wysiwyg;
         
     case 'FIGURES:CORR' % Makes the summary figure of within / between correlations
-        toPlot = {'lob10','atlasFinal9'};
+        toPlot = {'lob10','atlasFinal9'}; % something weird happening with 'bucknerRest'
         numPlots = numel(toPlot);
         for i=1:numPlots
             subplot(1,numPlots,i);
@@ -603,7 +604,7 @@ switch what
         set(gcf,'PaperPosition',[2 4 12 3]);
         wysiwyg;
     case 'FIGURES:DIFF' % Makes the summary figure of within / between diff
-        toPlot = {'lob10','atlasFinal9'};
+        toPlot = {'lob10','atlasFinal9'}; % something weird happening with 'bucknerRest'
         sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',2,toPlot,3,0);
         set(gcf,'PaperPosition',[2 4 12 3]);
 %         wysiwyg;    
