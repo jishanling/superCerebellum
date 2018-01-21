@@ -2,7 +2,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
@@ -129,7 +129,7 @@ switch what
         % evaluated on sc1+sc2 (allConds)
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest', or 'atlasFinal<num>'
         
-        % load in map
+        % load in mapOR 
         mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
         
         % load in func data (sc1+sc2) to test
@@ -403,7 +403,9 @@ switch what
         end
         
         xyplot(T.dist,T.corr,T.bin,'split',T.bwParcel,'leg',{'within Parcel','between Parcels'},...
-            'subset',T.crossval==crossval & T.dist<=35,'style_symbols4*2','markersize',10,'markertype','^');
+            'subset',T.crossval==crossval & T.dist<=35,'style_symbols4*2','markersize',8,...
+            'markertype','^','linewidth',2,'linecolor',{'r','k'},'markercolor',{'r','k'},...
+            'markerfill',{'r','k'});
         set(gca,'YLim',[0 0.6],'XLim',[0 35]);
         xlabel('Spatial Distance (mm)');
         ylabel('Activity correlation');
@@ -595,7 +597,7 @@ switch what
         set(gcf,'PaperPosition',[1 1 60 30]);wysiwyg;
         
     case 'FIGURES:CORR' % Makes the summary figure of within / between correlations
-        toPlot = {'lob10','atlasFinal9'}; % something weird happening with 'bucknerRest'
+        toPlot = {'lob10','atlasFinal9','bucknerRest'}; % something weird happening with 'bucknerRest'
         numPlots = numel(toPlot);
         for i=1:numPlots
             subplot(1,numPlots,i);
