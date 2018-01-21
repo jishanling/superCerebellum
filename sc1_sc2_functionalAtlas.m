@@ -424,6 +424,7 @@ switch what
             P=addstruct(P,A);
             clear A
         end
+        pivottable(T.SN,[T.bin T.bwParcel],T.corr,'length','subset',T.crossval==0)
         
         % plot boxplot of different clusters
         W=getrow(P,P.bwParcel==0); % within
