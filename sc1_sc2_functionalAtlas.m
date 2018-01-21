@@ -26,13 +26,14 @@ switch what
     case 'ATLAS:finalMap'
         % example: 'sc1_sc2_functionalAtlas('ATLAS:finalMap',[2],1,13,'leaveOneOut')
         K=varargin{1}; % number of clusters
+        metric=varargin{2}; % 'yes' or 'no'
         
         sn=returnSubjs;
-        outName=fullfile(studyDir{2},encodeDir,'glm4','atlasFinal.nii');
+        outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_atlasFinal%d',K),'map.nii');
         
         [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,[1,2]);
         [F,G,Err1]=semiNonNegMatFac(X_C,K,'threshold',0.01);
-        save(fullfile(studyDir{2},encodeDir,'glm4','atlasFinal_parcel.mat'),'F','G','volIndx','V');
+        save(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_atlasFinal%d',K),'parcels.mat'),'F','G','volIndx','V');
         fprintf('final atlas created for %s \n',K)
         
         [~,groupFeat]=max(G,[],2);
@@ -56,25 +57,28 @@ switch what
         % save out metric file
         % map vol 2 surf
         M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode','type','paint');
-        M.column_name={'atlasFinal'};
         
-        caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','atlasFinal.paint'),M);
-        
-        % make areacolour
-        cmap=load(fullfile(studyDir{2},caretDir,'suit_flat','glm4','features.txt'));
-        M.column_name=M.paintnames;
-        M.column_color_mapping=repmat([-5 5],length(M.column_name),1);
-        M.data=cmap(1:length(M.column_name),2:4);
-        caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','atlasFinal.areacolor'),M);
-        
-        figure()
-        title('final atlas')
-        M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
-        suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
+        switch metric,
+            case 'yes'
+                M.column_name={'atlasFinal'};
+                caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','atlasFinal.paint'),M);
+                % make areacolour
+                cmap=load(fullfile(studyDir{2},caretDir,'suit_flat','glm4','features.txt'));
+                M.column_name=M.paintnames;
+                M.column_color_mapping=repmat([-5 5],length(M.column_name),1);
+                M.data=cmap(1:length(M.column_name),2:4);
+                caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','atlasFinal.areacolor'),M);
+            case 'no'
+                figure()
+                title('final atlas')
+                M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
+                suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
+        end
         
     case 'EVAL:get_data'
-        sn=varargin{1}; % Subje numbers to include
+        sn=varargin{1}; % Subj numbers to include
         study=varargin{2}; % 1 or 2 or [1,2]
+        group=varargin{3}; % 'yes' or 'no'
         
         D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         
@@ -97,11 +101,16 @@ switch what
                 end
             end
             
-            % if group - get mean
-            UFull=nanmean(UFullAvrg,3);
-            
-            % remove mean of shared tasks
-            UFullAvrg_C=bsxfun(@minus,UFull,mean(UFull(idx,:)));
+            switch group,
+                case 'yes'
+                    % if group - get mean
+                    UFull=nanmean(UFullAvrg,3);
+                    % remove mean of shared tasks
+                    UFullAvrg_C=bsxfun(@minus,UFull,mean(UFull(idx,:)));
+                case 'no'
+                    % remove mean of shared tasks
+                    UFullAvrg_C=bsxfun(@minus,UFullAvrg,mean(UFullAvrg(idx,:,:)));
+            end
             
             % if func1+func2 - concatenate
             if length(study)>1,
@@ -113,11 +122,46 @@ switch what
         
         % center the data (remove overall mean)
         X_C=bsxfun(@minus,UFullAvrgAll,mean(UFullAvrgAll));
-        varargout={X_C,volIndx,V};
-    case 'EVAL:make_SNN_map'
+        varargout={X_C,volIndx,V,sn};
+    case 'EVAL:unCrossval:GROUP'
+        % code is written now so that func map is built on sc1+sc2 (allConds) and
+        % evaluated on sc1+sc2 (allConds)
+        mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>' or 'atlasFinal'
+        
+        % load in map
+        mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
+        
+        % load in func data (sc1+sc2) to test
+        [X_C,volIndx,V,sn] = sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,[1,2],'no');
+        
+        % Now get the parcellation sampled into the same space
+        [i,j,k]=ind2sub(V.dim,volIndx);
+        [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
+        VA= spm_vol(mapName);
+        [i1,j1,k1]=spmj_affine_transform(x,y,z,inv(VA.mat));
+        Parcel = spm_sample_vol(VA,i1,j1,k1,0);
+        % Divide the voxel pairs into all the spatial bins that we want
+        fprintf('parcels\n');
+        voxIn = Parcel>0;
+        XYZ= [x;y;z];
+        RR=[];
+        [BIN,R]=mva_spatialCorrBin(XYZ(:,voxIn),'Parcel',Parcel(1,voxIn));
+        clear XYZ i k l x y z i1 j1 k1 VA Parcel; % Free memory
+        % Now calculate the uncrossvalidated estimation of the correlation for each subject
+        for s=1:length(sn),
+            B=X_C(:,:,s);
+            R.SN = ones(length(R.N),1)*sn(s);
+            fprintf('%d correl \n',sn(s));
+            R.corr=mva_spatialCorr(B,BIN);
+            R.crossval = zeros(length(R.corr),1);
+            RR = addstruct(RR,R);
+            fprintf('uncrossval eval done for subj %d \n',sn(s));
+        end;
+        save(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),'spatialBoundfunc3.mat'),'-struct','RR'); % 3 - studies 1 and 2 combined
+    case 'EVAL:crossval:MAKE'
         % example: 'sc1_sc2_functionalAtlas('EVAL:make_SNN_map',[2],1,13,'leaveOneOut')
         sn=varargin{1}; % subjNum or 'group'
-        study=varargin{2}; % 1 or 2 or [1,2]
+        study=varargin{2}; % 1 or 2
         K=varargin{3}; % number of clusters
         type=varargin{4}; % 'group','indiv','leaveOneOut'
         
@@ -136,11 +180,11 @@ switch what
                 sn=returnSubjs(returnSubjs~=sn);
         end
         
-        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study);
+        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'no');
         [F,G,Err1]=semiNonNegMatFac(X_C,K,'threshold',0.01);
         fprintf('SNN map (%d clusters) created for %s \n',K,type)
         save(fullfile(outName),'F','G','volIndx','V');
-    case 'EVAL:visualise_SNN_map'
+    case 'EVAL:crossval:VISUALISE'
         sn=varargin{1}; % [2] or 'group'
         study=varargin{2}; % 1 or 2 or [1,2]
         K=varargin{3}; % number of clusters
@@ -181,7 +225,7 @@ switch what
         title(sprintf('%d clusters',K))
         M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
         suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
-    case 'EVAL:bounds:GROUP'
+    case 'EVAL:crossval:GROUP'
         % code is written now so that func map from sc1 is always evaluated
         % on sc2 data (and vice versa)
         study=varargin{1}; % is map built on study [1] or [2] ?
@@ -223,13 +267,8 @@ switch what
         % Estimation of the correlation for each subject
         for sn=unique(T.SN)';
             for c=1:length(idx),
-<<<<<<< HEAD
                 i1(c) = find(T.SN==sn & T.sess==1 & T.cond==idx(c));
                 i2(c) = find(T.SN==sn & T.sess==2 & T.cond==idx(c));
-=======
-            i1(c) = find(T.SN==sn & T.sess==1 & T.cond==idx(c));
-            i2(c) = find(T.SN==sn & T.sess==2 & T.cond==idx(c));
->>>>>>> ac957374445521af364006761f048ef4939ba70d
             end
             B=(T.data(i1,voxIn)+T.data(i2,voxIn))/2; % why divide by 2 ?
             
@@ -245,7 +284,7 @@ switch what
             RR = addstruct(RR,R);
         end;
         save(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d.mat',data)),'-struct','RR');
-    case 'EVAL:bounds:INDIV' % NEED TO UPDATE FOR SNN !!
+    case 'EVAL:crossval:INDIV' % NEED TO UPDATE FOR SNN !!
         sn=varargin{1}; % [2]
         study=varargin{2}; % 1 or 2
         var=varargin{3}; % .95
@@ -294,7 +333,7 @@ switch what
             RR = addstruct(RR,R);
         end;
         save(outName,'-struct','RR');
-    case 'EVAL:bounds:LEAVEONEOUT' % NEED TO UPDATE FOR SNN !!
+    case 'EVAL:crossval:LEAVEONEOUT' % NEED TO UPDATE FOR SNN !!
         sn=varargin{1}; % [2]
         study=varargin{2}; % 1 or 2
         var=varargin{3}; % .95
@@ -342,44 +381,12 @@ switch what
         RR = addstruct(RR,R);
         save(outName,'-struct','RR');
         
-    case 'EVAL:PLOT:DIFF'
-        study=varargin{1};% is map built on study [1] or [2] ?
-        mapType=varargin{2}; % {'lob10','bucknerRest','SC1_9cluster'}
-        data=varargin{3}; % evaluating data from study [1] or [2] ?
-        
-        P=[];
-        for m=1:length(mapType),
-            T=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d.mat',data)));
-            
-            A=getrow(T,T.crossval==1);
-            A.type=repmat({mapType{m}},length(A.SN),1);
-            A.m=repmat(m,length(A.SN),1);
-            P=addstruct(P,A);
-            clear A
-        end
-        
-        % plot correlations (across clusters) for within
-        %         figure('name','within')
-        %         xyplot(P.dist,P.corr,P.bin,'split',P.type,'leg','auto','subset',P.bwParcel==0,'style_thickline');
-        %
-        %         % plot correlations (across clusters) for between
-        %         figure('name','between')
-        %         xyplot(P.dist,P.corr,P.bin,'split',P.type,'leg','auto','subset',P.bwParcel==1,'style_thickline');
-        
-        % plot boxplot of different clusters
-        W=getrow(P,P.bwParcel==0); % within
-        B=getrow(P,P.bwParcel==1); % between
-        W.diff=W.corr-B.corr;
-        
-        figure()
-        myboxplot(W.m,W.diff) % within-between diff
-        figure()
-        lineplot(W.m,W.diff) % within-between diff
     case 'EVAL:PLOT:CURVES'
         study=varargin{1};% is map built on study [1] or [2] ?
         mapType=varargin{2}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
-        data=varargin{3}; % evaluating data from study [1] or [2] ?
+        data=varargin{3}; % evaluating data from study [1] or [2] or both [3]
         type=varargin{4}; % 'group' or 'leaveOneOut'
+        crossval=varargin{5}; % [0] - no crossval; [1] - crossval
         
         switch type,
             case 'group'
@@ -394,26 +401,36 @@ switch what
                 fprintf('no such case')
         end
         
-<<<<<<< HEAD
-        figure()
         xyplot(T.dist,T.corr,T.bin,'split',T.bwParcel,'leg',{'within Parcel','between Parcels'},...
-            'subset',T.crossval==1 & T.dist<=35,'style_symbols4*2','markersize',10,'markertype','^');
-=======
-        xyplot(T.dist,T.corr,T.bin,'split',T.bwParcel,'leg',{'within Parcel','between Parcels'},...
-            'subset',T.crossval==1 & T.dist<=35,'style_symbols4*2','markersize',8,'markertype','^',...
-            'linewidth',2,'linecolor','k','errorcolor','k');
->>>>>>> ac957374445521af364006761f048ef4939ba70d
+            'subset',T.crossval==crossval & T.dist<=35,'style_symbols4*2','markersize',10,'markertype','^');
         set(gca,'YLim',[0 0.6],'XLim',[0 35]);
         xlabel('Spatial Distance (mm)');
         ylabel('Activity correlation');
-        title(sprintf('%s-func%d-with crossval',mapType,data));
-<<<<<<< HEAD
-        set(gcf,'PaperPosition',[2 4 10 12]);
-        wysiwyg;
+        title(sprintf('%s-func%d-%dcrossval',mapType,data,crossval)); %0-no crossval; %1-crossval
+    case 'EVAL:PLOT:DIFF'
+        study=varargin{1};% is map built on study [1] or [2] ?
+        mapType=varargin{2}; % {'lob10','bucknerRest','atlasFinal9'}
+        data=varargin{3}; % evaluating data from study [1] or [2] or [3]?
+        crossval=varargin{4}; % [0]-no crossval; [1]-crossval
         
-=======
-  
->>>>>>> ac957374445521af364006761f048ef4939ba70d
+        P=[];
+        for m=1:length(mapType),
+            T=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d.mat',data)));
+            
+            A=getrow(T,T.crossval==crossval);
+            A.type=repmat({mapType{m}},length(A.SN),1);
+            A.m=repmat(m,length(A.SN),1);
+            P=addstruct(P,A);
+            clear A
+        end
+        
+        % plot boxplot of different clusters
+        W=getrow(P,P.bwParcel==0); % within
+        B=getrow(P,P.bwParcel==1); % between
+        W.diff=W.corr-B.corr;
+        
+        myboxplot(W.m,W.diff,'subset',W.dist<=35,'style_twoblock','plotall',0) % within-between diff
+        ylabel('Within/Between Difference');    
     case 'EVAL:PLOT:INDIV' % NEED TO UPDATE FOR SNN !!
         study=varargin{1};
         var=varargin{2};
@@ -450,23 +467,15 @@ switch what
         title(sprintf('SC%d(%dPOV)-%s-with crossval',study,var*100,data));
         set(gcf,'PaperPosition',[2 4 10 12]);
         wysiwyg;
-    case 'EVAL:PLOT:CORRFIGURE' % Makes the summary figure of within / between correlations 
-        toPlot = {'lob10','SC1_9cluster','bucknerRest'}; 
-        numPlots = numel(toPlot);   
-        for i=1:numPlots 
-            subplot(1,numPlots,i); 
-            sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',1,toPlot{i},2,'group'); 
-        end; 
-        set(gcf,'PaperPosition',[2 4 12 3]);
-        wysiwyg;
-        
+
     case 'ENCODE:project_taskSpace'
+        K=varargin{1}; % how many clusters ?
         
         % load raw Y (cereb)
-        [Y,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,[1,2]);
+        [Y,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,[1,2],'no');
         
         % load clusters for cereb
-        load(fullfile(studyDir{2},encodeDir,'glm4','atlasFinal_parcel.mat'));
+        load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_atlasFinal%d',K),'parcels.mat'));
         
         D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         
@@ -500,9 +509,11 @@ switch what
         %         scatterplot(X(:,14),X(:,10),'label',allCondNames,'CAT',CAT,'regression','linear','intercept',0,'printcorr','draworig')
         %         xlabel('right hand tasks');ylabel('left hand tasks');
     case 'ENCODE:features'
+        K=varargin{1}; % how many clusters in atlasFinal ?
+        
         D=dload(fullfile(baseDir,'featureTable_jd.txt'));        % Read feature table
         S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));      % List of task conditions
-        load(fullfile(studyDir{2},encodeDir,'glm4','atlasFinal_condLoads.mat'));
+        load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%datlasFinal',K),'condLoads.mat'));
         W=pivottablerow(S.condNumUni,T.taskWeights,'mean(x,1)');
         
         figure(1);
@@ -547,8 +558,11 @@ switch what
         A = -eye(numFeat);
         b = zeros(numFeat,1);
         for p=1:numClusters,
-            % U(:,p) = cplexqp(XX+lambda(2)*eye(numFeat),ones(numFeat,1)*lambda(1)-XY(:,p),A,b); 
-            U(:,p) = (XX + eye(numFeat)*lambda(2))\(XY(:,p));
+            % U(:,p) =
+            % cplexqp(XX+lambda(2)*eye(numFeat),ones(numFeat,1)*lambda(1)-XY(:,p),A,b);
+            % % I don't have the IBM cplexqp routine (will download it
+            % later)
+            U(:,p) = (XX + eye(numFeat)*lambda(2))\(XY(:,p)); % just normal ridge regression
         end;
         
         % Present the list of the highest three correlation for each
@@ -578,6 +592,21 @@ switch what
             end;
         end;
         set(gcf,'PaperPosition',[1 1 60 30]);wysiwyg;
+        
+    case 'FIGURES:CORR' % Makes the summary figure of within / between correlations
+        toPlot = {'lob10','atlasFinal9'};
+        numPlots = numel(toPlot);
+        for i=1:numPlots
+            subplot(1,numPlots,i);
+            sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',2,toPlot{i},3,'group',0);
+        end;
+        set(gcf,'PaperPosition',[2 4 12 3]);
+        wysiwyg;
+    case 'FIGURES:DIFF' % Makes the summary figure of within / between diff
+        toPlot = {'lob10','atlasFinal9'};
+        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',2,toPlot,3,0);
+        set(gcf,'PaperPosition',[2 4 12 3]);
+%         wysiwyg;    
 end
 % Local functions
 function dircheck(dir)
