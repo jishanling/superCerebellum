@@ -391,7 +391,7 @@ switch what
         RR = addstruct(RR,R);
         save(outName,'-struct','RR');
     case 'EVAL:average' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
-        study=varargin{1};% is map built on study [1] or [2] ?
+        study=varargin{1};% is map saved in study 1 or 2 directory ?
         mapType=varargin{2}; % options are 'lob10','bucknerRest','atlasFinal<num>' etc'
         
         R=[];
@@ -400,9 +400,9 @@ switch what
             T.studyNum=repmat([i],length(T.SN),1);
             R=addstruct(R,T);
         end
-        
+        R=rmfield(R,{'distmin','distmax','N'}); 
         % get average of both structures here
-        
+        A=tapply(R,{'bwParcel','bin','dist','SN','corr','crossval'},{'bwParcel','mean'},{'bin','mean'},{'dist','mean'},{'SN','mean'},{'corr','mean'},{'crossval','mean'}); 
         
         outDir=fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),'spatialBoundfunc4.mat');
         save(outDir,'-struct','T');    
