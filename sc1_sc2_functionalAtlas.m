@@ -2,7 +2,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
@@ -29,10 +29,10 @@ switch what
         metric=varargin{2}; % 'yes' or 'no'
         
         sn=returnSubjs;
-        dircheck(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_atlasFinal%d',K))); 
+        dircheck(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_atlasFinal%d',K)));
         outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_atlasFinal%d',K),'map.nii');
         
-        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,[1,2],'yes');
+        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,[1,2],'build');
         [F,G,Err1]=semiNonNegMatFac(X_C,K,'threshold',0.01);
         save(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_atlasFinal%d',K),'parcels.mat'),'F','G','volIndx','V');
         fprintf('final atlas created for %s \n',K)
@@ -79,7 +79,7 @@ switch what
     case 'EVAL:get_data'
         sn=varargin{1}; % Subj numbers to include
         study=varargin{2}; % 1 or 2 or [1,2]
-        group=varargin{3}; % 'yes' or 'no'
+        type=varargin{3}; % 'build' or 'eval'. For build - we get group data. For eval - we get indiv data
         
         D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         
@@ -102,13 +102,13 @@ switch what
                 end
             end
             
-            switch group,
-                case 'yes'
+            switch type,
+                case 'build'
                     % if group - get mean
                     UFull=nanmean(UFullAvrg,3);
                     % remove mean of shared tasks
                     UFullAvrg_C=bsxfun(@minus,UFull,mean(UFull(idx,:)));
-                case 'no'
+                case 'eval'
                     % remove mean of shared tasks
                     UFullAvrg_C=bsxfun(@minus,UFullAvrg,mean(UFullAvrg(idx,:,:)));
             end
@@ -128,12 +128,21 @@ switch what
         % code is written now so that func map is built on sc1+sc2 (allConds) and
         % evaluated on sc1+sc2 (allConds)
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest', or 'atlasFinal<num>'
+        eval=varargin{2}; % [1] [2] or [1,2]
         
-        % load in mapOR 
+        if size(eval,2)==2,
+            outName='spatialBoundfunc3.mat';
+            outDir=fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),outName);
+        else
+            outName=sprintf('spatialBoundfunc%d.mat',eval);
+            outDir=fullfile(studyDir{eval},'encoding','glm4',sprintf('groupEval_%s',mapType),outName);
+        end
+        
+        % load in mapOR
         mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
         
         % load in func data (sc1+sc2) to test
-        [X_C,volIndx,V,sn] = sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,[1,2],'no');
+        [X_C,volIndx,V,sn] = sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,eval,'eval');
         
         % Now get the parcellation sampled into the same space
         [i,j,k]=ind2sub(V.dim,volIndx);
@@ -158,7 +167,7 @@ switch what
             RR = addstruct(RR,R);
             fprintf('uncrossval eval done for subj %d \n',sn(s));
         end;
-        save(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),'spatialBoundfunc3.mat'),'-struct','RR'); % 3 - studies 1 and 2 combined
+        save(outDir,'-struct','RR');
     case 'EVAL:crossval:MAKE'
         % example: 'sc1_sc2_functionalAtlas('EVAL:make_SNN_map',[2],1,13,'leaveOneOut')
         sn=varargin{1}; % subjNum or 'group'
@@ -181,7 +190,7 @@ switch what
                 sn=returnSubjs(returnSubjs~=sn);
         end
         
-        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'no');
+        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
         [F,G,Err1]=semiNonNegMatFac(X_C,K,'threshold',0.01);
         fprintf('SNN map (%d clusters) created for %s \n',K,type)
         save(fullfile(outName),'F','G','volIndx','V');
@@ -241,11 +250,11 @@ switch what
         % be sc2)
         load(fullfile(studyDir{data},'encoding','glm4','cereb_avrgDataStruct.mat'));
         
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        D1=getrow(D,D.StudyNum==data);
         switch eval,
             case 'unique'
                 % if funcMap - only evaluate unique tasks in sc1 or sc2
-                D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
-                D1=getrow(D,D.StudyNum==data);
                 idx=D1.condNum(D1.overlap==0); % get index for unique tasks
             case 'all'
                 idx=D1.condNum;
@@ -271,9 +280,9 @@ switch what
                 i1(c) = find(T.SN==sn & T.sess==1 & T.cond==idx(c));
                 i2(c) = find(T.SN==sn & T.sess==2 & T.cond==idx(c));
             end
-            B=(T.data(i1,voxIn)+T.data(i2,voxIn))/2; % why divide by 2 ?
+            B=(T.data(i1,voxIn)+T.data(i2,voxIn))/2;
             
-            fprintf('%d cross\n',sn);
+            %             fprintf('%d cross\n',sn);
             R.SN = ones(length(R.N),1)*sn;
             R.corr = mva_spatialCorr(T.data([i1;i2],voxIn),BIN,...
                 'CrossvalPart',T.sess([i1;i2],1),'excludeNegVoxels',1);
@@ -381,11 +390,27 @@ switch what
         R.crossval = zeros(length(R.corr),1);
         RR = addstruct(RR,R);
         save(outName,'-struct','RR');
+    case 'EVAL:average' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
+        study=varargin{1};% is map built on study [1] or [2] ?
+        mapType=varargin{2}; % options are 'lob10','bucknerRest','atlasFinal<num>' etc'
+        
+        R=[];
+        for i=1:2,
+            T=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d.mat',i)));
+            T.studyNum=repmat([i],length(T.SN),1);
+            R=addstruct(R,T);
+        end
+        
+        % get average of both structures here
+        
+        
+        outDir=fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),'spatialBoundfunc4.mat');
+        save(outDir,'-struct','T');    
         
     case 'EVAL:PLOT:CURVES'
         study=varargin{1};% is map built on study [1] or [2] ?
         mapType=varargin{2}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
-        data=varargin{3}; % evaluating data from study [1] or [2] or both [3]
+        data=varargin{3}; % evaluating data from study [1] or [2], both [3] or average of [1] and [2] after eval [4]
         type=varargin{4}; % 'group' or 'leaveOneOut'
         crossval=varargin{5}; % [0] - no crossval; [1] - crossval
         
@@ -421,12 +446,12 @@ switch what
             T=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d.mat',data)));
             
             A=getrow(T,T.crossval==crossval);
-            A.type=repmat({mapType{m}},length(A.SN),1);
-            A.m=repmat(m,length(A.SN),1);
+            A.type=repmat({mapType{m}},length(A.bin),1);
+            A.m=repmat(m,length(A.bin),1);
             P=addstruct(P,A);
             clear A
         end
-        pivottable(T.SN,[T.bin T.bwParcel],T.corr,'length','subset',T.crossval==0)
+        pivottable(T.SN,[T.bin T.bwParcel],T.corr,'length','subset',T.crossval==crossval)
         
         % plot boxplot of different clusters
         W=getrow(P,P.bwParcel==0); % within
@@ -434,7 +459,7 @@ switch what
         W.diff=W.corr-B.corr;
         
         myboxplot(W.m,W.diff,'subset',W.dist<=35,'style_twoblock','plotall',0) % within-between diff
-        ylabel('Within/Between Difference');    
+        ylabel('Within/Between Difference');
     case 'EVAL:PLOT:INDIV' % NEED TO UPDATE FOR SNN !!
         study=varargin{1};
         var=varargin{2};
@@ -471,7 +496,7 @@ switch what
         title(sprintf('SC%d(%dPOV)-%s-with crossval',study,var*100,data));
         set(gcf,'PaperPosition',[2 4 10 12]);
         wysiwyg;
-
+        
     case 'ENCODE:project_taskSpace'
         K=varargin{1}; % how many clusters ?
         
@@ -596,21 +621,27 @@ switch what
             end;
         end;
         set(gcf,'PaperPosition',[1 1 60 30]);wysiwyg;
-        
+
     case 'FIGURES:CORR' % Makes the summary figure of within / between correlations
-        toPlot = {'lob10','atlasFinal9','bucknerRest'}; % something weird happening with 'bucknerRest'
+        toPlot = {'atlasFinal6','atlasFinal9','atlasFinal10','atlasFinal13',...
+            'atlasFinal15','atlasFinal19','atlasFinal23'};
+        crossval=varargin{1}; 
+        evalNum=varargin{2}; 
         numPlots = numel(toPlot);
         for i=1:numPlots
             subplot(1,numPlots,i);
-            sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',2,toPlot{i},3,'group',0);
+            sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',2,toPlot{i},evalNum,'group',crossval);
         end;
-        set(gcf,'PaperPosition',[2 4 12 3]);
-        wysiwyg;
+        %         set(gcf,'PaperPosition',[2 4 12 3]);
+        %         wysiwyg;
     case 'FIGURES:DIFF' % Makes the summary figure of within / between diff
-        toPlot = {'lob10','atlasFinal9'}; % something weird happening with 'bucknerRest'
-        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',2,toPlot,3,0);
+        toPlot = {'atlasFinal6','atlasFinal9','atlasFinal10','atlasFinal13',...
+            'atlasFinal15','atlasFinal19','atlasFinal23'}; % something weird happening with 'bucknerRest'
+        crossval=varargin{1};
+        evalNum=varargin{2};
+        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',2,toPlot,evalNum,crossval);
         set(gcf,'PaperPosition',[2 4 12 3]);
-%         wysiwyg;    
+        %         wysiwyg;
 end
 % Local functions
 function dircheck(dir)
