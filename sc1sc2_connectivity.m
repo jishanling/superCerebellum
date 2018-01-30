@@ -5,8 +5,8 @@ function varargout=sc1sc2_connectivity(what,varargin)
 type=[];
 % % (1) Directories
 % rootDir           = '/Users/jdiedrichsen/Data/super_cerebellum';
-rootDir           = '/Volumes/MotorControl/data/super_cerebellum_new/';
-% rootDir         = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+% rootDir           = '/Volumes/MotorControl/data/super_cerebellum_new/';
+rootDir         = '/Users/chernandez/Cerebellum';
 sc1Dir            = [rootDir '/sc1'];
 sc2Dir            = [rootDir '/sc2'];
 behavDir        =['data'];
@@ -42,7 +42,7 @@ expStr    = {'sc1','sc2'};
 %==========================================================================
 
 switch(what)
-    case 'make_bucknermargin' % Generates the Buckner Margin ROI
+    case 'make_bucknermargin'   % Generates the Buckner Margin ROI
         kernel = 8;
         threshold = 0.05;
         for s=2:22
@@ -63,7 +63,7 @@ switch(what)
             Vcort.fname =  (fullfile(sc1Dir,regDir,'data',subj_name{s},'bucknermargin.nii'));
             spm_write_vol(Vcort,Vcort.dat);
         end;
-    case 'TS_correlation_map' % Seed based correlation analysis for 1 location - for visualization
+    case 'TS_correlation_map'   % Seed based correlation analysis for 1 location - for visualization
         sn=varargin{1}; % subjNum
         glm=varargin{2}; % glmNum
         location=[-8 -50 -11]; % [x,y,z]
@@ -134,7 +134,7 @@ switch(what)
                 spm_write_vol(Vo,Xo);
             end;
         end;
-    case 'TS_get_meants'            % Get univariately pre-whitened mean times series for each region
+    case 'TS_get_meants'        % Get univariately pre-whitened mean times series for each region
         % sc1_connectivity('TS_get_meants',[2 3 6 8 9 10 12 17:22],'sc2',4,'162_tessellation_hem');
         % sc1_connectivity('TS_get_meants',[2:22],'sc1',4,'162_tessellation_hem');
         sn=varargin{1}; % subjNum
@@ -194,7 +194,7 @@ switch(what)
             
             fprintf('ts saved for %s (%s) for %s \n',subj_name{sn(s)},sprintf('glm%d',glm),type);
         end
-    case 'TS_get_ts'                % Get univariately pre-whitened time series for each voxel of a region
+    case 'TS_get_ts'            % Get univariately pre-whitened time series for each voxel of a region
         % sc1_connectivity('TS_get_ts',[2:22],'sc2',4,'Cerebellum_grey');
         % sc1_connectivity('TS_get_ts',[2 3 6 8 9 10 12 17:22],'sc2',4,'Cerebellum_grey');
         sn=varargin{1}; % subjNum
@@ -247,8 +247,8 @@ switch(what)
             save(filename,'Yres','Yhatm','Yhatr','B');
             fprintf('ts saved for %s (%s) for %s \n',subj_name{sn(s)},sprintf('glm%d',glm),type);
         end
-    case 'TS_allsubj'              % Make a structure of all cortical time series of all subject - also seperate out residual from
-        sn=[2:22];  % subjNum
+    case 'TS_allsubj'           % Make a structure of all cortical time series of all subject - also seperate out residual from
+        sn=goodsubj;  % Take only good subjects
         glm=4; % glmNum
         type='162_tessellation_hem'; % 'cortical_lobes','whole_brain','yeo','desikan','cerebellum','yeo_cerebellum'
         session_specific = 1;
@@ -257,7 +257,6 @@ switch(what)
         vararginoptions(varargin,{'sn','glm4','type','session_specific'});
         
         glmDir =fullfile(expDir,sprintf('/GLM_firstlevel_%d',glm));
-        subjs=length(sn);
         numSubj=length(sn);
         
         for s=1:numSubj
@@ -289,7 +288,7 @@ switch(what)
         else
             save(fullfile(expDir,regDir,sprintf('glm%d',glm),sprintf('ts_%s_all.mat',type)),'Yres','Yhatm','Yhatr','B');
         end;
-    case 'get_meanBeta'  % Take the time series structure and extract mean beta for cross-session modeling - removes instruct and adds rest
+    case 'get_meanBeta'         % Take the time series structure and extract mean beta for cross-session modeling - removes instruct and adds rest
         % type  = '162_tessellation_hem';
         type  = 'Cerebellum_grey';
         exper = {'sc1','sc2'};
@@ -338,29 +337,24 @@ switch(what)
         save(fullfile(wdir,'SampleDesignMatrix.mat'),'Sess','X','wX'); 
         
     case 'cortical_covariances'                 % Covariances between cortical areas in predicted time series
-        % variance inflation factor
-        load(fullfile(encodeDir,'162_tesselation_hem_all.mat')); % 'Y','partNum','condNum','ROI');
+        sn = goodsubj;
+        glm = 4;
+        type = '162_tessellation_hem';
+        vararginoptions(varargin,{'sn','glm','type'});
         
         % Figure out the right ones to use
-        X=load(fullfile(regDir,'data','162_reorder.mat'));
+        X=load(fullfile(sc1Dir,regDir,'data','162_reorder.mat'));
         Xx=getrow(X,X.newIndx);
         Xx=getrow(Xx,Xx.good==1);
-        
-        % Make a time series structure
-        SPM=load(fullfile(baseDir,'GLM_firstlevel_4','SampleDesignMatrix'));
-        for b=1:16
-            Tindx(SPM.Sess(b).row,1)=b;
-        end;
-        runX = indicatorMatrix('identity',Tindx);
-        R = eye(size(runX,1))-runX*pinv(runX);
-        
+   
         % Calcualte correlations
-        numSubj=size(Y,3);
-        for s=1:numSubj
-            B=Y(:,Xx.regIndx2,s);
-            % B(condNum==1,:)=0; % Set Instruction to 0
-            predT=SPM.X*B;  % Predicted time series
-            predT=R*predT;  % Subtract mean from each run
+        for s=1:length(sn)
+            % load Individual data
+            filename=(fullfile(sc1Dir,regDir,sprintf('glm%d',glm),subj_name{sn(s)},sprintf('ts_%s.mat',type)));
+            load(filename);
+            
+            Y = Yhatm + Yhatr;          % Predicted timeseries(Both mean and variable)
+            predT=Y(:,Xx.regIndx2);     % remove the bad regions 
             
             % Covariance and correlation
             COV(:,:,s)=cov(predT);
@@ -379,7 +373,7 @@ switch(what)
         for h=1:2
             subplot(2,2,h+2);
             ii=find(Xx.hem==h)';
-            sc1_imana_jd('plot_cortex_162',h,data(ii),Xx.regIndx(ii)-158*(h-1));
+            sc1_imana_jd('plot_cortex',h,data(ii));
         end;
     case 'cortical_pattern_consistency_all'     % Consistency based on betas
         T=load(fullfile(regDir,'glm4','ts_162_tessellation_hem_all.mat'));
