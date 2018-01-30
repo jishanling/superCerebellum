@@ -327,16 +327,7 @@ switch(what)
             end;
             save(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',type)),'B','ResMS');
         end;
-    case 'sample_DesignMatrix' 
-        exper=varargin{1}; 
-        glm = varargin{2}; 
-        wdir = fullfile(rootDir,expStr{exper},sprintf('GLM_firstlevel_%d',glm)); 
-        load(fullfile(wdir,'s02','SPM_light.mat')); 
-        Sess = SPM.Sess;    % Session Structure 
-        X = SPM.xX.X;      % Design matrix 
-        wX = SPM.xX.xKXs.X; % Filtered design matrix 
-        save(fullfile(wdir,'SampleDesignMatrix.mat'),'Sess','X','wX'); 
-        
+    case 'sample_ 
     case 'cortical_covariances'                 % Covariances between cortical areas in predicted time series
         % variance inflation factor
         load(fullfile(encodeDir,'162_tesselation_hem_all.mat')); % 'Y','partNum','condNum','ROI');
