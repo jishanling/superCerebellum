@@ -21,7 +21,198 @@ returnSubjs=[2,3,4,6,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
 switch what
     
     case 'TASKSPACE:overlap'
-    case 'TASKSPACE:contrasts'
+        
+    case 'ACTIVITY:get_data'
+        % load in allSubjs data struct from sc1 & sc2
+        H=[];
+        for study=1:2,
+            load(fullfile(studyDir{study},encodeDir,'glm4','cereb_avrgDataStruct.mat'));
+            T.studyNum=repmat(study,size(T.SN,1),1);
+            H=addstruct(H,T);
+            clear T
+        end
+        
+        sn=unique(H.SN);
+        
+        % get session average for each study separately
+        for s=1:length(sn),
+            idx=1;
+            for study=1:2,
+                numConds=length(unique(H.cond(H.studyNum==study)));
+                for c=1:numConds, % get average across sessions
+                    indx = H.cond==c & H.studyNum==study & H.SN==(sn(s));
+                    avrgData(idx,:)=nanmean(H.data(indx,:),1);
+                    idx=idx+1;
+                    clear indx
+                end
+                fprintf('subj%d averaged sessions for study%d \n',sn(s),study)
+            end
+            % subtract condition avrg baseline (across 61-1 conditions)
+            all=[1:size(avrgData,1)];
+            for c=1:size(avrgData,1),
+                X=nanmean(avrgData(all(all~=c),:),1);
+                data(c,:,s)=avrgData(c,:)-X;
+            end
+            clear avrgData
+            fprintf('subj%d new baseline \n',sn(s))
+        end
+        
+        varargout={data,sn,V,volIndx};
+    case 'ACTIVITY:get_motorFeats'
+        D.saccades=[28;28;98;31;31;37;37;29;29;46;38;38;36;41;38;38;20;20;25;25;50;22;22;26;26;32;32;32;45;...
+            60;15;15;15;26;26;50;16;30;35;71;60;58;38;38;43;43;43;25;25;30;30;23;23;50;40;40;40;98;21;21;45];
+        D.duration = [15;15;30;15;15;15;15;15;15;30;15;15;30;30;15;15;15;15;15;15;30;15;15;15;15;10;10;10;30;...
+            30;10;10;10;15;15;30;10;10;10;30;30;30;15;15;10;10;10;15;15;15;15;10;10;10;10;10;10;30;15;15;30];
+        D.lHand = [0;15;2;0;0;8;7;0;0;0;0;0;0;0;12;12;0;7;0;0;0;3.5;4;0;0;5;5;5;0;...
+            2;2;2;2;0;0;0;1;1;1;0;0;0;12;12;0;0;0;0;0;0;0;1;1;1;5;5;5;2;0;0;0];
+        D.rHand = [0;0;0;0;0;0;0;5;5;0;8;7;15;0;12;12;0;0;0;7;0;3.5;4;0;0;0;0;0;0;...
+            2;0;0;0;0;0;0;1;1;1;0;0;0;12;12;3;3;3;0;7;5;5;1;1;1;0;0;0;0;0;0;0];
+        featNames={'lHand','rHand','saccades'}; 
+        varargout={D,featNames};
+    case 'ACTIVITY:taskConds'
+        stats=varargin{1}; % 'yes' or 'no'
+        
+        pThresh=.05;
+        
+        [data,sn,V,volIndx]=sc1_sc2_functionalAtlas('ACTIVITY:get_data');
+        numTasks=size(data,1); 
+        
+        [D,featNames]=sc1_sc2_functionalAtlas('ACTIVITY:get_motorFeats');
+
+        T=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        
+        condNames=[T.condNames;featNames']; 
+        
+        X=[eye(numTasks) D.lHand./D.duration D.rHand./D.duration D.saccades./D.duration];
+        numTasks=size(X,2); 
+        
+        % set up volume info
+        Yy=zeros(numTasks,length(sn),V.dim(1)*V.dim(2)*V.dim(3));
+        C{1}.dim=V.dim;
+        C{1}.mat=V.mat;
+        
+        % do ridge regression
+        for s=1:length(sn),
+            X1=bsxfun(@minus,X,mean(X));
+            X1=bsxfun(@rdivide,X1,sum(X1.^2));
+            B=(X1'*X1+eye(numTasks)*.5)\(X1'*data(:,:,s));
+            % make volume
+            Yy(:,s,volIndx)=B;
+            clear X1 B
+            fprintf('subj%d done \n',sn(s))
+        end;
+        
+        switch stats,
+            case 'yes'
+                Yy(Yy==0)=nan;
+                for ii=1:numTasks,
+                    data=ssqrt(Yy(ii,:,:));
+                    data=reshape(data,[size(data,2),size(data,3)]);
+                    cStats{ii}= caret_getcSPM('onesample_t','data',data(1:length(sn),:)');
+                    P=spm_P_FDR(cStats{ii}.con.Z,cStats{ii}.con.df,'Z',1,sort(cStats{ii}.con.Z_P,'ascend'));
+                    %                     P=spm_P_Bonf(cStats{ii}.con.Z,cStats{ii}.con.df,'Z',size(cStats{ii}.data,1),1);
+                    c=cStats{ii}.con.Z;
+                    c(P>pThresh)=nan;
+                    indices(ii,:)=c;
+                    clear c
+                end
+            case 'no'
+                % if numSubjs > 1 get avg
+                Yy=permute(Yy,[2 1 3]);
+                indices=nanmean(Yy,1);
+                indices=reshape(indices,[size(indices,2),size(indices,3)]);
+        end
+        clear data
+        
+        % map vol2surf
+        indices=reshape(indices,[size(indices,1) V.dim(1),V.dim(2),V.dim(3)]);
+        for i=1:size(indices,1),
+            data=reshape(indices(i,:,:,:),[C{1}.dim]);
+            C{i}.dat=data;
+        end
+        M=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',condNames);  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
+        
+        % save out metric file
+        if strcmp(stats,'yes'),
+            save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','FDRCorr_taskConds.metric'),M);
+        else
+            caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','unCorr_taskConds.metric'),M);
+        end
+    case 'ACTIVITY:motorFeats'
+        stats=varargin{1}; % 'yes' or 'no'
+        
+        pThresh=.05;
+        
+        [data,sn,V,volIndx]=sc1_sc2_functionalAtlas('ACTIVITY:get_data');
+        
+        [D,featNames]=sc1_sc2_functionalAtlas('ACTIVITY:get_motorFeats');
+        
+        X=[D.lHand./D.duration D.rHand./D.duration D.saccades./D.duration];
+        
+        % set up volume info
+        numFeat=size(X,2);
+        Yy=zeros(numFeat,length(sn),V.dim(1)*V.dim(2)*V.dim(3));
+        C{1}.dim=V.dim;
+        C{1}.mat=V.mat;
+        
+        % do ridge regression
+        for s=1:length(sn),
+            X1=bsxfun(@minus,X,mean(X));
+            X1=bsxfun(@rdivide,X1,sum(X1.^2));
+            B=(X1'*X1+eye(numFeat)*.5)\(X1'*data(:,:,s));
+            % make volume
+            Yy(:,s,volIndx)=B;
+            clear X1 B
+            fprintf('subj%d done \n',sn(s))
+        end;
+        
+        switch stats,
+            case 'yes'
+                Yy(Yy==0)=nan;
+                for ii=1:numFeat,
+                    data=ssqrt(Yy(ii,:,:));
+                    data=reshape(data,[size(data,2),size(data,3)]);
+                    cStats{ii}= caret_getcSPM('onesample_t','data',data(1:length(sn),:)');
+                    P=spm_P_FDR(cStats{ii}.con.Z,cStats{ii}.con.df,'Z',1,sort(cStats{ii}.con.Z_P,'ascend'));
+                    %                     P=spm_P_Bonf(cStats{ii}.con.Z,cStats{ii}.con.df,'Z',size(cStats{ii}.data,1),1);
+                    c=cStats{ii}.con.Z;
+                    c(P>pThresh)=nan;
+                    indices(ii,:)=c;
+                    clear c
+                end
+            case 'no'
+                % if numSubjs > 1 get avg
+                Yy=permute(Yy,[2 1 3]);
+                indices=nanmean(Yy,1);
+                indices=reshape(indices,[size(indices,2),size(indices,3)]);
+        end
+        clear data
+        
+        % map vol2surf
+        indices=reshape(indices,[size(indices,1) V.dim(1),V.dim(2),V.dim(3)]);
+        for i=1:size(indices,1),
+            data=reshape(indices(i,:,:,:),[C{1}.dim]);
+            C{i}.dat=data;
+        end
+        M=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',featNames');  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
+        
+        % visualise motor features
+        for m=1:numFeat,
+            figure()
+            suit_plotflatmap(M.data(:,m))
+        end
+        
+        % save out metric file
+        if strcmp(stats,'yes'),
+            save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','FDRCorr_motorFeats.metric'),M);
+        else
+            caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','unCorr_motorFeats.metric'),M);
+        end
+    case 'ACTIVITY:reliability'
+        
+    case 'DISTANCES:RDM'
+    case 'DISTANCES:MDS'
+    case 'DISTANCES:Reliability'
         
     case 'ATLAS:finalMap'
         % example: 'sc1_sc2_functionalAtlas('ATLAS:finalMap',[2],1,13,'leaveOneOut')
@@ -400,12 +591,12 @@ switch what
             T.studyNum=repmat([i],length(T.SN),1);
             R=addstruct(R,T);
         end
-        R=rmfield(R,{'distmin','distmax','N'}); 
+        R=rmfield(R,{'distmin','distmax','N'});
         % get average of both structures here
-        A=tapply(R,{'bwParcel','bin','dist','SN','corr','crossval'},{'bwParcel','mean'},{'bin','mean'},{'dist','mean'},{'SN','mean'},{'corr','mean'},{'crossval','mean'}); 
+        A=tapply(R,{'bin','SN','bwParcel','crossval','dist'},{'corr'});
         
         outDir=fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),'spatialBoundfunc4.mat');
-        save(outDir,'-struct','T');    
+        save(outDir,'-struct','T');
         
     case 'EVAL:PLOT:CURVES'
         study=varargin{1};% is map built on study [1] or [2] ?
@@ -451,7 +642,7 @@ switch what
             P=addstruct(P,A);
             clear A
         end
-        pivottable(T.SN,[T.bin T.bwParcel],T.corr,'length','subset',T.crossval==crossval)
+        %         pivottable(T.SN,[T.bin T.bwParcel],T.corr,'length','subset',T.crossval==crossval)
         
         % plot boxplot of different clusters
         W=getrow(P,P.bwParcel==0); % within
@@ -460,6 +651,28 @@ switch what
         
         myboxplot(W.m,W.diff,'subset',W.dist<=35,'style_twoblock','plotall',0) % within-between diff
         ylabel('Within/Between Difference');
+    case 'EVAL:PLOT:(UN)CROSSVAL'
+        study=varargin{1};% is map built on study [1] or [2] ?
+        mapType=varargin{2}; % {'lob10','bucknerRest','atlasFinal9'}
+        data=varargin{3}; % evaluating data from study [1] or [2] or [4]? (not [3] - because there is no crossval)
+        
+        P=[];
+        for m=1:length(mapType),
+            T=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d.mat',data)));
+            T.type=repmat({mapType{m}},length(T.bin),1);
+            T.m=repmat(m,length(T.bin),1); 
+            P=addstruct(P,T);
+            clear T
+        end
+        %         pivottable(T.SN,[T.bin T.bwParcel],T.corr,'length','subset',T.crossval==crossval)
+        
+        % plot boxplot of different clusters
+        W=getrow(P,P.bwParcel==0); % within
+        B=getrow(P,P.bwParcel==1); % between
+        W.diff=W.corr-B.corr;
+        
+        lineplot([W.type],W.diff,'split',W.crossval,'leg',{'uncrossval','crossval'},'subset',W.dist<=35,'style_shade')
+        ylabel('Within/Between Diff')
     case 'EVAL:PLOT:INDIV' % NEED TO UPDATE FOR SNN !!
         study=varargin{1};
         var=varargin{2};
@@ -621,12 +834,12 @@ switch what
             end;
         end;
         set(gcf,'PaperPosition',[1 1 60 30]);wysiwyg;
-
+        
     case 'FIGURES:CORR' % Makes the summary figure of within / between correlations
         toPlot = {'atlasFinal6','atlasFinal9','atlasFinal10','atlasFinal13',...
             'atlasFinal15','atlasFinal19','atlasFinal23'};
-        crossval=varargin{1}; 
-        evalNum=varargin{2}; 
+        crossval=varargin{1};
+        evalNum=varargin{2};
         numPlots = numel(toPlot);
         for i=1:numPlots
             subplot(1,numPlots,i);
