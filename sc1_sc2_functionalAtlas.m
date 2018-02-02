@@ -12,7 +12,7 @@ caretDir        ='/surfaceCaret';
 regDir          ='/RegionOfInterest/';
 encodeDir       ='/encoding';
 
-subj_name = {'s01','s02','s03','s04','s05','s06','s07','s08','s09','s10','s11',...
+subj_name = {'s01','s02','s03','s04','s05','s06','s08','s09','s10','s11',...
     's12','s13','s14','s15','s16','s17','s18','s19','s20','s21','s22','s23','s24',...
     's25','s26','s27','s28','s29','s30','s31'};
 
@@ -209,11 +209,104 @@ switch what
             caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','unCorr_motorFeats.metric'),M);
         end
     case 'ACTIVITY:reliability'
+        glm=varargin{1};
+        type=varargin{2}; % 'cerebellum' or 'cortex'
         
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        
+        load(fullfile(studyDir{2},encodeDir,sprintf('glm%d',glm),sprintf('allVox_sc1_sc2_sess_%s.mat',type)));
+        Y=Yy;clear Yy;
+        
+        numSubj=length(Y);
+        
+        for subj=1:numSubj,
+            idx=1;
+            for study=1:2,
+                
+                D1=getrow(D,D.StudyNum==study);
+                
+                cN=condNum{study}-1;  % Important: In the allVox file, instruction is still included!
+                pN=partNum{study};    % Partition Numner
+                sN=(pN>8)+1;          % Sessions Number
+                for se=1:2,
+                    X1=indicatorMatrix('identity_p',cN.*(sN==se));  % This one is the matrix that related trials-> condition numbers
+                    X2=indicatorMatrix('identity_p',D1.condNumUni.*D1.overlap); % THis goes from condNum to shared condNumUni
+                    Yf(:,:,idx,subj)=pinv(X1*X2)*Y{subj}{study};
+                    Yf(:,:,idx,subj)=bsxfun(@minus,Yf(:,:,idx,subj),mean(Yf(:,:,idx,subj)));
+                    idx=idx+1;
+                end;
+            end;
+            CORR(:,:,subj)=interSess_corr(Yf(:,:,:,subj));
+            T.SN(subj,1)      = subj;
+            T.within1(subj,1) = CORR(1,2,subj);
+            T.within2(subj,1) = CORR(3,4,subj);
+            T.across(subj,1)  = mean(mean(CORR(1:2,3:4,subj)));
+        end
+        
+        % within & between-subj reliability
+        myboxplot([],[T.within1 T.within2 T.across],'style_tukey');
+        drawline(0,'dir','horz');
+        set(gca,'XTickLabel',{'SC1','SC2','across'});
+        set(gcf,'PaperPosition',[2 2 4 3]);
+        wysiwyg;
+        ttest(sqrt(T.within1.*T.within2),T.across,2,'paired');
+        
+        % group reliability
+        X=nanmean(CORR,3);
+        fprintf('group reliability for study1 is %2.2f \n',X(1,2));
+        fprintf('group reliability for study2 is %2.2f \n',X(3,4));
+        fprintf('group reliability for shared tasks is %2.2f \n',mean(mean(X(1:2,3:4))));
+        varargout={T};
+    
     case 'DISTANCES:RDM'
     case 'DISTANCES:MDS'
     case 'DISTANCES:Reliability'
+        glm=varargin{1};
+        type=varargin{2}; % 'cerebellum' or 'cortex'
+        % example 'sc1_sc2_imana('CHECK:DIST',4,'cerebellum')
         
+        load(fullfile(regDir,sprintf('glm%d',glm),sprintf('G_hat_sc1_sc2_sess_%s.mat',type)));
+        D=dload('sc1_sc2_taskConds.txt');
+        D1=getrow(D,D.StudyNum==1);
+        D2=getrow(D,D.StudyNum==2);
+        
+        % Look at the shared conditions only
+        i1 = find(D1.overlap==1);
+        i2 = find(D2.overlap==1);
+        [~,b] = sort(D2.condNumUni(i2));     % Bring the indices for sc2 into the right order.
+        i2=i2(b);
+        numCond = length(i1);
+        numSubj = size(G_hat_sc1,4);
+        numSess = 2;
+        
+        C=indicatorMatrix('allpairs',[1:numCond]);
+        for i=1:numSubj
+            for j=1:numSess
+                dist(:,j  ,i)  = ssqrt(diag(C*G_hat_sc1(i1,i1,j,i)*C'));
+                dist(:,j+2,i)  = ssqrt(diag(C*G_hat_sc2(i2,i2,j,i)*C'));
+            end;
+            CORR(:,:,i)    = corr(dist(:,:,i));
+            T.SN(i,1)      = i;
+            T.within1(i,1) = CORR(1,2,i);
+            T.within2(i,1) = CORR(3,4,i);
+            T.across(i,1)  = mean(mean(CORR(1:2,3:4,i)));
+        end;
+        
+        % within & between-subj reliability
+        myboxplot([],[T.within1 T.within2 T.across],'style_tukey');
+        set(gca,'XTickLabel',{'SC1','SC2','across'});
+        set(gcf,'PaperPosition',[2 2 4 3]);
+        wysiwyg;
+        ttest(sqrt(T.within1.*T.within2),T.across,2,'paired');
+        
+        % group reliability
+        X=nanmean(dist,3);
+        groupCorr=corr(X);
+        fprintf('group reliability for study1 is %2.2f \n',groupCorr(1,2));
+        fprintf('group reliability for study2 is %2.2f \n',groupCorr(3,4));
+        fprintf('group reliability for shared tasks is %2.2f \n',mean(mean(groupCorr(1:2,3:4))));
+        varargout={T};
+    
     case 'ATLAS:finalMap'
         % example: 'sc1_sc2_functionalAtlas('ATLAS:finalMap',[2],1,13,'leaveOneOut')
         K=varargin{1}; % number of clusters
@@ -427,7 +520,7 @@ switch what
         M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
         suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
     case 'EVAL:crossval:GROUP'
-        % code is written now so that func map from sc1 is always evaluated
+        % should be that func map from sc1 is always evaluated
         % on sc2 data (and vice versa)
         study=varargin{1}; % is map built on study [1] or [2] ?
         mapType=varargin{2}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
@@ -472,7 +565,6 @@ switch what
                 i2(c) = find(T.SN==sn & T.sess==2 & T.cond==idx(c));
             end
             B=(T.data(i1,voxIn)+T.data(i2,voxIn))/2;
-            
             %             fprintf('%d cross\n',sn);
             R.SN = ones(length(R.N),1)*sn;
             R.corr = mva_spatialCorr(T.data([i1;i2],voxIn),BIN,...
@@ -484,7 +576,7 @@ switch what
             R.crossval = zeros(length(R.corr),1);
             RR = addstruct(RR,R);
         end;
-        save(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d.mat',data)),'-struct','RR');
+        save(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',data,eval)),'-struct','RR');
     case 'EVAL:crossval:INDIV' % NEED TO UPDATE FOR SNN !!
         sn=varargin{1}; % [2]
         study=varargin{2}; % 1 or 2
@@ -836,14 +928,14 @@ switch what
         set(gcf,'PaperPosition',[1 1 60 30]);wysiwyg;
         
     case 'FIGURES:CORR' % Makes the summary figure of within / between correlations
-        toPlot = {'atlasFinal6','atlasFinal9','atlasFinal10','atlasFinal13',...
-            'atlasFinal15','atlasFinal19','atlasFinal23'};
-        crossval=varargin{1};
-        evalNum=varargin{2};
+        toPlot = {'SC1_5cluster','SC1_7cluster','SC1_9cluster','SC1_11cluster'};
+        studyNum=varargin{1};
+        crossval=varargin{2};
+        evalNum=varargin{3};
         numPlots = numel(toPlot);
         for i=1:numPlots
             subplot(1,numPlots,i);
-            sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',2,toPlot{i},evalNum,'group',crossval);
+            sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',studyNum,toPlot{i},evalNum,'group',crossval);
         end;
         %         set(gcf,'PaperPosition',[2 4 12 3]);
         %         wysiwyg;
