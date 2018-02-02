@@ -2844,10 +2844,10 @@ switch(what)
         % prep inputs for PCM modelling functions
         for s=1:subjs,
             V=[];
+            load(fullfile(studyDir{2},encodeDir,sprintf('glm%d',glm),sprintf('allVox_sc1_sc2_sess_%s.mat',type))); % region stats (T)
             for study=1:2,
-                T = load(fullfile(studyDir{study},encodeDir,sprintf('glm%d',glm),sprintf('%s_allVoxels.mat',type))); % region stats (T)
                 D = load(fullfile(studyDir{study},sprintf('GLM_firstlevel_%d',glm), subj_name{sn(s)}, 'SPM_info.mat'));   % load subject's trial structure
-                betaW              = T.Yy{s};
+                betaW              = Yy{s}{study};
                 % get subject's partitions and second moment matrix
                 N                  = length(D.run);
                 numConds(study)    = length(D.cond(D.cond~=1))/numel(run); % remove instruct
