@@ -242,6 +242,10 @@ switch what
             T.within2(subj,1) = CORR(3,4,subj);
             T.across(subj,1)  = mean(mean(CORR(1:2,3:4,subj)));
         end
+        save(fullfile(studyDir{2},regDir,'glm4','patternReliability.mat'),'T','CORR')
+    case 'FIGURES:reliabilityA'
+        % load relability 
+        load(fullfile(studyDir{2},regDir,'glm4','patternReliability.mat')); 
         
         % within & between-subj reliability
         myboxplot([],[T.within1 T.within2 T.across],'style_tukey');
@@ -255,12 +259,50 @@ switch what
         X=nanmean(CORR,3);
         fprintf('group reliability for study1 is %2.2f \n',X(1,2));
         fprintf('group reliability for study2 is %2.2f \n',X(3,4));
-        fprintf('group reliability for shared tasks is %2.2f \n',mean(mean(X(1:2,3:4))));
-        varargout={T};
-    
-    case 'DISTANCES:RDM'
-    case 'DISTANCES:MDS'
-    case 'DISTANCES:Reliability'
+        fprintf('group reliability for shared tasks is %2.2f \n',mean(mean(X(1:2,3:4))));   
+
+    case 'REPRESENTATION:get_distances'
+        type=varargin{1}; % 'cortex' or 'cerebellum'
+        removeMotor=varargin{2}; % 'hands','saccades','all','none'
+        
+        load(fullfile(studyDir{2},regDir,'glm4',sprintf('G_hat_sc1_sc2_%s.mat',type)))
+        subjs=size(G_hat,3);
+        numDist=size(G_hat,1);
+        
+        % load in condName info
+        T=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+
+        % Get RDM
+        for s=1:subjs,
+            H=eye(numDist)-ones(numDist)/numDist; % centering matrix
+            G_hat(:,:,s)=H*G_hat(:,:,s)*H'; % subtract out mean pattern
+            IPM=rsa_vectorizeIPM(G_hat(:,:,s));
+            con = indicatorMatrix('allpairs',[1:numDist]);
+            N = rsa_squareIPM(IPM);
+            D = rsa.rdm.squareRDM(diag(con*N*con'));
+            fullRDM(:,:,s) = D;
+        end
+        % load feature matrix
+        F=sc1_sc2_functionalAtlas('ACTIVITY:get_motorFeats');
+        
+        switch removeMotor,
+            case 'hands'
+                X   = [F.lHand./F.duration F.rHand./F.duration];
+                X   = [X eye(numDist)];
+            case 'saccades'
+                X   = [F.saccades./F.duration];
+                X   = [X eye(numDist)];
+            case 'all'
+                X   = [F.lHand./F.duration F.rHand./F.duration F.saccades./F.duration];
+                X   = [X eye(numDist)];
+            case 'none'
+                X   = [eye(numDist)];
+        end 
+        X   = bsxfun(@minus,X,mean(X));
+        X   = bsxfun(@rdivide,X,sqrt(sum(X.^2)));  % Normalize to unit length vectors
+        
+        varargout={fullRDM,T,X}; 
+    case 'REPRESENTATION:reliability'
         glm=varargin{1};
         type=varargin{2}; % 'cerebellum' or 'cortex'
         % example 'sc1_sc2_imana('CHECK:DIST',4,'cerebellum')
@@ -291,6 +333,80 @@ switch what
             T.within2(i,1) = CORR(3,4,i);
             T.across(i,1)  = mean(mean(CORR(1:2,3:4,i)));
         end;
+
+        save(fullfile(studyDir{2},regDir,'glm4','distanceReliability.mat'),'T','dist')
+    case 'FIGURES:RDM'
+        % load in fullRDM
+        [fullRDM,T,~,~]=sc1_sc2_functionalAtlas('REPRESENTATION:get_distances','cerebellum'); 
+
+        % Plot RDM
+        reOrder=[1,2,6,7,8,9,10,11,12,13,14,17,18,22,23,3,4,5,15,16,19,20,21,24,25,26,...
+            27,28,29,58,59,60,43,44,49,48,36,34,35,55,56,57,61,30,31,32,33,37,38,39,40,41,42,45,46,47,50,51,52,53,54]'; % reorder
+        figure()
+        avrgFullRDM=ssqrt(nanmean(fullRDM,3));
+        numDist=size(avrgFullRDM,1);
+        imagesc_rectangle(avrgFullRDM(reOrder,reOrder),'YDir','reverse');
+        caxis([0 1]);
+        t=set(gca,'Ytick',[1:numDist]','YTickLabel',T.condNames(reOrder)','FontSize',12,'FontWeight','bold');
+        t.Color='white';
+        colorbar   
+    case 'FIGURES:MDS'
+         % load in fullRDM
+        [fullRDM,T,X]=sc1_sc2_functionalAtlas('REPRESENTATION:get_distances','cerebellum','none'); 
+        
+        avrgFullRDM=ssqrt(nanmean(fullRDM,3));
+
+        vecRDM = rsa.rdm.vectorizeRDM(avrgFullRDM);
+        [Y,~] = rsa_classicalMDS(vecRDM,'mode','RDM');
+        B = (X'*X+eye(size(X,2))*0.0001)\(X'*Y); % ridge regression
+        Yr    = Y  - X(:,1:3)*B(1:3,:); % remove motor features
+        
+        clustTree = linkage(Yr,'average');
+        indx = cluster(clustTree,'cutoff',1);
+        
+        % define cluster colour
+        colour={[1 0 0],[0 1 0],[0 0 1],[0.3 0.3 0.3],[1 0 1],[1 1 0],[0 1 1],[0.5 0 0.5],[0.8 0.8 0.8],[.07 .48 .84],[.99 .76 .21],[.11 .7 .68],[.39 .74 .52],[.21 .21 .62],[0.2 0.2 0.2],[.6 .6 .6],[.3 0 .8],[.8 0 .4],[0 .9 .2],[.1 .3 0],[.2 .4 0],[.63 0 .25],[0 .43 .21],[.4 0 .8]};
+        [V,L]   = eig(Yr*Yr');
+        [l,i]   = sort(diag(L),1,'descend'); % Sort the eigenvalues
+        V       = V(:,i);
+        X       = bsxfun(@times,V,sqrt(l'));
+        X = real(X);
+        
+        for study=1:2,
+            % which condNames and numbers are we taking ?
+            if study==2,
+                condIndx=T.condNum(T.StudyNum==study)+length(T.condNum(T.StudyNum==1)); 
+            else
+                condIndx=T.condNum(T.StudyNum==study); 
+            end
+            indxShort=indx(T.condNum(T.StudyNum==study)); 
+            CAT.markercolor= {colour{indxShort}};
+            CAT.markerfill = {colour{indxShort}};
+            CAT.markersize = 10;
+            
+            X1=X(condIndx,condIndx);
+            figure(study)
+            scatterplot3(X1(:,1),X1(:,2),X1(:,3),'split',condIndx,'CAT',CAT,'label',T.condNames(T.StudyNum==study),'markertype','o');
+            set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
+            hold on;
+            plot3(0,0,0,'+');
+            % Draw connecting lines
+%             for i=1:15,
+%                 ind=clustTree(i,1:2);
+%                 X(end+1,:)=(X(ind(1),:)+X(ind(2),:))/2;
+%                 line(X(ind,1),X(ind,2),X(ind,3));
+%             end;
+            hold off;
+            set(gcf,'PaperPosition',[2 2 8 8]);
+            axis equal;
+            set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
+            wysiwyg;
+            view([81 9]);
+            clear X1  indxShort
+        end     
+    case 'FIGURES:reliabilityP'
+        % load relability 
+        load(fullfile(studyDir{2},regDir,'glm4','distanceReliability.mat')); 
         
         % within & between-subj reliability
         myboxplot([],[T.within1 T.within2 T.across],'style_tukey');
@@ -304,8 +420,7 @@ switch what
         groupCorr=corr(X);
         fprintf('group reliability for study1 is %2.2f \n',groupCorr(1,2));
         fprintf('group reliability for study2 is %2.2f \n',groupCorr(3,4));
-        fprintf('group reliability for shared tasks is %2.2f \n',mean(mean(groupCorr(1:2,3:4))));
-        varargout={T};
+        fprintf('group reliability for shared tasks is %2.2f \n',mean(mean(groupCorr(1:2,3:4))));    
     
     case 'ATLAS:finalMap'
         % example: 'sc1_sc2_functionalAtlas('ATLAS:finalMap',[2],1,13,'leaveOneOut')
@@ -801,6 +916,26 @@ switch what
         title(sprintf('SC%d(%dPOV)-%s-with crossval',study,var*100,data));
         set(gcf,'PaperPosition',[2 4 10 12]);
         wysiwyg;
+    case 'FIGURES:CORR' % Makes the summary figure of within / between correlations
+        toPlot = {'SC1_5cluster','SC1_7cluster','SC1_9cluster','SC1_11cluster'};
+        studyNum=varargin{1};
+        crossval=varargin{2};
+        evalNum=varargin{3};
+        numPlots = numel(toPlot);
+        for i=1:numPlots
+            subplot(1,numPlots,i);
+            sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',studyNum,toPlot{i},evalNum,'group',crossval);
+        end;
+        %         set(gcf,'PaperPosition',[2 4 12 3]);
+        %         wysiwyg;
+    case 'FIGURES:DIFF' % Makes the summary figure of within / between diff
+        toPlot = {'atlasFinal6','atlasFinal9','atlasFinal10','atlasFinal13',...
+            'atlasFinal15','atlasFinal19','atlasFinal23'}; % something weird happening with 'bucknerRest'
+        crossval=varargin{1};
+        evalNum=varargin{2};
+        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',2,toPlot,evalNum,crossval);
+        set(gcf,'PaperPosition',[2 4 12 3]);
+        %         wysiwyg;    
         
     case 'ENCODE:project_taskSpace'
         K=varargin{1}; % how many clusters ?
@@ -927,26 +1062,7 @@ switch what
         end;
         set(gcf,'PaperPosition',[1 1 60 30]);wysiwyg;
         
-    case 'FIGURES:CORR' % Makes the summary figure of within / between correlations
-        toPlot = {'SC1_5cluster','SC1_7cluster','SC1_9cluster','SC1_11cluster'};
-        studyNum=varargin{1};
-        crossval=varargin{2};
-        evalNum=varargin{3};
-        numPlots = numel(toPlot);
-        for i=1:numPlots
-            subplot(1,numPlots,i);
-            sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',studyNum,toPlot{i},evalNum,'group',crossval);
-        end;
-        %         set(gcf,'PaperPosition',[2 4 12 3]);
-        %         wysiwyg;
-    case 'FIGURES:DIFF' % Makes the summary figure of within / between diff
-        toPlot = {'atlasFinal6','atlasFinal9','atlasFinal10','atlasFinal13',...
-            'atlasFinal15','atlasFinal19','atlasFinal23'}; % something weird happening with 'bucknerRest'
-        crossval=varargin{1};
-        evalNum=varargin{2};
-        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',2,toPlot,evalNum,crossval);
-        set(gcf,'PaperPosition',[2 4 12 3]);
-        %         wysiwyg;
+
 end
 % Local functions
 function dircheck(dir)
@@ -954,4 +1070,18 @@ if ~exist(dir,'dir');
     warning('%s doesn''t exist. Creating one now. You''re welcome! \n',dir);
     mkdir(dir);
 end
+
+% InterSubj Corr
+function C=interSess_corr(Y)
+numSess=size(Y,3);
+for i=1:numSess
+    for j=1:numSess
+        C(i,j)=nansum(nansum(Y(:,:,i).*Y(:,:,j)))/...
+            sqrt(nansum(nansum(Y(:,:,i).*Y(:,:,i)))*...
+            nansum(nansum(Y(:,:,j).*Y(:,:,j))));
+    end;
+end
+
+
+
 
