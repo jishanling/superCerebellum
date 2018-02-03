@@ -362,9 +362,9 @@ switch(what)
             
             % Variance inflation factor for each
             T.SN(s,1)=s;
-            T.VIF(s,:)=diag(inv(COR(:,:,s)))';
-            T.VAR(s,:)=diag(COV(:,:,s));
-            T.VARB(s,:)=diag(inv(COV(:,:,s)));
+            T.VAR(s,:)=diag(COV(:,:,s)); % Variance of the task-related betas: How much activity could we induce?
+            T.VIF(s,:)=diag(inv(COR(:,:,s)))'; % Variance inflation factor: How much does the region suffer from co-linearity? 
+            T.VARB(s,:)=diag(inv(COV(:,:,s))); % Combination of the last two: How well would we estimate connectivity weights from this region?
         end;
         
         subplot(2,2,1);
