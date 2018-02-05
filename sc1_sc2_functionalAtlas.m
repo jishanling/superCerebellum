@@ -337,7 +337,7 @@ switch what
         save(fullfile(studyDir{2},regDir,'glm4','distanceReliability.mat'),'T','dist')
     case 'FIGURES:RDM'
         % load in fullRDM
-        [fullRDM,T,~,~]=sc1_sc2_functionalAtlas('REPRESENTATION:get_distances','cerebellum'); 
+        [fullRDM,T,~]=sc1_sc2_functionalAtlas('REPRESENTATION:get_distances','cerebellum','all'); 
 
         % Plot RDM
         reOrder=[1,2,6,7,8,9,10,11,12,13,14,17,18,22,23,3,4,5,15,16,19,20,21,24,25,26,...
@@ -404,7 +404,7 @@ switch what
             view([81 9]);
             clear X1  indxShort
         end     
-    case 'FIGURES:reliabilityP'
+    case 'FIGURES:reliabilityD'
         % load relability 
         load(fullfile(studyDir{2},regDir,'glm4','distanceReliability.mat')); 
         
@@ -578,13 +578,13 @@ switch what
         switch type,
             case 'group'
                 sn=returnSubjs;
-                outDir=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir);
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir);
                 outName=fullfile(outDir,'SNN.mat');
             case 'indiv'
-                outDir=fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn});
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
                 outName=fullfile(outDir,sprintf('SNN_SC%d_%dcluster.mat',study,K));
             case 'leaveOneOut'
-                outDir=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K)); dircheck(outDir);
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K)); dircheck(outDir);
                 outName=fullfile(outDir,sprintf('SNN_leaveOut_%s.mat',subj_name{sn}));
                 sn=returnSubjs(returnSubjs~=sn);
         end
@@ -602,14 +602,14 @@ switch what
         % figure out if individual or group
         switch type,
             case 'group'
-                outName=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),'map.nii');
-                load(fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),'SNN.mat'));
+                outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),'map.nii');
+                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),'SNN.mat'));
             case 'indiv'
-                outName=fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn},sprintf('map_SC%d_%dcluster.nii',study,K));
-                load(fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn},sprintf('SNN_SC%d_%dcluster.mat',study,K)));
+                outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_SC%d_%dcluster.nii',study,K));
+                load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('SNN_SC%d_%dcluster.mat',study,K)));
             case 'leaveOneOut'
-                outName=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),sprintf('map_leaveOut_%s.nii',subj_name{sn}));
-                load(fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),sprintf('SNN_leaveOut_%s.mat',subj_name{sn})));
+                outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),sprintf('map_leaveOut_%s.nii',subj_name{sn}));
+                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),sprintf('SNN_leaveOut_%s.mat',subj_name{sn})));
         end
         
         [~,groupFeat]=max(G,[],2);
@@ -637,13 +637,12 @@ switch what
     case 'EVAL:crossval:GROUP'
         % should be that func map from sc1 is always evaluated
         % on sc2 data (and vice versa)
-        study=varargin{1}; % is map built on study [1] or [2] ?
-        mapType=varargin{2}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
-        data=varargin{3}; % evaluating data from study [1] or [2] ?
-        eval=varargin{4}; % 'unique' or 'all'. Are we evaluating on all taskConds or just those unique to either sc1 or sc2 ?
+        mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
+        data=varargin{2}; % evaluating data from study [1] or [2] ?
+        condType=varargin{3}; % 'unique' or 'all'. Are we evaluating on all taskConds or just those unique to either sc1 or sc2 ?
         
         % load in map
-        mapName=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
+        mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
         
         % load in func data to test (e.g. if map is sc1; func data should
         % be sc2)
@@ -651,7 +650,7 @@ switch what
         
         D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         D1=getrow(D,D.StudyNum==data);
-        switch eval,
+        switch condType,
             case 'unique'
                 % if funcMap - only evaluate unique tasks in sc1 or sc2
                 idx=D1.condNum(D1.overlap==0); % get index for unique tasks
@@ -691,15 +690,15 @@ switch what
             R.crossval = zeros(length(R.corr),1);
             RR = addstruct(RR,R);
         end;
-        save(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',data,eval)),'-struct','RR');
+        save(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',data,condType)),'-struct','RR');
     case 'EVAL:crossval:INDIV' % NEED TO UPDATE FOR SNN !!
         sn=varargin{1}; % [2]
         study=varargin{2}; % 1 or 2
         var=varargin{3}; % .95
         data=varargin{4}; % 'func1' or 'func2'
         
-        outName=fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn},sprintf('SC%d_%dPOV_spatialBound%s.mat',study,var*100,data));
-        mapName=fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn},sprintf('map_SC%d_%dPOV.nii',study,var*100));
+        outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('SC%d_%dPOV_spatialBound%s.mat',study,var*100,data));
+        mapName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_SC%d_%dPOV.nii',study,var*100));
         
         % load in func data to test
         switch data
@@ -747,8 +746,8 @@ switch what
         var=varargin{3}; % .95
         data=varargin{4}; % 'func1' or 'func2
         
-        outName=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100),sprintf('spatialBound%s_eval_%s.mat',data,subj_name{sn}));
-        mapName=fullfile(studyDir{study},encodeDir,'glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100),sprintf('map_leaveOut_%s.nii',subj_name{sn}));
+        outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100),sprintf('spatialBound%s_eval_%s.mat',data,subj_name{sn}));
+        mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100),sprintf('map_leaveOut_%s.nii',subj_name{sn}));
         
         % load in func data to test
         switch data
@@ -788,13 +787,15 @@ switch what
         R.crossval = zeros(length(R.corr),1);
         RR = addstruct(RR,R);
         save(outName,'-struct','RR');
-    case 'EVAL:average' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
-        study=varargin{1};% is map saved in study 1 or 2 directory ?
-        mapType=varargin{2}; % options are 'lob10','bucknerRest','atlasFinal<num>' etc'
+    case 'EVAL:averageClust' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
+        clusterNum=varargin{1}; % [5:2:23]
+        condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
         
+        mapType=[1,2]; % test on one dataset
+        eval=[2,1]; % evaluate on the other
         R=[];
         for i=1:2,
-            T=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d.mat',i)));
+            T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_SC%d_%dcluster',mapType(i),clusterNum),sprintf('spatialBoundfunc%d_%s.mat',eval(i),condType)));
             T.studyNum=repmat([i],length(T.SN),1);
             R=addstruct(R,T);
         end
@@ -802,23 +803,39 @@ switch what
         % get average of both structures here
         A=tapply(R,{'bin','SN','bwParcel','crossval','dist'},{'corr'});
         
-        outDir=fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),'spatialBoundfunc4.mat');
-        save(outDir,'-struct','T');
+        outDir=fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_SC2_%dcluster',clusterNum),sprintf('spatialBoundfunc4_%s.mat',condType));
+        save(outDir,'-struct','A');
+    case 'EVAL:averageOther'
+        mapType=varargin{1}; % options are 'lob10','bucknerRest','atlasFinal<num>' etc'
+        condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
+        
+        R=[];
+        for i=1:2,
+            T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',i,condType)));
+            T.studyNum=repmat([i],length(T.SN),1);
+            R=addstruct(R,T);
+        end
+        R=rmfield(R,{'distmin','distmax','N'});
+        % get average of both structures here
+        A=tapply(R,{'bin','SN','bwParcel','crossval','dist'},{'corr'});
+        
+        outDir=fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
+        save(outDir,'-struct','A');
         
     case 'EVAL:PLOT:CURVES'
-        study=varargin{1};% is map built on study [1] or [2] ?
-        mapType=varargin{2}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
-        data=varargin{3}; % evaluating data from study [1] or [2], both [3] or average of [1] and [2] after eval [4]
-        type=varargin{4}; % 'group' or 'leaveOneOut'
-        crossval=varargin{5}; % [0] - no crossval; [1] - crossval
+        mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
+        data=varargin{2}; % evaluating data from study [1] or [2], both [3] or average of [1] and [2] after eval [4]
+        type=varargin{3}; % 'group' or 'leaveOneOut'
+        crossval=varargin{4}; % [0] - no crossval; [1] - crossval
+        condType=varargin{5}; % evaluating on 'all' or 'unique' taskConds ??
         
         switch type,
             case 'group'
-                T=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d.mat',data)));
+                T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',data,condType)));
             case 'leaveOneOut'
                 T=[];
                 for s=1:length(returnSubjs),
-                    P=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_eval_%s.mat',data,subj_name{returnSubjs(s)})));
+                    P=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_eval_%s.mat',data,subj_name{returnSubjs(s)})));
                     T=addstruct(T,P);
                 end
             otherwise
@@ -834,14 +851,14 @@ switch what
         ylabel('Activity correlation');
         title(sprintf('%s-func%d-%dcrossval',mapType,data,crossval)); %0-no crossval; %1-crossval
     case 'EVAL:PLOT:DIFF'
-        study=varargin{1};% is map built on study [1] or [2] ?
-        mapType=varargin{2}; % {'lob10','bucknerRest','atlasFinal9'}
-        data=varargin{3}; % evaluating data from study [1] or [2] or [3]?
-        crossval=varargin{4}; % [0]-no crossval; [1]-crossval
+        mapType=varargin{1}; % {'lob10','bucknerRest','atlasFinal9'}
+        data=varargin{2}; % evaluating data from study [1] or [2] or [3]?
+        crossval=varargin{3}; % [0]-no crossval; [1]-crossval
+        condType=varargin{4}; % evaluating on 'unique' or 'all' taskConds ??
         
         P=[];
         for m=1:length(mapType),
-            T=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d.mat',data)));
+            T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d_%s.mat',data,condType)));
             
             A=getrow(T,T.crossval==crossval);
             A.type=repmat({mapType{m}},length(A.bin),1);
@@ -858,14 +875,16 @@ switch what
         
         myboxplot(W.m,W.diff,'subset',W.dist<=35,'style_twoblock','plotall',0) % within-between diff
         ylabel('Within/Between Difference');
-    case 'EVAL:PLOT:(UN)CROSSVAL'
-        study=varargin{1};% is map built on study [1] or [2] ?
-        mapType=varargin{2}; % {'lob10','bucknerRest','atlasFinal9'}
-        data=varargin{3}; % evaluating data from study [1] or [2] or [4]? (not [3] - because there is no crossval)
         
+        figure()
+        lineplot(W.m,W.diff,'subset',W.dist<=35); 
+    case 'EVAL:PLOT:(UN)CROSSVAL'
+        mapType=varargin{1}; % {'lob10','bucknerRest','atlasFinal9'}
+        data=varargin{2}; % evaluating data from study [1] or [2] or [4]? (not [3] - because there is no crossval)
+        condType=varargin{3}; % evaluating on 'unique' or 'all' ?
         P=[];
         for m=1:length(mapType),
-            T=load(fullfile(studyDir{study},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d.mat',data)));
+            T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d_%s.mat',data,condType)));
             T.type=repmat({mapType{m}},length(T.bin),1);
             T.m=repmat(m,length(T.bin),1); 
             P=addstruct(P,T);
@@ -878,7 +897,7 @@ switch what
         B=getrow(P,P.bwParcel==1); % between
         W.diff=W.corr-B.corr;
         
-        lineplot([W.type],W.diff,'split',W.crossval,'leg',{'uncrossval','crossval'},'subset',W.dist<=35,'style_shade')
+        lineplot([W.type],W.diff,'split',W.crossval,'leg',{'uncrossval','crossval'},'subset',W.dist<=30,'style_shade')
         ylabel('Within/Between Diff')
     case 'EVAL:PLOT:INDIV' % NEED TO UPDATE FOR SNN !!
         study=varargin{1};
@@ -917,23 +936,23 @@ switch what
         set(gcf,'PaperPosition',[2 4 10 12]);
         wysiwyg;
     case 'FIGURES:CORR' % Makes the summary figure of within / between correlations
-        toPlot = {'SC1_5cluster','SC1_7cluster','SC1_9cluster','SC1_11cluster'};
-        studyNum=varargin{1};
-        crossval=varargin{2};
-        evalNum=varargin{3};
+        toPlot = {'SC2_5cluster','SC2_7cluster','SC2_9cluster','SC2_11cluster','SC2_13cluster','SC2_15cluster','SC2_17cluster'};
+        crossval=varargin{1}; % 0-uncrossval; 1-crossval
+        evalNum=varargin{2}; % SC1-[1],SC2-[2],concat SC1+SC2 [3],average of SC1+SC2 eval [4]
+        condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ?? 
         numPlots = numel(toPlot);
         for i=1:numPlots
             subplot(1,numPlots,i);
-            sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',studyNum,toPlot{i},evalNum,'group',crossval);
+            sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',toPlot{i},evalNum,'group',crossval,condType);
         end;
         %         set(gcf,'PaperPosition',[2 4 12 3]);
         %         wysiwyg;
     case 'FIGURES:DIFF' % Makes the summary figure of within / between diff
-        toPlot = {'atlasFinal6','atlasFinal9','atlasFinal10','atlasFinal13',...
-            'atlasFinal15','atlasFinal19','atlasFinal23'}; % something weird happening with 'bucknerRest'
-        crossval=varargin{1};
-        evalNum=varargin{2};
-        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',2,toPlot,evalNum,crossval);
+        toPlot = {'SC2_5cluster','SC2_7cluster','SC2_9cluster','SC2_11cluster','SC2_13cluster','SC2_15cluster','SC2_17cluster','SC2_19cluster','SC2_21cluster','SC2_23cluster'}; 
+        crossval=varargin{1}; % 0-uncrossval; 1-crossval
+        evalNum=varargin{2}; % SC1-[1],SC2-[2],concat SC1+SC2 [3],average of SC1+SC2 eval [4]
+        condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ?? 
+        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNum,crossval,condType);
         set(gcf,'PaperPosition',[2 4 12 3]);
         %         wysiwyg;    
         
