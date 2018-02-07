@@ -33,7 +33,7 @@ subj_name = {'s01','s02','s03','s04','s05','s06','s07','s08','s09','s10',...
     's21','s22','s23','s24','s25','s26','s27','s28','s29','s30',...
     's31'};
 allsubj = [2:22];
-goodsubj  = [2,3,4,6,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,29,30,31];
+goodsubj  = [2,3,4,6,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
 atlasname = 'fsaverage_sym';
 hemName   = {'LeftHem','RightHem'};
 expStr    = {'sc1','sc2'};
@@ -347,14 +347,14 @@ switch(what)
         Xx=getrow(X,X.newIndx);
         Xx=getrow(Xx,Xx.good==1);
    
-        % Calcualte correlations
+        % Calculate correlations
         for s=1:length(sn)
             % load Individual data
             filename=(fullfile(sc1Dir,regDir,sprintf('glm%d',glm),subj_name{sn(s)},sprintf('ts_%s.mat',type)));
             load(filename);
             
             Y = Yhatm + Yhatr;          % Predicted timeseries(Both mean and variable)
-            predT=Y(:,Xx.regIndx2);     % remove the bad regions 
+            predT=Y(:,Xx.regIndx2);     % Remove the bad regions
             
             % Covariance and correlation
             COV(:,:,s)=cov(predT);
@@ -367,14 +367,39 @@ switch(what)
             T.VARB(s,:)=diag(inv(COV(:,:,s))); % Combination of the last two: How well would we estimate connectivity weights from this region?
         end;
         
-        subplot(2,2,1);
-        imagesc(mean(COR,3));
-        data=mean(T.VAR,1);
-        for h=1:2
-            subplot(2,2,h+2);
-            ii=find(Xx.hem==h)';
-            sc1_imana_jd('plot_cortex',h,data(ii));
-        end;
+        % Plot group mean in flatmap
+        data{1}=sqrt(mean(T.VAR,1));
+        data{2}=sqrt(mean(T.VIF,1));
+        data{3}=sqrt(mean(T.VARB,1));
+        plottitle{1}='Variance';
+        plottitle{2}='Variance Inflation Factor';
+        plottitle{3}='Combined';
+        
+        figure;
+        set(gcf,'color','w');
+        ppos=1;
+        for i=1:3
+            subplot(3,2,ppos);
+            ii=find(Xx.hem==1)';
+            sc1sc2_connectivity('plot_cortex',1,data{i}(ii));
+            axis off;
+            tmp=get(gca,'position');
+            set(gca,'position',[tmp(1) tmp(2) 0.9*tmp(3) tmp(4)]);
+            title(plottitle{i})
+            ppos=ppos+1;
+            subplot(3,2,ppos);
+            ii=find(Xx.hem==2)';
+            sc1sc2_connectivity('plot_cortex',2,data{i}(ii));
+            axis off;
+            tmp=get(gca,'position');
+            set(gca,'position',[tmp(1)-0.1 tmp(2) 1.2*tmp(3) tmp(4)]);
+            ppos=ppos+1;
+            colorbar;
+        end
+
+        set(gcf,'paperposition',[10 10 7 7])
+        wysiwyg
+
     case 'cortical_pattern_consistency_all'     % Consistency based on betas
         T=load(fullfile(regDir,'glm4','ts_162_tessellation_hem_all.mat'));
         X=load(fullfile(regDir,'data','162_reorder.mat'));
@@ -946,12 +971,12 @@ switch(what)
         vararginoptions({varargin{3:end}},{'cscale','parcel'});
         switch (parcel)
             case '162'
-                D=caret_load(fullfile(caretDir,'fsaverage_sym',hemName{h},sprintf([hem{h} '.tessel162_new.metric'])));
-                Tcort=load(fullfile(regDir,'data','162_reorder.mat'));
+                D=caret_load(fullfile(sc1Dir,caretDir,'fsaverage_sym',hemName{h},sprintf([hem{h} '.tessel162_new.metric'])));
+                Tcort=load(fullfile(sc1Dir,regDir,'data','162_reorder.mat'));
                 Tcort=getrow(Tcort,Tcort.good==1 & Tcort.hem==h);
                 indx = Tcort.regIndx-158*(h-1);
             case 'yeo17'
-                D=caret_load(fullfile(caretDir,'fsaverage_sym',hemName{h},sprintf([hem{h} '.yeo17.paint'])));
+                D=caret_load(fullfile(sc1Dir,caretDir,'fsaverage_sym',hemName{h},sprintf([hem{h} '.yeo17.paint'])));
                 indx=[2:18]';
         end;
         
@@ -960,8 +985,8 @@ switch(what)
             FData(D.data==indx(i),1)=data(i);
         end;
         
-        coord=fullfile(caretDir,'fsaverage_sym',hemName{h},[hem{h} '.FLAT.coord']);
-        topo=fullfile(caretDir,'fsaverage_sym',hemName{h},[hem{h} '.CUT.topo']);
+        coord=fullfile(sc1Dir,caretDir,'fsaverage_sym',hemName{h},[hem{h} '.FLAT.coord']);
+        topo=fullfile(sc1Dir,caretDir,'fsaverage_sym',hemName{h},[hem{h} '.CUT.topo']);
         if (h==1)
             caret_plotflatmap('coord',coord,'topo',topo,'data',FData,'xlims',[-200 150],'ylims',[-140 140],'cscale',cscale);
         else
