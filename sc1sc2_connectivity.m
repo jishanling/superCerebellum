@@ -7,8 +7,8 @@ type=[];
 % rootDir           = '/Users/jdiedrichsen/Data/super_cerebellum';
 % rootDir           = '/Volumes/MotorControl/data/super_cerebellum_new/';
 rootDir         = '/Users/chernandez/Cerebellum';
-sc1Dir            = [rootDir '/sc1'];
-sc2Dir            = [rootDir '/sc2'];
+sc1Dir          = [rootDir '/sc1'];
+sc2Dir          = [rootDir '/sc2'];
 behavDir        =['data'];
 imagingDir      =['imaging_data'];
 imagingDirRaw   =['imaging_data_raw'];
@@ -19,25 +19,23 @@ caretDir        =['surfaceCaret'];
 regDir          =['RegionOfInterest/'];
 connDir         =['connectivity_cerebellum'];
 
-
 %==========================================================================
 
 % % (2) Hemisphere and Region Names
-hem        = {'lh','rh'};
-regSide    = [1 2] ;
-regType    = [1 2 3 4 5 1 2 3 4 5];
-regName    = {'frontal','parietal','occipital','temporal','cerebellum'};
-numReg     = length(regName);
+hem       = {'lh','rh'};
+regSide   = [1 2] ;
+regType   = [1 2 3 4 5 1 2 3 4 5];
+regName   = {'frontal','parietal','occipital','temporal','cerebellum'};
+numReg    = length(regName);
 subj_name = {'s01','s02','s03','s04','s05','s06','s07','s08','s09','s10',...
-    's11','s12','s13','s14','s15','s16','s17','s18','s19','s20',...
-    's21','s22','s23','s24','s25','s26','s27','s28','s29','s30',...
-    's31'};
-allsubj = [2:22];
-goodsubj  = [2,3,4,6,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
+            's11','s12','s13','s14','s15','s16','s17','s18','s19','s20',...
+            's21','s22','s23','s24','s25','s26','s27','s28','s29','s30',...
+            's31'};
+allsubj   = [2:22];
+goodsubj  = [2,3,4,6,7,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
 atlasname = 'fsaverage_sym';
 hemName   = {'LeftHem','RightHem'};
 expStr    = {'sc1','sc2'};
-
 
 %==========================================================================
 
@@ -509,7 +507,7 @@ switch(what)
             keyboard;
             
         end;
-    case 'TS_interregion_corr'  % How consistent is the cortical connectivity pattern through the three signal sources
+    case 'TS_interregion_corr'     % How consistent is the cortical connectivity pattern through the three signal sources
         T=load(fullfile(sc1Dir,regDir,'glm4','ts_162_tessellation_hem_all_se.mat'));
         numsubj = size(T.Yres,3);
         N = size(T.Yres,1);
@@ -784,55 +782,28 @@ switch(what)
             RR=addstruct(RR,R);
         end;
         varargout={RR};
+        
     case 'conn_ts'                 % Run encoding model on time series
         % sc1_connectivity('conn_ts',[2:22],'method','winnerTakeAll_nonNeg','name','glm4_162_nnWTA','lambdaL1',0,'lambdaL2',0);
         % sc1_connectivity('conn_ts',goodsubj,'method','winnerTakeAll','name','glm4_162_WTA','lambdaL1',0,'lambdaL2',0);
         % sc1_connectivity('conn_ts',[2:22],'method','ridgeFixed','name','glm4_162_ridge','lambdaL1',[0 0 0 0 0 0],'lambdaL2',[0 500 1000 2500 5000 7500]);
         % sc1_connectivity('conn_ts',[2:22],'method','cplexqpL1L2','name','glm4_162_L1L2c','lambdaL1',[2500 7500 7500],'lambdaL2',[2500 7500 2500]);
-        sn=varargin{1};        % [2:22]
-        glm=4;       % usually 4
-        method= 'cplexqpL1L2';  % linRegress, ridgeFixed, nonNegExp, cplexqp, lasso, winnerTakeAll
+        sn=varargin{1};  
+        glm=4;                          % usually 4
+        method= 'ridgeFixed';           % cplexqpL1L2, linRegress, nonNegExp, cplexqp, lasso, winnerTakeAll
         yname = 'cerebellum_grey';
         xname = '162_tessellation_hem';
-        name  = 'glm4_162_L1L2c';
-        type  = {'Yhat'};
+        name  = 'glm4_162_ridgeFixed';  % Name of the output
+        type  = {'Y','Yhat'};           % Run with three Y 
         exper   = 'sc1';
-        lambdaL1 = [2500 7500 7500];
-        lambdaL2 = [2500 7500 2500];
+        lambdaL1 = 0;                   %[2500 7500 7500];    % Initially set to 0
+        lambdaL2 = 2500;                %[2500 7500 2500];    % Inititally select one value
         partial = [];
         vararginoptions({varargin{2:end}},{'xname','type','method','glm','partial','name','lambdaL1','lambdaL2'});
         
         outDir = fullfile(rootDir,exper,connDir,name);
+        dircheck(outDir);
         myRegDir = fullfile(rootDir,exper,regDir);
-        subjs=length(sn);
-        
-        % Load cortical time series
-        file = fullfile(myRegDir,sprintf('glm%d',glm),sprintf('ts_%s_all.mat',xname));
-        XX=load(file);
-        
-        if (strcmp(xname,'162_tessellation_hem'))
-            Tcort=load(fullfile(myRegDir,'data','162_reorder.mat'));
-            Tcort=getrow(Tcort,Tcort.good==1);
-            XX.Yhatm = XX.Yhatm(:,Tcort.regIndx,:);
-            XX.Yhatr = XX.Yhatr(:,Tcort.regIndx,:);
-            XX.Yres =  XX.Yres(:,Tcort.regIndx,:);
-        end;
-        
-        if (strcmp(xname,'yeo'))
-            XX.Yhatm = XX.Yhatm(:,2:18,:);
-            XX.Yhatr = XX.Yhatr(:,2:18,:);
-            XX.Yres =  XX.Yres(:,2:18,:);
-        end;
-        
-        XX.Yhat = XX.Yhatm + XX.Yhatr;
-        XX.Y    = XX.Yres + XX.Yhat;
-        
-        
-        if (~isempty(partial))
-            PP=load(fullfile(rootDir,exper,regDir,regDir,'glm4',sprintf('ts_%s_all.mat',partial)));
-            PP.Yhat = PP.Yhatm + PP.Yhatr;
-            PP.Y = PP.Yhat + PP.Yres;
-        end;
         
         % Build matrix to remove block mean
         SPM=load(fullfile(rootDir,exper,'GLM_firstlevel_4','SampleDesignMatrix.mat'));
@@ -840,12 +811,39 @@ switch(what)
             B(SPM.Sess(b).row,b)=1;
         end;
         
-        subj=[2:22]; % these are the subjects in the alldata
         for s=sn
             TT=[];
             T=[];
-            sindx=find(subj==s);
-            % load Y
+            
+            % Load X 
+            file = fullfile(myRegDir,sprintf('glm%d',glm),subj_name{s},sprintf('ts_%s.mat',xname));
+            XX=load(file);
+
+            if (strcmp(xname,'162_tessellation_hem'))
+                Tcort=load(fullfile(myRegDir,'data','162_reorder.mat'));
+                Tcort=getrow(Tcort,Tcort.good==1);
+                XX.Yhatm = XX.Yhatm(:,Tcort.regIndx,:);
+                XX.Yhatr = XX.Yhatr(:,Tcort.regIndx,:);
+                XX.Yres =  XX.Yres(:,Tcort.regIndx,:);
+            end;
+
+            if (strcmp(xname,'yeo'))
+                XX.Yhatm = XX.Yhatm(:,2:18,:);
+                XX.Yhatr = XX.Yhatr(:,2:18,:);
+                XX.Yres =  XX.Yres(:,2:18,:);
+            end;
+
+            XX.Yhat = XX.Yhatm + XX.Yhatr;
+            XX.Y    = XX.Yres + XX.Yhat;
+
+
+            if (~isempty(partial))
+                PP=load(fullfile(rootDir,exper,regDir,regDir,'glm4',subj_name{sn(s)},sprintf('ts_%s.mat',partial)));
+                PP.Yhat = PP.Yhatm + PP.Yhatr;
+                PP.Y = PP.Yhat + PP.Yres;
+            end;
+
+            % Load Y
             Y=load(fullfile(myRegDir,'glm4',subj_name{s},sprintf('ts_%s.mat',yname)));
             Y.Yhat = Y.Yhatm + Y.Yhatr;
             Y.Y    = Y.Yhat  + Y.Yres;
@@ -853,7 +851,7 @@ switch(what)
             % Loop over the different types
             for t=1:length(type);
                 yy = Y.(type{t});
-                xx = XX.(type{t})(:,:,sindx);
+                xx = XX.(type{t});
                 
                 % remove mean
                 yy = yy - B*pinv(B)*yy;
@@ -868,7 +866,7 @@ switch(what)
                 
                 % Regress out the partial ROI
                 if (~isempty(partial))
-                    pp = PP.(type{t})(:,:,sindx);
+                    pp = PP.(type{t});
                     pp = pp - B*pinv(B)*pp;
                     yy = yy - pp*pinv(pp)*yy;  % Subtract from cerebellar data only
                 end;
@@ -890,7 +888,7 @@ switch(what)
             fprintf('encode model: cerebellar voxels predicted for %s \n',subj_name{s});
         end
         
-    case 'numberOfConditions'     % Build predictive models on a random assortment of conditions - evaluate them on the other experiment
+    case 'numberOfConditions'      % Build predictive models on a random assortment of conditions - evaluate them on the other experiment
         T = dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
         RR=[];
         for nc=2:29
@@ -1723,4 +1721,10 @@ X=bsxfun(@minus,B,m);
 Gr=X'*diag(w)*X/sum(w);
 L=eye(P)*0.01;
 tvar=trace(inv(Gr+L));
+
+function dircheck(dir)
+if ~exist(dir,'dir');
+    fprintf('%s doesn''t exist. Creating one now. \n',dir);
+    mkdir(dir);
+end
 
