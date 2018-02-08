@@ -7,8 +7,8 @@ numTRs    = 601;                                                            % pe
 
 %========================================================================================================================
 % (1) Directories
-baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-% baseDir          = '/Volumes/Seagate Backup Plus Drive';
+% baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+baseDir          = '/Volumes/Seagate Backup Plus Drive';
 % baseDir        = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir        = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
@@ -745,7 +745,7 @@ switch(what)
         % example: sc1_sc2_imana('FUNC:func_dicom_import',1,1,1)
         sn=varargin{1}; % subjNum
         sess=varargin{2}; % sessNum
-        study=varargin{1}; % studyNum
+        study=varargin{3}; % studyNum
         
         subjs=length(sn);
         
@@ -3809,7 +3809,7 @@ for i=1:numSess
             sqrt(nansum(nansum(Y(:,:,i).*Y(:,:,i)))*...
             nansum(nansum(Y(:,:,j).*Y(:,:,j))));
     end;
-end
+end;
 
 
 
