@@ -799,10 +799,10 @@ switch(what)
                 ss=(sn(s)*2);
             end
             for i=1:length(fscanNum{study}{ss}),  % run number
-                outfilename = fullfile(studyDir{study},imagingDirRaw,subj_name{sn(s)},sprintf('run_%2.2d.nii',runs{study}{sess}(i)));
+                outfilename = fullfile(studyDir{1},imagingDirRaw,subj_name{sn(s)},sprintf('run_%2.2d.nii',runs{study}{sess}(i)));
                 for j=1:numTRs-numDummys    % doesn't include dummy scans in .nii file
                     P{j}=fullfile(studyDir{study},dicomDir,[subj_name{sn(s)},sprintf('_%d',sess)],sprintf('series%2.2d',fscanNum{study}{ss}(i)),...
-                        sprintf('f%s-%4.4d-%5.5d-%6.6d-01.nii',NiiRawName{study}{ss},fscanNum{study}{ss}(i),j+numDummys,j+numDummys));
+                        sprintf('f%s-%4.4d-%5.5d-%6.6d-01.nii',NiiRawName{study}{ss},fscanNum{study}{ss}(i),j+numDummys,j+numDummys)); 
                 end;
                 spm_file_merge(char(P),outfilename);
                 fprintf('Run %d done for %s \n',runs{study}{sess}(i),subj_name{sn(s)});
