@@ -7,12 +7,16 @@ function varargout=sc1sc2_connectivity(what,varargin)
 % rootDir           = '/Volumes/MotorControl/data/super_cerebellum_new/';
 rootDir         = '/Users/chernandez/Cerebellum';
 sc1Dir          = [rootDir '/sc1'];
-behavDir        = 'data';
-imagingDir      = 'imaging_data';
-suitDir         = 'suit';
-caretDir        = 'surfaceCaret';
-regDir          = 'RegionOfInterest/';
-connDir         = 'connectivity_cerebellum';
+sc2Dir          = [rootDir '/sc2'];
+behavDir        =['data'];
+imagingDir      =['imaging_data'];
+imagingDirRaw   =['imaging_data_raw'];
+dicomDir        =['imaging_data_dicom'];
+anatomicalDir   =['anatomicals'];
+suitDir         =['suit'];
+caretDir        =['surfaceCaret'];
+regDir          =['RegionOfInterest/'];
+connDir         =['connectivity_cerebellum'];
 
 %==========================================================================
 
@@ -568,6 +572,7 @@ switch(what)
         %  save(fullfile(regDir,'glm4','Covariance_by_session.mat'),...
         %     'C','R','Xx');
         varargout={DD,meanSD};
+   
     case 'conn_B'                  % Run encoding model on mean predicted time series - (old)
         % sc1_imana_jd('encoding_B',[2],'method','ridgeFixed','name','162_ridge','lambdaL1',[0],'lambdaL2',[20000],'crossval',1);
         
