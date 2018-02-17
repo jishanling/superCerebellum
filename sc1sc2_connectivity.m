@@ -2,38 +2,27 @@ function varargout=sc1sc2_connectivity(what,varargin)
 % Matlab script to do connectivity analyses for sc1 and sc2 experiments
 % Does time series extraction
 %==========================================================================
-type=[];
 % % (1) Directories
 % rootDir           = '/Users/jdiedrichsen/Data/super_cerebellum';
 % rootDir           = '/Volumes/MotorControl/data/super_cerebellum_new/';
 rootDir         = '/Users/chernandez/Cerebellum';
 sc1Dir          = [rootDir '/sc1'];
-sc2Dir          = [rootDir '/sc2'];
-behavDir        =['data'];
-imagingDir      =['imaging_data'];
-imagingDirRaw   =['imaging_data_raw'];
-dicomDir        =['imaging_data_dicom'];
-anatomicalDir   =['anatomicals'];
-suitDir         =['suit'];
-caretDir        =['surfaceCaret'];
-regDir          =['RegionOfInterest/'];
-connDir         =['connectivity_cerebellum'];
+behavDir        = 'data';
+imagingDir      = 'imaging_data';
+suitDir         = 'suit';
+caretDir        = 'surfaceCaret';
+regDir          = 'RegionOfInterest/';
+connDir         = 'connectivity_cerebellum';
 
 %==========================================================================
 
 % % (2) Hemisphere and Region Names
 hem       = {'lh','rh'};
-regSide   = [1 2] ;
-regType   = [1 2 3 4 5 1 2 3 4 5];
-regName   = {'frontal','parietal','occipital','temporal','cerebellum'};
-numReg    = length(regName);
 subj_name = {'s01','s02','s03','s04','s05','s06','s07','s08','s09','s10',...
             's11','s12','s13','s14','s15','s16','s17','s18','s19','s20',...
             's21','s22','s23','s24','s25','s26','s27','s28','s29','s30',...
             's31'};
-allsubj   = [2:22];
 goodsubj  = [2,3,4,6,7,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
-atlasname = 'fsaverage_sym';
 hemName   = {'LeftHem','RightHem'};
 expStr    = {'sc1','sc2'};
 
@@ -153,9 +142,8 @@ switch(what)
             % load data
             tic;
             load(fullfile(sc1Dir,regDir,'data',subj_name{sn(s)},sprintf('regions_%s.mat',type))); % 'regions' are defined in 'ROI_define'
-%             SPM=spmj_move_rawdata(SPM,fullfile(rootDir,'sc1',imagingDir,subj_name{sn(s)}));
-            SPM=spmj_move_rawdata(SPM,fullfile('/Volumes/Seagate Backup Plus Drive/sc1/imaging_data',subj_name{sn(s)}));
-            
+            SPM=spmj_move_rawdata(SPM,fullfile(rootDir,'sc1',imagingDir,subj_name{sn(s)}));
+
             % Get the raw data files
             V=SPM.xY.VY;
             VresMS = spm_vol(fullfile(glmDirSubj,'ResMS.nii'));
@@ -213,9 +201,8 @@ switch(what)
             % load data
             tic;
             load(fullfile(sc1Dir,regDir,'data',subj_name{sn(s)},sprintf('regions_%s.mat',type))); % 'regions' are defined in 'ROI_define'
-%             SPM=spmj_move_rawdata(SPM,fullfile(rootDir,'sc1',imagingDir,subj_name{sn(s)}));
-            %             % all imaging_data saved in 'sc1'
-            SPM=spmj_move_rawdata(SPM,fullfile('/Volumes/Seagate Backup Plus Drive/sc1/imaging_data',subj_name{sn(s)}));
+            SPM=spmj_move_rawdata(SPM,fullfile(rootDir,'sc1',imagingDir,subj_name{sn(s)}));
+
             % Get the raw data files
             V=SPM.xY.VY;
             VresMS = spm_vol(fullfile(glmDirSubj,'ResMS.nii'));
@@ -237,7 +224,7 @@ switch(what)
             
             % Decompose betas into mean and residuals
             Z=indicatorMatrix('identity',T.cond);
-            Bm = Z*pinv(Z)*B(reg_interest,:);   % Mean betas
+            Bm = Z*pinv(Z)*B(reg_interest,:);     % Mean betas
             Br = B(reg_interest,:)-Bm;
             Yhatm = SPM.xX.xKXs.X(:,reg_interest)*Bm; %- predicted values
             Yhatr = SPM.xX.xKXs.X(:,reg_interest)*Br; %- predicted values
@@ -286,20 +273,20 @@ switch(what)
         else
             save(fullfile(expDir,regDir,sprintf('glm%d',glm),sprintf('ts_%s_all.mat',type)),'Yres','Yhatm','Yhatr','B');
         end;
-    case 'get_meanBeta'         % Take the time series structure and extract mean beta for cross-session modeling - removes instruct and adds rest
-        % type  = '162_tessellation_hem';
-        type  = 'Cerebellum_grey';
-        exper = {'sc1','sc2'};
-        sn    = goodsubj;
-        glm = 4;
-        vararginoptions(varargin,{'sn','glm','type'});
+    case 'get_meanBeta'         % Take the time series structure and extract mean beta for cross-session modeling - add rest
+        type    = '162_tessellation_hem';  % 'Cerebellum_grey';
+        exper   = {'sc1','sc2'};
+        sn      = goodsubj;
+        glm     = 4;
+        incInst = 1;
+        vararginoptions(varargin,{'sn','glm','type','incInst'});
         for e=1:2
             myRegDir = fullfile(rootDir,exper{e},regDir);
             for s=1:length(sn);
                 fprintf('%d\n',sn(s));
                 filename = (fullfile(myRegDir,sprintf('glm%d',glm),subj_name{sn(s)},sprintf('ts_%s.mat',type)));
                 D          = load(filename);
-                glmDirSubj = fullfile(rootDir,exper{e},sprintf('GLM_firstlevel_%d',4),subj_name{sn(s)});
+                glmDirSubj = fullfile(rootDir,exper{e},sprintf('GLM_firstlevel_%d',glm),subj_name{sn(s)});
                 T          = load(fullfile(glmDirSubj,'SPM_info.mat'));
                 
                 if (strcmp(type,'162_tessellation_hem'))
@@ -311,8 +298,13 @@ switch(what)
                 
                 % Now generate mean estimates per session
                 T.sess=[T.sess;ones(8,1);ones(8,1)*2];
-                restNum = max(T.cond);
-                T.cond=[T.cond-1;ones(16,1)*restNum]; % Make instruction 0
+                if incInst == 1;
+                    restNum = max(T.cond)+2;
+                    T.cond=[T.cond+1;ones(16,1)*restNum]; % Include Instruction
+                else
+                    restNum = max(T.cond);
+                    T.cond=[T.cond-1;ones(16,1)*restNum]; % Remove Instruction
+                end;
                 T.run =[T.run;[1:16]'];
                 D.B(T.cond==restNum,:)=0;
                 for se=1:2
@@ -668,8 +660,8 @@ switch(what)
             fprintf('encode model: cerebellar voxels predicted for %s \n',subj_name{s});
         end
     case 'get_mbeta_all'
-        exper={'sc1','sc2'};
-        glm =4;
+        exper = {'sc1','sc2'};
+        glm   = 4;
         yname = 'Cerebellum_grey';
         xname = '162_tessellation_hem';
         vararginoptions(varargin,{'exper','glm','yname','xname'});
@@ -788,7 +780,7 @@ switch(what)
         % sc1_connectivity('conn_ts',goodsubj,'method','winnerTakeAll','name','glm4_162_WTA','lambdaL1',0,'lambdaL2',0);
         % sc1_connectivity('conn_ts',[2:22],'method','ridgeFixed','name','glm4_162_ridge','lambdaL1',[0 0 0 0 0 0],'lambdaL2',[0 500 1000 2500 5000 7500]);
         % sc1_connectivity('conn_ts',[2:22],'method','cplexqpL1L2','name','glm4_162_L1L2c','lambdaL1',[2500 7500 7500],'lambdaL2',[2500 7500 2500]);
-        sn=varargin{1};  
+        sn=goodsubj;%varargin{1};  
         glm=4;                          % usually 4
         method= 'ridgeFixed';           % cplexqpL1L2, linRegress, nonNegExp, cplexqp, lasso, winnerTakeAll
         yname = 'cerebellum_grey';
@@ -878,7 +870,7 @@ switch(what)
                     T.lambda  = [lambdaL1(l) lambdaL2(l)];
                     
                     fprintf('Fitting s%2.2d %s lambdaL1 = %2.2f lambdaL2 = %2.2f\n',s,type{t},lambdaL1(l),lambdaL2(l));
-                    [W,T.fR2m,T.fRm,T.fR2v,T.fRv]=sc1_encode_fit(yy,xx,method,'lambda',[lambdaL1(l) lambdaL2(l)]);
+                    [W,T.fR2m,T.fRm,T.fR2v,T.fRv]=sc_connect_fit(yy,xx,method,'lambda',[lambdaL1(l) lambdaL2(l)]);
                     T.W = {W};
                     TT=addstruct(TT,T);
                 end;
@@ -1033,6 +1025,7 @@ switch(what)
         % Now map to surface-based representation
         D = suit_map2surf(Vres,'stats','mean');
         varargout={D,Vres};
+
     case 'evaluate'
         M = varargin{1};        % This is a structure with the fitted data
         T = dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
@@ -1042,7 +1035,7 @@ switch(what)
         xname = '162_tessellation_hem';
         meanSub = 0; % Mean pattern subtraction before prediction?
         vararginoptions(varargin(2:end),{'subset','splitby','meanSub','xname','yname'});
-        [X,Y,S]=sc1_connectivity('get_mbeta_all','xname',xname,'yname',yname);
+        [X,Y,S]=sc1sc2_connectivity('get_mbeta_all','xname',xname,'yname',yname);
         S.subset= [subset;subset];
         if (isempty(splitby))
             splitby = ones(length(T.StudyNum),1);
@@ -1164,7 +1157,7 @@ switch(what)
         outname = whatAna;
         xnames = {'162_tessellation_hem'};
         D=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
-        sn = goodsubj;
+        %sn = [6,8];%goodsubj;
         switch(whatAna)
             case 'buckner_margin_sc2'
                 
