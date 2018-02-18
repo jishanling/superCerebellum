@@ -244,30 +244,40 @@ switch(what)
         Err2(end)
     case 'SNN:make_map'
         % example: 'sc1_sc2_functionalAtlas('ICA:make_map',[2],1,.95)
-        sn=varargin{1}; % subjNum or 'group'
+        sn=varargin{1}; % subject numbers 
         study=varargin{2}; % 1 or 2 or [1,2]
-        type=varargin{3}; % 'group'
-        K=varargin{4};       % Number of clusters
+        K=varargin{3};       % Number of clusters
         % figure out if individual or group or leave one out
         outDir=fullfile(studyDir{study},encodeDir,'glm4','SNN');
-        switch type,
-            case 'group'
-                sn=returnSubjs;
-                outName=fullfile(outDir,sprintf('SNN_%d.mat',K));
-            case 'indiv'
-                outName=fullfile(outDir,sprintf('SNN_%d_indiv_%s.mat',K,subj_name{sn}));
-            case 'leaveOneOut'
-                outName=fullfile(outDir,sprintf('SNN_%d_loo_%s.mat',K,subj_name{sn}));
-                sn=returnSubjs(returnSubjs~=sn);
-        end
-        
-        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study);
-        [F,G,Err1]=semiNonNegMatFac(X_C,K,'threshold',0.01);
+        outName=fullfile(outDir,sprintf('SNN_%d.mat',K));
+        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
+        [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01);
         save(fullfile(outName),'F','G','volIndx','V');
+    case 'SNN:check_convergence'
+        % example: 'sc1_sc2_functionalAtlas('ICA:make_map',[2],1,.95)
+        sn=varargin{1}; % subject numbers 
+        study=varargin{2}; % 1 or 2 or [1,2]
+        K=varargin{3};       % Number of clusters
+        D=[]; 
+        numFits=10; 
+        % figure out if individual or group or leave one out
+        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
+        for i=1:numFits
+            fprintf('%d\n',i); 
+            [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01);
+            [~,Cl(:,i)]=max(G,[],2); 
+            D=addstruct(D,Info);    
+        end; 
+        for i=1:numFits 
+            for j=1:numFits
+                fprintf('%d,%d\n',i,j); 
+                RI(i,j)=RandIndex(Cl(:,i),Cl(:,j)); 
+            end; 
+        end; 
+        keyboard; 
     case 'SNN:visualise_map'
         sn=varargin{1}; % subjNum or 'group'
         study=varargin{2}; % 1 or 2 or [1,2]
-        type=varargin{3};
         K=varargin{4};       % Number of clusters
         
         % figure out if individual or group
