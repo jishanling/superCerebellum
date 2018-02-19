@@ -12,7 +12,7 @@ caretDir        ='/surfaceCaret';
 regDir          ='/RegionOfInterest/';
 encodeDir       ='/encoding';
 
-subj_name = {'s01','s02','s03','s04','s05','s06','s08','s09','s10','s11',...
+subj_name = {'s01','s02','s03','s04','s05','s06','s07','s08','s09','s10','s11',...
     's12','s13','s14','s15','s16','s17','s18','s19','s20','s21','s22','s23','s24',...
     's25','s26','s27','s28','s29','s30','s31'};
 
@@ -444,6 +444,42 @@ switch what
         wysiwyg;
         ttest(sqrt(T.within1.*T.within2),T.across,2,'paired');
         
+    case 'ATLAS:COLEtoSUIT'
+        %Setting the parcel files to be the 648 parcels (cortical + subcortical)
+        
+        filesToLoad={'final_LR_subcortex_atlas_subcortexGSR.dlabel.nii',...
+            'subcortex_atlas_subcortexGSR.dlabel.nii',...
+            'CortexSubcortex_ColeAnticevic_NetPartition_parcels_v1_L.dlabel.nii',...
+            'CortexSubcortex_ColeAnticevic_NetPartition_parcels_v1_R.dlabel.nii',...
+            'CortexSubcortex_ColeAnticevic_NetPartition_netassignments_v1_L.dlabel.nii',...
+            'CortexSubcortex_ColeAnticevic_NetPartition_netassignments_v1_R.dlabel.nii'};
+        % find path to atlas templates
+        parcelDir=fileparts(which(filesToLoad{1}));
+        
+        % load in Cole nifti
+        %         Vo=spm_vol(fullfile(parcelDir,'Cole_subcortex_atlas.nii'));
+        %         Vi=spm_read_vols(Vo);
+        
+        cii=ft_read_cifti(fullfile(parcelDir,filesToLoad{1}));
+        
+        % figure out volume of labels
+        [y1,y2,y3]=spmj_affine_transform(cii.pos(:,1),cii.pos(:,2),cii.pos(:,3),cii.transform);
+        
+        % write out as spm vol
+        V=spm_vol(fullfile(studyDir{1},'suit/anatomicals/cerebellarGreySUIT.nii'));
+        V.mat=cii.transform;
+        V.fname=fullfile(parcelDir,'ColeAnticevicAtlas_MNI.nii');
+        V.dim=cii.dim;
+        V.private.mat0=V.mat;
+        V.private.dat.dim=V.dim;
+        V.private.dat.fname=V.fname;
+        
+        indx=sub2ind(size(cii.pos),cii.pos(:,1),cii.pos(:,2),cii.pos(:,3));
+        
+        %         [y1,y2,y3]=spmj_affine_transform(cii.pos(:,1),cii.pos(:,2),cii.pos(:,3),cii.transform);
+        
+        for i=1:length(filesToLoad),
+        end
     case 'ATLAS:finalMap'
         % example: 'sc1_sc2_functionalAtlas('ATLAS:finalMap',[2],1,13,'leaveOneOut')
         K=varargin{1}; % number of clusters
@@ -496,6 +532,41 @@ switch what
                 M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
                 suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
         end
+        
+    case 'TEST:mapType'
+        sn=varargin{1}; % subject numbers
+        study=varargin{2}; % 1 or 2 or [1,2]
+        K=varargin{3};       % Number of clusters
+        RI_thresh=.85;
+        numCount=4;
+        
+        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
+        count=0;
+        iter=2;
+        ClP=ones(25275,1); % starter
+        while count~=numCount,
+            fprintf('count %d\n',count);
+            [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01);
+            error(iter)=Info.error;
+            [~,Cl]=max(G,[],2);
+            ClP(:,iter)=Cl; 
+            % calculate RandIndex between maps
+            RI=RandIndex(ClP(:,iter-1),Cl(:,1)); 
+            clause=(sum(RI<RI_thresh) + sum(Info.error>error(iter-1)))>0; 
+            if clause, % if error is larger than previous & RI is smaller than .9. Reset counter
+                count=0;
+                clear Cl RI 
+            else
+                Cl(:,count+1)=Cl;
+                RI(count+1)=RI; 
+                errorC(count+1)=Info.error; 
+                count=count+1;
+            end
+            iter=iter+1;
+        end
+        keyboard;
+        
+        save(fullfile(outName),'F','G','volIndx','V');
         
     case 'EVAL:get_data'
         sn=varargin{1}; % Subj numbers to include
@@ -611,19 +682,19 @@ switch what
         figure()
         title(sprintf('%d clusters',K))
         M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
-        suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))    
+        suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
     case 'EVAL:unCrossval:GROUP'
         % code is written now so that func map is built on sc1+sc2 (allConds) and
         % evaluated on sc1+sc2 (allConds)
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest', or 'atlasFinal<num>'
-        eval=varargin{2}; % [1] [2] or [1,2]
+        evalType=varargin{2}; % [1] [2] or [1,2]
         
-        if size(eval,2)==2,
+        if size(evalType,2)==2,
             outName='spatialBoundfunc3_all.mat';
             outDir=fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),outName);
         else
-            outName=sprintf('spatialBoundfunc%d.mat',eval);
-            outDir=fullfile(studyDir{eval},'encoding','glm4',sprintf('groupEval_%s',mapType),outName);
+            outName=sprintf('spatialBoundfunc%d.mat',evalType);
+            outDir=fullfile(studyDir{evalType},'encoding','glm4',sprintf('groupEval_%s',mapType),outName);
         end
         
         % load in map
@@ -656,13 +727,13 @@ switch what
             fprintf('uncrossval eval done for subj %d \n',sn(s));
         end;
         save(outDir,'-struct','RR');
-    case 'EVAL:crossval' 
+    case 'EVAL:crossval'
         sn=varargin{1}; % 'group' or <subjNum>
         mapType=varargin{2}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster'
         data=varargin{3}; % evaluating data from study [1] or [2] ?
         condType=varargin{4}; % 'unique' or 'all'. Are we evaluating on all taskConds or just those unique to either sc1 or sc2 ?
         type=varargin{5}; % 'group' or 'indiv'
-
+        
         switch type,
             case 'group'
                 % load in map
@@ -670,7 +741,7 @@ switch what
                 outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',data,condType));
             case 'indiv'
                 mapName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_%s.nii',mapType));
-                outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_spatialBoundfunc%d_%s.mat',mapType,data,condType)); 
+                outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_spatialBoundfunc%d_%s.mat',mapType,data,condType));
         end
         
         % load in func data to test (e.g. if map is sc1; func data should
@@ -686,7 +757,7 @@ switch what
             case 'all'
                 idx=D1.condNum;
         end
-
+        
         % Now get the parcellation sampled into the same space
         [i,j,k]=ind2sub(V.dim,volIndx);
         [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
@@ -771,20 +842,34 @@ switch what
     case 'EVAL:averageClust' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
         clusterNum=varargin{1}; % [5:2:23]
         condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
+        type=varargin{3}; % 'group' or 'indiv' ?
         
         mapType=[1,2]; % test on one dataset
-        eval=[2,1]; % evaluate on the other
+        evalType=[2,1]; % evaluate on the other
         R=[];
-        for i=1:2,
-            T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_SC%d_%dcluster',mapType(i),clusterNum),sprintf('spatialBoundfunc%d_%s.mat',eval(i),condType)));
-            T.studyNum=repmat([i],length(T.SN),1);
-            R=addstruct(R,T);
+        
+        vararginoptions({varargin{4:end}},{'sn'}); % option if doing individual map analysis
+        
+        switch type,
+            case 'group'
+                for i=1:2,
+                    T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_SC%d_%dcluster',mapType(i),clusterNum),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
+                    T.studyNum=repmat([i],length(T.SN),1);
+                    R=addstruct(R,T);
+                end
+                outDir=fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_SC2_%dcluster',clusterNum),sprintf('spatialBoundfunc4_%s.mat',condType));
+            case 'indiv'
+                for i=1:2,
+                    T=load(fullfile(studyDir{2},'encoding','glm4',subj_name{sn},sprintf('SC%d_%dcluster_spatialBoundfunc%d_%s.mat',mapType(i),clusterNum,evalType(i),condType)));
+                    T.studyNum=repmat([i],length(T.SN),1);
+                    R=addstruct(R,T);
+                end
+                outDir=fullfile(studyDir{2},'encoding','glm4',subj_name{sn},sprintf('%dcluster_spatialBoundfunc4_%s.mat',clusterNum,condType));
         end
         R=rmfield(R,{'distmin','distmax','N'});
         % get average of both structures here
         A=tapply(R,{'bin','SN','bwParcel','crossval','dist'},{'corr'});
         
-        outDir=fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_SC2_%dcluster',clusterNum),sprintf('spatialBoundfunc4_%s.mat',condType));
         save(outDir,'-struct','A');
     case 'EVAL:averageOther'
         mapType=varargin{1}; % options are 'lob10','bucknerRest','atlasFinal<num>' etc'
@@ -806,9 +891,11 @@ switch what
     case 'EVAL:PLOT:CURVES'
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
         data=varargin{2}; % evaluating data from study [1] or [2], both [3] or average of [1] and [2] after eval [4]
-        type=varargin{3}; % 'group' or 'leaveOneOut'
+        type=varargin{3}; % 'group' or 'leaveOneOut' or 'indiv'
         crossval=varargin{4}; % [0] - no crossval; [1] - crossval
         condType=varargin{5}; % evaluating on 'all' or 'unique' taskConds ??
+        
+        vararginoptions({varargin{6:end}},{'sn'}); % option if doing individual map analysis
         
         switch type,
             case 'group'
@@ -819,6 +906,8 @@ switch what
                     P=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_eval_%s.mat',data,subj_name{returnSubjs(s)})));
                     T=addstruct(T,P);
                 end
+            case 'indiv'
+                T=load(fullfile(studyDir{2},'encoding','glm4',subj_name{sn},sprintf('%s_spatialBoundfunc%d_%s.mat',mapType,data,condType)));
             otherwise
                 fprintf('no such case')
         end
@@ -854,11 +943,11 @@ switch what
         B=getrow(P,P.bwParcel==1); % between
         W.diff=W.corr-B.corr;
         
-        subplot(1,2,1);
-        myboxplot(W.m,W.diff,'subset',W.dist<=35,'style_twoblock','plotall',0) % within-between diff
-        ylabel('Within/Between Difference');
+        %         subplot(1,2,1);
+        %         myboxplot(W.m,W.diff,'subset',W.dist<=35,'style_twoblock','plotall',0) % within-between diff
+        %         ylabel('Within/Between Difference');
         
-        subplot(1,2,2);
+        %         subplot(1,2,2);
         lineplot(W.m,W.diff,'subset',W.dist<=35);
     case 'EVAL:PLOT:(UN)CROSSVAL'
         mapType=varargin{1}; % {'lob10','bucknerRest','atlasFinal9'}
@@ -917,11 +1006,12 @@ switch what
         title(sprintf('SC%d(%dPOV)-%s-with crossval',study,var*100,data));
         set(gcf,'PaperPosition',[2 4 10 12]);
         wysiwyg;
-    case 'FIGURES:CORR' % Makes the summary figure of within / between correlations
-        toPlot = {'lob10','SC2_10cluster','SC2_11cluster','SC2_12cluster'};
+    case 'FIGURES:CORR:GROUP' % Makes the summary figure of within / between correlations for GROUP
+        toPlot = {'lob10','bucknerRest','SC2_9cluster'};
         crossval=varargin{1}; % 0-uncrossval; 1-crossval
         evalNum=varargin{2}; % SC1-[1],SC2-[2],concat SC1+SC2 [3],average of SC1+SC2 eval [4]
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
+        
         numPlots = numel(toPlot);
         figure()
         for i=1:numPlots
@@ -930,27 +1020,97 @@ switch what
         end;
         %         set(gcf,'PaperPosition',[2 4 12 3]);
         %         wysiwyg;
-    case 'FIGURES:DIFF' % Makes the summary figure of within / between diff
-%                 toPlot = {'SC1_6cluster',...
-%                     'SC1_7cluster','SC1_8cluster','SC1_9cluster','SC1_10cluster',...
-%                     'SC1_11cluster','SC1_12cluster','SC1_13cluster','SC1_14cluster',...
-%                     'SC1_15cluster','SC1_16cluster','SC1_17cluster','SC1_18cluster',...
-%                     'SC1_19cluster','SC1_20cluster','SC1_21cluster','SC1_22cluster',...
-%                     'SC1_23cluster','SC1_24cluster'};
-%         toPlot = {'lob10','SC2_6cluster',...
-%             'SC2_7cluster','SC2_8cluster','SC2_9cluster','SC2_10cluster',...
-%             'SC2_11cluster','SC2_12cluster','SC2_13cluster','SC2_14cluster',...
-%             'SC2_15cluster','SC2_16cluster','SC2_17cluster','SC2_18cluster',...
-%             'SC2_19cluster','SC2_20cluster','SC2_21cluster','SC2_22cluster',...
-%             'SC2_23cluster','SC2_24cluster'}; 
-        toPlot= {'lob10','bucknerRest','SC2_9cluster'}; 
+    case 'FIGURES:CORR:INDIV'
+        sn=varargin{1}; % <subjNum>
+        crossval=varargin{2}; % 0-uncrossval; 1-crossval
+        evalNum=varargin{3}; % SC1-[1],SC2-[2],concat SC1+SC2 [3],average of SC1+SC2 eval [4]
+        condType=varargin{4}; % evaluating on 'unique' or 'all' taskConds ??
+        
+        numPlots = numel(sn);
+        figure()
+        for i=1:numPlots
+            subplot(1,numPlots,i);
+            sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES','9cluster',evalNum,'indiv',crossval,condType,'sn',sn(i));
+        end;
+        %         set(gcf,'PaperPosition',[2 4 12 3]);
+        %         wysiwyg;
+    case 'FIGURES:DIFF:GROUP' % Makes the summary figure of within / between diff
+        %                 toPlot = {'SC1_6cluster',...
+        %                     'SC1_7cluster','SC1_8cluster','SC1_9cluster','SC1_10cluster',...
+        %                     'SC1_11cluster','SC1_12cluster','SC1_13cluster','SC1_14cluster',...
+        %                     'SC1_15cluster','SC1_16cluster','SC1_17cluster','SC1_18cluster',...
+        %                     'SC1_19cluster','SC1_20cluster','SC1_21cluster','SC1_22cluster',...
+        %                     'SC1_23cluster','SC1_24cluster'};
+        toPlot = {'lob10','SC2_3cluster','SC2_4cluster','SC2_5cluster','SC2_6cluster',...
+            'SC2_7cluster','SC2_8cluster','SC2_9cluster','SC2_10cluster',...
+            'SC2_11cluster','SC2_12cluster','SC2_13cluster','SC2_14cluster',...
+            'SC2_15cluster','SC2_16cluster','SC2_17cluster','SC2_18cluster',...
+            'SC2_19cluster','SC2_20cluster','SC2_21cluster','SC2_22cluster',...
+            'SC2_23cluster','SC2_24cluster'};
+        %         toPlot= {'lob10','bucknerRest','SC2_10cluster'};
         crossval=varargin{1}; % 0-uncrossval; 1-crossval
         evalNum=varargin{2}; % SC1-[1],SC2-[2],concat SC1+SC2 [3],average of SC1+SC2 eval [4]
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
         sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNum,crossval,condType);
         set(gcf,'PaperPosition',[2 4 12 3]);
         %         wysiwyg;
-    
+    case 'FIGURES:DIFF:INDIV'
+        sn=varargin{1}; % <subjNum>
+        crossval=varargin{2}; % [0]-no crossval; [1]-crossval
+        condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
+        
+        for s=1:length(sn),
+            P=[];
+            
+            T=load(fullfile(studyDir{2},'encoding','glm4',subj_name{sn(s)},sprintf('9cluster_spatialBoundfunc4_%s.mat',condType)));
+            A=getrow(T,T.crossval==crossval);
+            P=addstruct(P,A);
+            clear A
+            %         pivottable(T.SN,[T.bin T.bwParcel],T.corr,'length','subset',T.crossval==crossval)
+            
+            % plot boxplot of different clusters
+            W=getrow(P,P.bwParcel==0); % within
+            B=getrow(P,P.bwParcel==1); % between
+            W.diff=W.corr-B.corr;
+            
+            subplot(1,length(sn),s);
+            lineplot(W.SN,W.diff,'subset',W.dist<=35,'style_shade','errorfcn','stderr(fisherz(x))');
+            ylabel('Within/Between Diff')
+            title(sprintf('%s',subj_name{sn(s)}));
+            clear W
+        end
+    case 'FIGURES:GROUP_INDIV'
+        sn=varargin{1}; % <subjNum>
+        crossval=varargin{2}; % [0]-no crossval; [1]-crossval
+        condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
+        
+        % load in group map
+        T=load(fullfile(studyDir{2},'encoding','glm4','groupEval_SC2_9cluster',sprintf('spatialBoundfunc4_%s.mat',condType)));
+        T.mapType=repmat({'group'},length(T.SN),1);
+        T.type=repmat([1],length(T.SN),1); % 1 is group
+        G=getrow(T,T.crossval==crossval);
+        
+        A=[];
+        for s=1:length(sn),
+            P=load(fullfile(studyDir{2},'encoding','glm4',subj_name{sn(s)},sprintf('9cluster_spatialBoundfunc4_%s.mat',condType)));
+            P.mapType=repmat({'indiv'},length(P.SN),1);
+            P.type=repmat([2],length(T.SN),1); % 2 is indiv
+            I=getrow(P,P.crossval==crossval & P.SN==sn(s));
+            A=addstruct(A,I);
+            clear I P
+        end
+        G=addstruct(G,A);
+        
+        W=getrow(G,G.bwParcel==0); % within
+        B=getrow(G,G.bwParcel==1); % between
+        W.diff=W.corr-B.corr;
+        
+        % integrate over dist (large error bars !!)
+        D=getrow(W,W.dist<=35);
+        Dd=tapply(D,{'SN','mapType','type'},{'diff'});
+        
+        lineplot(Dd.SN,Dd.diff,'split',Dd.mapType,'leg','auto','style_thickline2x3')
+        
     case 'ENCODE:project_taskSpace'
         K=varargin{1}; % how many clusters ?
         
@@ -1095,6 +1255,35 @@ for i=1:numSess
             nansum(nansum(Y(:,:,j).*Y(:,:,j))));
     end;
 end
+
+function E = expectedObs(pivotTable)
+%Number of observations
+N = sum(nansum(pivotTable));
+
+%Number of observations marginals
+X = nansum(pivotTable,1);
+Y = nansum(pivotTable,2);
+
+%Propotions
+Px = X/N;
+Py = Y/N;
+
+%Expected number of observations
+E = Py * Px * N;
+
+function G = Gtest(map1,map2, validIdx)
+%Argument controller
+if nargin == 2
+    %Valid vertices index vector
+    validIdx = ones(length(map1),1);
+end
+%Observations
+O = pivottable(map1, map2, map1, 'length', 'subset', validIdx);
+E = expectedObs(O);
+%G-test
+G = 2 * sum(nansum( O .* (log(O) - log(E)) ));
+
+
 
 
 
