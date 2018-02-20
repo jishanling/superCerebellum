@@ -546,8 +546,20 @@ switch what
         sn=varargin{1}; % subject numbers
         study=varargin{2}; % 1 or 2 or [1,2]
         K=varargin{3};       % Number of clusters
+        type=varargin{4}; % 'group' or 'indiv'
         RI_thresh=.6;
         numCount=5;
+        
+        % figure out if individual or group or leave one out
+        switch type,
+            case 'group'
+                sn=returnSubjs;
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir);
+                outName=fullfile(outDir,'SNN_test.mat');
+            case 'indiv'
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
+                outName=fullfile(outDir,sprintf('SNN_SC%d_%dcluster_test.mat',study,K));
+        end
         
         [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
         count=0;
@@ -577,7 +589,29 @@ switch what
         toc
         keyboard;
         
-        save(fullfile(outName),'F','G','volIndx','V');
+        % Make out struct
+        C.Cl=ClC; 
+        C.RI=RIC; 
+        C.error=errorC;
+        
+        save(outName,'C','volIndx','V');
+    case 'TEST:plot'
+        study=varargin{1}; % 1 or 2 or [1,2]
+        K=varargin{2};       % Number of clusters
+        type=varargin{3}; % 'group' or 'indiv'
+        
+        switch type,
+            case 'group'
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir);
+                outName=fullfile(outDir,'SNN_test.mat');
+        end
+        load(outName)
+        subplot(2,1,1)
+        lineplot([1:5]',C.error')
+        ylabel('Error')
+        subplot(2,1,2)
+        lineplot([1:5]',C.RI')
+        ylabel('RandIndex')
         
     case 'EVAL:get_data'
         sn=varargin{1}; % Subj numbers to include
