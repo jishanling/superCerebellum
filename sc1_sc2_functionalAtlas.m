@@ -447,26 +447,26 @@ switch what
     case 'ATLAS:COLEtoSUIT' % can't figure this out !
         
         %filesToLoad='final_LR_subcortex_atlas_subcortexGSR.dlabel.nii';
-        filesToLoad='subcortex_atlas_subcortexGSR.dlabel.nii'; 
+        filesToLoad='subcortex_atlas_subcortexGSR.dlabel.nii';
         % find path to atlas templates
         parcelDir=fileparts(which(filesToLoad));
         
         cii=ft_read_cifti(fullfile(parcelDir,filesToLoad));
         
-%         gii=gifti(fullfile(parcelDir,'Cole_subcortex_atlas.gii')); 
+        %         gii=gifti(fullfile(parcelDir,'Cole_subcortex_atlas.gii'));
         
         % get cerebellar Idx
-        cerebIdx=cii.indexmax(cii.brainstructure==8 | cii.brainstructure==9); 
-        cerebPos=cii.pos(cii.brainstructure==8 | cii.brainstructure==9,:); 
+        cerebIdx=cii.indexmax(cii.brainstructure==8 | cii.brainstructure==9);
+        cerebPos=cii.pos(cii.brainstructure==8 | cii.brainstructure==9,:);
         
         % load in SUIT MNI
-        suitMNI=which('maskMNI.nii'); 
-        V=spm_vol(suitMNI); 
-        Vo=spm_read_vols(V); 
+        suitMNI=which('maskMNI.nii');
+        V=spm_vol(suitMNI);
+        Vo=spm_read_vols(V);
         
         % figure out volume of labels
-%         [y1,y2,y3]=spmj_affine_transform(cii.pos(:,1),cii.pos(:,2),cii.pos(:,3),cii.transform);
-       
+        %         [y1,y2,y3]=spmj_affine_transform(cii.pos(:,1),cii.pos(:,2),cii.pos(:,3),cii.transform);
+        
         
         % write out as spm vol
         V=spm_vol(fullfile(studyDir{1},'suit/anatomicals/cerebellarGreySUIT.nii'));
@@ -486,9 +486,9 @@ switch what
     case 'ATLAS:BucknertoSUIT'
         mapToTransform='Buckner2011_7Networks_MNI152_FreeSurferConformed1mm_TightMask.nii';
         parcelDir=fileparts(which(mapToTransform));
-
+        
         cd(parcelDir)
-        suit_mni2suit(mapToTransform); 
+        suit_mni2suit(mapToTransform);
     case 'ATLAS:finalMap'
         % example: 'sc1_sc2_functionalAtlas('ATLAS:finalMap',[2],1,13,'leaveOneOut')
         K=varargin{1}; % number of clusters
@@ -546,33 +546,35 @@ switch what
         sn=varargin{1}; % subject numbers
         study=varargin{2}; % 1 or 2 or [1,2]
         K=varargin{3};       % Number of clusters
-        RI_thresh=.85;
-        numCount=4;
+        RI_thresh=.6;
+        numCount=5;
         
         [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
         count=0;
         iter=2;
         ClP=ones(25275,1); % starter
+        tic
         while count~=numCount,
             fprintf('count %d\n',count);
             [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01);
             error(iter)=Info.error;
             [~,Cl]=max(G,[],2);
-            ClP(:,iter)=Cl; 
+            ClP(:,iter)=Cl;
             % calculate RandIndex between maps
-            RI=RandIndex(ClP(:,iter-1),Cl(:,1)); 
-            clause=(sum(RI<RI_thresh) + sum(Info.error>error(iter-1)))>0; 
-            if clause, % if error is larger than previous & RI is smaller than .9. Reset counter
+            RI=RandIndex(ClP(:,iter-1),Cl(:,1));
+            err_RI=(sum(RI<RI_thresh) + sum(Info.error>error(iter-1)))>0;
+            if err_RI, % if error is larger than previous & RI is smaller than .9. Reset counter
                 count=0;
-                clear Cl RI 
+                clear Cl RI
             else
-                Cl(:,count+1)=Cl;
-                RI(count+1)=RI; 
-                errorC(count+1)=Info.error; 
+                ClC(:,count+1)=Cl;
+                RIC(count+1)=RI;
+                errorC(count+1)=Info.error;
                 count=count+1;
             end
             iter=iter+1;
         end
+        toc
         keyboard;
         
         save(fullfile(outName),'F','G','volIndx','V');
@@ -1016,7 +1018,7 @@ switch what
         set(gcf,'PaperPosition',[2 4 10 12]);
         wysiwyg;
     case 'FIGURES:CORR:GROUP' % Makes the summary figure of within / between correlations for GROUP
-        toPlot = {'lob10','bucknerRest','SC2_9cluster'};
+        toPlot = {'lob10','buckner17','buckner7','SC2_9cluster'};
         crossval=varargin{1}; % 0-uncrossval; 1-crossval
         evalNum=varargin{2}; % SC1-[1],SC2-[2],concat SC1+SC2 [3],average of SC1+SC2 eval [4]
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
@@ -1027,8 +1029,10 @@ switch what
             subplot(1,numPlots,i);
             sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',toPlot{i},evalNum,'group',crossval,condType);
         end;
-        %         set(gcf,'PaperPosition',[2 4 12 3]);
-        %         wysiwyg;
+        
+%                 set(gcf,'PaperPosition',[2 4 12 3]);
+%                 fig.PaperPositionMode = 'auto';
+%                 wysiwyg;
     case 'FIGURES:CORR:INDIV'
         sn=varargin{1}; % <subjNum>
         crossval=varargin{2}; % 0-uncrossval; 1-crossval
