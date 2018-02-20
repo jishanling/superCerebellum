@@ -444,26 +444,29 @@ switch what
         wysiwyg;
         ttest(sqrt(T.within1.*T.within2),T.across,2,'paired');
         
-    case 'ATLAS:COLEtoSUIT'
-        %Setting the parcel files to be the 648 parcels (cortical + subcortical)
+    case 'ATLAS:COLEtoSUIT' % can't figure this out !
         
-        filesToLoad={'final_LR_subcortex_atlas_subcortexGSR.dlabel.nii',...
-            'subcortex_atlas_subcortexGSR.dlabel.nii',...
-            'CortexSubcortex_ColeAnticevic_NetPartition_parcels_v1_L.dlabel.nii',...
-            'CortexSubcortex_ColeAnticevic_NetPartition_parcels_v1_R.dlabel.nii',...
-            'CortexSubcortex_ColeAnticevic_NetPartition_netassignments_v1_L.dlabel.nii',...
-            'CortexSubcortex_ColeAnticevic_NetPartition_netassignments_v1_R.dlabel.nii'};
+        %filesToLoad='final_LR_subcortex_atlas_subcortexGSR.dlabel.nii';
+        filesToLoad='subcortex_atlas_subcortexGSR.dlabel.nii'; 
         % find path to atlas templates
-        parcelDir=fileparts(which(filesToLoad{1}));
+        parcelDir=fileparts(which(filesToLoad));
         
-        % load in Cole nifti
-        %         Vo=spm_vol(fullfile(parcelDir,'Cole_subcortex_atlas.nii'));
-        %         Vi=spm_read_vols(Vo);
+        cii=ft_read_cifti(fullfile(parcelDir,filesToLoad));
         
-        cii=ft_read_cifti(fullfile(parcelDir,filesToLoad{1}));
+%         gii=gifti(fullfile(parcelDir,'Cole_subcortex_atlas.gii')); 
+        
+        % get cerebellar Idx
+        cerebIdx=cii.indexmax(cii.brainstructure==8 | cii.brainstructure==9); 
+        cerebPos=cii.pos(cii.brainstructure==8 | cii.brainstructure==9,:); 
+        
+        % load in SUIT MNI
+        suitMNI=which('maskMNI.nii'); 
+        V=spm_vol(suitMNI); 
+        Vo=spm_read_vols(V); 
         
         % figure out volume of labels
-        [y1,y2,y3]=spmj_affine_transform(cii.pos(:,1),cii.pos(:,2),cii.pos(:,3),cii.transform);
+%         [y1,y2,y3]=spmj_affine_transform(cii.pos(:,1),cii.pos(:,2),cii.pos(:,3),cii.transform);
+       
         
         % write out as spm vol
         V=spm_vol(fullfile(studyDir{1},'suit/anatomicals/cerebellarGreySUIT.nii'));
@@ -480,6 +483,12 @@ switch what
         
         for i=1:length(filesToLoad),
         end
+    case 'ATLAS:BucknertoSUIT'
+        mapToTransform='Buckner2011_7Networks_MNI152_FreeSurferConformed1mm_TightMask.nii';
+        parcelDir=fileparts(which(mapToTransform));
+
+        cd(parcelDir)
+        suit_mni2suit(mapToTransform); 
     case 'ATLAS:finalMap'
         % example: 'sc1_sc2_functionalAtlas('ATLAS:finalMap',[2],1,13,'leaveOneOut')
         K=varargin{1}; % number of clusters
