@@ -1,4 +1,4 @@
-function cifti2nifti(image)
+function cifti2nifti(image,type)
 % Beta version to covert cifti image into nifti. this function should be
 % extended to convert different types of infromation in the cifti structure
 % ATM only converts parcelations stored in the dlabel file which Maedbh was
@@ -17,12 +17,12 @@ name=strsplit(n,'.');
 cii=ft_read_cifti(image);
 
 % Conversion from mm to vox
-vox=(cii.pos/2)+repmat([45 63 36],size(cii.pos,1),1);
+vox=(cii.pos/2)+repmat([47 63 36],size(cii.pos,1),1);
 
 % Write Labels
 DATA=zeros(91,109,91);
 for i=1:31870
-    DATA(vox(i,1),vox(i,2),vox(i,3))=cii.brainstructure(i);
+    DATA(vox(i,1),vox(i,2),vox(i,3))=cii.type(i);
 end
 
 % MNI 2mm data structure
