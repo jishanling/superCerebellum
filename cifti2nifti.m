@@ -13,9 +13,13 @@ function cifti2nifti(image)
 [dir,n]=spm_fileparts(image);
 name=strsplit(n,'.');
 
+% Read CIFTI
 cii=ft_read_cifti(image);
 
-vox=(cii.pos/2)+repmat([45 63 36],31870,1);
+% Conversion from mm to vox
+vox=(cii.pos/2)+repmat([45 63 36],size(cii.pos,1),1);
+
+% Write Labels
 DATA=zeros(91,109,91);
 for i=1:31870
     DATA(vox(i,1),vox(i,2),vox(i,3))=cii.brainstructure(i);
