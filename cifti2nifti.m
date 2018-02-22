@@ -1,8 +1,7 @@
 function cifti2nifti(image)
-% Beta version to covert cifti image into nifti. this function should be
-% extended to convert different types of infromation in the cifti structure
-% ATM only converts parcelations stored in the dlabel file which Maedbh was
-% not able to figure out.
+% Beta version to convert cifti images into nifti. this function should be
+% extended to convert different types of information in the cifti structure
+% ATM only converts parcelations stored in the dlabel file
 % 
 % Input: CIFTI image (dlabel)
 %
@@ -22,7 +21,7 @@ vox=(cii.pos/2)+repmat([45 63 36],size(cii.pos,1),1);
 % Write Labels
 DATA=zeros(91,109,91);
 for i=1:31870
-    DATA(vox(i,1),vox(i,2),vox(i,3))=cii.brainstructure(i);
+    DATA(vox(i,1),vox(i,2),vox(i,3))=cii.indexmax(i); % MK changed 'brainstructure' to 'indexmax'
 end
 
 % MNI 2mm data structure
