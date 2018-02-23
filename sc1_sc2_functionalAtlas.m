@@ -444,52 +444,188 @@ switch what
         wysiwyg;
         ttest(sqrt(T.within1.*T.within2),T.across,2,'paired');
         
-    case 'ATLAS:COLEtoSUIT' % can't figure this out !
+    case 'MAP:vol2surf'
+        % this function takes any labelled volume (already in SUIT space)
+        % and plots to the surface
+        inputMap=varargin{1}; % some options are 'Buckner_7Networks','SC1_9cluster','lob10', 'Cole_10Networks' etc
+        metric=varargin{2}; % 'yes' or 'no'
         
-        %filesToLoad='final_LR_subcortex_atlas_subcortexGSR.dlabel.nii';
-        filesToLoad='subcortex_atlas_subcortexGSR.dlabel.nii';
-        % find path to atlas templates
-        parcelDir=fileparts(which(filesToLoad));
+        inputDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',inputMap));
+        cd(inputDir);
         
-        cii=ft_read_cifti(fullfile(parcelDir,filesToLoad));
+        Vo=spm_vol(fullfile(inputDir,'map.nii'));
+        Vi=spm_read_vols(Vo);
+        Vv{1}.dat=Vi;
+        Vv{1}.dim=Vo.dim;
+        Vv{1}.mat=Vo.mat;
         
-        %         gii=gifti(fullfile(parcelDir,'Cole_subcortex_atlas.gii'));
-        
-        % get cerebellar Idx
-        cerebIdx=cii.indexmax(cii.brainstructure==8 | cii.brainstructure==9);
-        cerebPos=cii.pos(cii.brainstructure==8 | cii.brainstructure==9,:);
-        
-        % load in SUIT MNI
-        suitMNI=which('maskMNI.nii');
-        V=spm_vol(suitMNI);
-        Vo=spm_read_vols(V);
-        
-        % figure out volume of labels
-        %         [y1,y2,y3]=spmj_affine_transform(cii.pos(:,1),cii.pos(:,2),cii.pos(:,3),cii.transform);
-        
-        
-        % write out as spm vol
-        V=spm_vol(fullfile(studyDir{1},'suit/anatomicals/cerebellarGreySUIT.nii'));
-        V.mat=cii.transform;
-        V.fname=fullfile(parcelDir,'ColeAnticevicAtlas_MNI.nii');
-        V.dim=cii.dim;
-        V.private.mat0=V.mat;
-        V.private.dat.dim=V.dim;
-        V.private.dat.fname=V.fname;
-        
-        indx=sub2ind(size(cii.pos),cii.pos(:,1),cii.pos(:,2),cii.pos(:,3));
-        
-        %         [y1,y2,y3]=spmj_affine_transform(cii.pos(:,1),cii.pos(:,2),cii.pos(:,3),cii.transform);
-        
-        for i=1:length(filesToLoad),
+        M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
+        M.data=round(M.data);
+        % figure out colourMap
+        if exist(fullfile(inputDir,'colourMap.txt'),'file'),
+            cmap=load('colourMap.txt');
+            cmap=cmap(:,2:4);
+            cmapF=cmap/255;
+        else
+            cmapF=colorcube(max(M.data));
         end
-    case 'ATLAS:BucknertoSUIT'
-        mapToTransform='Buckner2011_7Networks_MNI152_FreeSurferConformed1mm_TightMask.nii';
-        parcelDir=fileparts(which(mapToTransform));
         
-        cd(parcelDir)
-        suit_mni2suit(mapToTransform);
-    case 'ATLAS:finalMap'
+        switch metric,
+            case 'yes'
+                % make paint and area files
+                M=caret_struct('paint','data',M.data);
+                A=caret_struct('area','data',cmap,'column_name',M.paintnames,...
+                    'column_color_mapping',repmat([-5 5],M.num_paintnames),'paintnames',M.paintnames);
+                
+                % save out paint and area files
+                caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.paint',inputMap)),M);
+                caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.areacolor',inputMap)),A);
+            case 'no'
+                suit_plotflatmap(M.data,'type','label','cmap',cmapF) % colorcube(max(M.data))
+        end
+    case 'MAP:clusters'  % figure out optimal map for multiple clusters
+        sn=varargin{1}; % subject numbers
+        study=varargin{2}; % 1 or 2 or [1,2]
+        K=varargin{3};  % Number of clusters
+        type=varargin{4}; % 'group' or 'indiv'
+        
+        RI_thresh=.95;
+        numCount=10;
+        
+        % figure out if individual or group
+        switch type,
+            case 'group'
+                sn=returnSubjs;
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir);
+                outName=fullfile(outDir,'SNN.mat');
+            case 'indiv'
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
+                outName=fullfile(outDir,sprintf('SNN_SC%d_%dcluster.mat',study,K));
+        end
+        
+        % get data
+        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
+        
+        % get starting map and fit error
+        [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01);
+        bestErr=Info.error;
+        [~,bestSol]=max(G,[],2);
+        
+        iter=0;
+        while 1,
+            [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get current error
+            
+            % is lowestErr beaten ?
+            if Info.error>bestErr,
+                fprintf('CurrentErr is %2.2f: bestErr is %2.2f \n',Info.error,bestErr)
+                iter=iter+1;
+                fprintf('iter %d of lowest Err \n',iter)
+            % if lowestErr is beaten - find RandIndex
+            elseif Info.error<=bestErr,
+                [~,Cl]=max(G,[],2); % current, best solution
+                RI=RandIndex(bestSol,Cl); % compare maps
+                bestSol=Cl; % update bestMap
+                bestErr=Info.error; % update bestErr
+                iter=0; % reset if new lowestErr
+                fprintf('beat current lowestErr, resetting counter \n')
+            end
+            % check RI after 10 times of same lowestErr
+            if iter>numCount,
+                if RI>=RI_thresh, % if >.95. Keep this map
+                    fprintf('beat bestErr and thresh = %2.2f: this is best map \n',RI)
+                    keyboard;
+                    % if RI < 95%, then reset counter (but still keeping
+                    % bestMap and lowestErr)
+                else
+                    fprintf('beat bestErr but thresh = %2.2f \n',RI)
+                end
+            else
+                continue
+            end
+        end
+        fprintf('Best SNN map (%d clusters) created for %s \n',K,type)
+        save(fullfile(outName),'F','Cl','volIndx','V');
+    case 'MAP:plot'
+        study=varargin{1}; % 1 or 2 or [1,2]
+        K=varargin{2};       % Number of clusters
+        type=varargin{3}; % 'group' or 'indiv'
+        
+        switch type,
+            case 'group'
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir);
+                outName=fullfile(outDir,'SNN_test.mat');
+        end
+        load(outName)
+        subplot(2,1,1)
+        lineplot([1:5]',C.error')
+        ylabel('Error')
+        subplot(2,1,2)
+        lineplot([1:5]',C.RI')
+        ylabel('RandIndex')
+    case 'MAP:visualise'
+        sn=varargin{1}; % [2] or 'group'
+        study=varargin{2}; % 1 or 2 or [1,2]
+        K=varargin{3}; % number of clusters
+        type=varargin{4}; % 'group','indiv',or 'leaveOneOut'
+        
+        % figure out if individual or group
+        switch type,
+            case 'group'
+                outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),'map.nii');
+                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),'SNN.mat'));
+            case 'indiv'
+                outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_SC%d_%dcluster.nii',study,K));
+                load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('SNN_SC%d_%dcluster.mat',study,K)));
+            case 'leaveOneOut'
+                outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),sprintf('map_leaveOut_%s.nii',subj_name{sn}));
+                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),sprintf('SNN_leaveOut_%s.mat',subj_name{sn})));
+        end
+        
+        %[~,groupFeat]=max(G,[],2);
+        
+        % map features on group
+        V=spm_vol(which('Cerebellum-SUIT.nii'));
+        Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
+        Yy(1,volIndx)=Cl;
+        Yy=reshape(Yy,[V.dim(1),V.dim(2),V.dim(3)]);
+        Yy(Yy==0)=NaN;
+        Vv{1}.dat=Yy;
+        Vv{1}.dim=V.dim;
+        Vv{1}.mat=V.mat;
+        
+        % save out vol of SNN feats
+        exampleVol=fullfile(studyDir{study},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
+        X=spm_vol(exampleVol);
+        X.fname=outName;
+        X.private.dat.fname=V.fname;
+        spm_write_vol(X,Vv{1}.dat);
+        
+        figure()
+        title(sprintf('%d clusters',K))
+        M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
+        suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
+    case 'MAP:compare' % this function is to compare OTHER map (Cole,Buckner7/17) with FUNC map (different cluster sizes)
+        map1=varargin{1}; % either 'Cole_10Networks','Buckner_7Networks' or 'Buckner_17Networks'
+        map2=varargin{2}; % 'SC<studyNum>_<clusterNum>cluster'
+        % example
+        % sc1_sc2_functionalAtlas('MAP:compare','Cole_10Networks','SC1_10cluster')
+        
+        % load map1
+        mapNames{1}=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',map1),'map.nii');
+        % load map2
+        mapNames{2}=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',map2),'map.nii');
+        
+        for m=1:2,
+            Vo=spm_vol(mapNames{m});
+            Vi=spm_read_vols(Vo);
+            indx=find(Vi>0);
+            [i,j,k]= ind2sub(size(Vi),indx');
+            L(m,:)=spm_sample_vol(Vi,i,j,k,0);
+            clear Vo Vi indx i j k
+        end
+        
+        RI=RandIndex(Cl(:,i),Cl(:,j));
+    case 'MAP:final'
         % example: 'sc1_sc2_functionalAtlas('ATLAS:finalMap',[2],1,13,'leaveOneOut')
         K=varargin{1}; % number of clusters
         metric=varargin{2}; % 'yes' or 'no'
@@ -542,77 +678,6 @@ switch what
                 suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
         end
         
-    case 'TEST:mapType'
-        sn=varargin{1}; % subject numbers
-        study=varargin{2}; % 1 or 2 or [1,2]
-        K=varargin{3};       % Number of clusters
-        type=varargin{4}; % 'group' or 'indiv'
-        RI_thresh=.6;
-        numCount=5;
-        
-        % figure out if individual or group or leave one out
-        switch type,
-            case 'group'
-                sn=returnSubjs;
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir);
-                outName=fullfile(outDir,'SNN_test.mat');
-            case 'indiv'
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
-                outName=fullfile(outDir,sprintf('SNN_SC%d_%dcluster_test.mat',study,K));
-        end
-        
-        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
-        count=0;
-        iter=2;
-        ClP=ones(25275,1); % starter
-        tic
-        while count~=numCount,
-            fprintf('count %d\n',count);
-            [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01);
-            error(iter)=Info.error;
-            [~,Cl]=max(G,[],2);
-            ClP(:,iter)=Cl;
-            % calculate RandIndex between maps
-            RI=RandIndex(ClP(:,iter-1),Cl(:,1));
-            err_RI=(sum(RI<RI_thresh) + sum(Info.error>error(iter-1)))>0;
-            if err_RI, % if error is larger than previous & RI is smaller than .9. Reset counter
-                count=0;
-                clear Cl RI
-            else
-                ClC(:,count+1)=Cl;
-                RIC(count+1)=RI;
-                errorC(count+1)=Info.error;
-                count=count+1;
-            end
-            iter=iter+1;
-        end
-        toc
-        keyboard;
-        
-        % Make out struct
-        C.Cl=ClC; 
-        C.RI=RIC; 
-        C.error=errorC;
-        
-        save(outName,'C','volIndx','V');
-    case 'TEST:plot'
-        study=varargin{1}; % 1 or 2 or [1,2]
-        K=varargin{2};       % Number of clusters
-        type=varargin{3}; % 'group' or 'indiv'
-        
-        switch type,
-            case 'group'
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir);
-                outName=fullfile(outDir,'SNN_test.mat');
-        end
-        load(outName)
-        subplot(2,1,1)
-        lineplot([1:5]',C.error')
-        ylabel('Error')
-        subplot(2,1,2)
-        lineplot([1:5]',C.RI')
-        ylabel('RandIndex')
-        
     case 'EVAL:get_data'
         sn=varargin{1}; % Subj numbers to include
         study=varargin{2}; % 1 or 2 or [1,2]
@@ -661,77 +726,10 @@ switch what
         % center the data (remove overall mean)
         X_C=bsxfun(@minus,UFullAvrgAll,mean(UFullAvrgAll));
         varargout={X_C,volIndx,V,sn};
-    case 'EVAL:makeMap'
-        % example: 'sc1_sc2_functionalAtlas('EVAL:make_SNN_map',[2],1,13,'leaveOneOut')
-        sn=varargin{1}; % subjNum or 'group'
-        study=varargin{2}; % 1 or 2
-        K=varargin{3}; % number of clusters
-        type=varargin{4}; % 'group','indiv','leaveOneOut'
-        
-        % figure out if individual or group or leave one out
-        switch type,
-            case 'group'
-                sn=returnSubjs;
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir);
-                outName=fullfile(outDir,'SNN.mat');
-            case 'indiv'
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
-                outName=fullfile(outDir,sprintf('SNN_SC%d_%dcluster.mat',study,K));
-            case 'leaveOneOut'
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K)); dircheck(outDir);
-                outName=fullfile(outDir,sprintf('SNN_leaveOut_%s.mat',subj_name{sn}));
-                sn=returnSubjs(returnSubjs~=sn);
-        end
-        
-        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
-        [F,G,Err1]=semiNonNegMatFac(X_C,K,'threshold',0.01);
-        fprintf('SNN map (%d clusters) created for %s \n',K,type)
-        save(fullfile(outName),'F','G','volIndx','V');
-    case 'EVAL:visualiseMap'
-        sn=varargin{1}; % [2] or 'group'
-        study=varargin{2}; % 1 or 2 or [1,2]
-        K=varargin{3}; % number of clusters
-        type=varargin{4}; % 'group','indiv',or 'leaveOneOut'
-        
-        % figure out if individual or group
-        switch type,
-            case 'group'
-                outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),'map.nii');
-                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),'SNN.mat'));
-            case 'indiv'
-                outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_SC%d_%dcluster.nii',study,K));
-                load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('SNN_SC%d_%dcluster.mat',study,K)));
-            case 'leaveOneOut'
-                outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),sprintf('map_leaveOut_%s.nii',subj_name{sn}));
-                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),sprintf('SNN_leaveOut_%s.mat',subj_name{sn})));
-        end
-        
-        [~,groupFeat]=max(G,[],2);
-        
-        % map features on group
-        Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
-        Yy(1,volIndx)=groupFeat;
-        Yy=reshape(Yy,[V.dim(1),V.dim(2),V.dim(3)]);
-        Yy(Yy==0)=NaN;
-        Vv{1}.dat=Yy;
-        Vv{1}.dim=V.dim;
-        Vv{1}.mat=V.mat;
-        
-        % save out vol of SNN feats
-        exampleVol=fullfile(studyDir{study},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
-        X=spm_vol(exampleVol);
-        X.fname=outName;
-        X.private.dat.fname=V.fname;
-        spm_write_vol(X,Vv{1}.dat);
-        
-        figure()
-        title(sprintf('%d clusters',K))
-        M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
-        suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
     case 'EVAL:unCrossval:GROUP'
         % code is written now so that func map is built on sc1+sc2 (allConds) and
         % evaluated on sc1+sc2 (allConds)
-        mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest', or 'atlasFinal<num>'
+        mapType=varargin{1}; % options are 'lob10','lob26','Buckner_7Networks','Buckner_17Networks','Cole_12Networks', or 'atlasFinal<num>'
         evalType=varargin{2}; % [1] [2] or [1,2]
         
         if size(evalType,2)==2,
@@ -774,7 +772,7 @@ switch what
         save(outDir,'-struct','RR');
     case 'EVAL:crossval'
         sn=varargin{1}; % 'group' or <subjNum>
-        mapType=varargin{2}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster'
+        mapType=varargin{2}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks', 'Cole_10Networks','SC<studyNum>_<num>cluster'
         data=varargin{3}; % evaluating data from study [1] or [2] ?
         condType=varargin{4}; % 'unique' or 'all'. Are we evaluating on all taskConds or just those unique to either sc1 or sc2 ?
         type=varargin{5}; % 'group' or 'indiv'
@@ -917,7 +915,7 @@ switch what
         
         save(outDir,'-struct','A');
     case 'EVAL:averageOther'
-        mapType=varargin{1}; % options are 'lob10','bucknerRest','atlasFinal<num>' etc'
+        mapType=varargin{1}; % options are 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','atlasFinal<num>' etc'
         condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
         
         R=[];
@@ -932,7 +930,6 @@ switch what
         
         outDir=fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
         save(outDir,'-struct','A');
-        
     case 'EVAL:PLOT:CURVES'
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
         data=varargin{2}; % evaluating data from study [1] or [2], both [3] or average of [1] and [2] after eval [4]
@@ -988,11 +985,11 @@ switch what
         B=getrow(P,P.bwParcel==1); % between
         W.diff=W.corr-B.corr;
         
-        %         subplot(1,2,1);
-        %         myboxplot(W.m,W.diff,'subset',W.dist<=35,'style_twoblock','plotall',0) % within-between diff
-        %         ylabel('Within/Between Difference');
+        subplot(1,2,1);
+        myboxplot(W.m,W.diff,'subset',W.dist<=35,'style_twoblock','plotall',0) % within-between diff
+        ylabel('Within/Between Difference');
         
-        %         subplot(1,2,2);
+        subplot(1,2,2);
         lineplot(W.m,W.diff,'subset',W.dist<=35);
     case 'EVAL:PLOT:(UN)CROSSVAL'
         mapType=varargin{1}; % {'lob10','bucknerRest','atlasFinal9'}
@@ -1051,8 +1048,9 @@ switch what
         title(sprintf('SC%d(%dPOV)-%s-with crossval',study,var*100,data));
         set(gcf,'PaperPosition',[2 4 10 12]);
         wysiwyg;
+        
     case 'FIGURES:CORR:GROUP' % Makes the summary figure of within / between correlations for GROUP
-        toPlot = {'lob10','buckner17','buckner7','SC2_9cluster'};
+        toPlot = {'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC2_9cluster'};
         crossval=varargin{1}; % 0-uncrossval; 1-crossval
         evalNum=varargin{2}; % SC1-[1],SC2-[2],concat SC1+SC2 [3],average of SC1+SC2 eval [4]
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
@@ -1064,9 +1062,9 @@ switch what
             sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',toPlot{i},evalNum,'group',crossval,condType);
         end;
         
-%                 set(gcf,'PaperPosition',[2 4 12 3]);
-%                 fig.PaperPositionMode = 'auto';
-%                 wysiwyg;
+        %                 set(gcf,'PaperPosition',[2 4 12 3]);
+        %                 fig.PaperPositionMode = 'auto';
+        %                 wysiwyg;
     case 'FIGURES:CORR:INDIV'
         sn=varargin{1}; % <subjNum>
         crossval=varargin{2}; % 0-uncrossval; 1-crossval
@@ -1082,19 +1080,7 @@ switch what
         %         set(gcf,'PaperPosition',[2 4 12 3]);
         %         wysiwyg;
     case 'FIGURES:DIFF:GROUP' % Makes the summary figure of within / between diff
-        %                 toPlot = {'SC1_6cluster',...
-        %                     'SC1_7cluster','SC1_8cluster','SC1_9cluster','SC1_10cluster',...
-        %                     'SC1_11cluster','SC1_12cluster','SC1_13cluster','SC1_14cluster',...
-        %                     'SC1_15cluster','SC1_16cluster','SC1_17cluster','SC1_18cluster',...
-        %                     'SC1_19cluster','SC1_20cluster','SC1_21cluster','SC1_22cluster',...
-        %                     'SC1_23cluster','SC1_24cluster'};
-        toPlot = {'lob10','SC2_3cluster','SC2_4cluster','SC2_5cluster','SC2_6cluster',...
-            'SC2_7cluster','SC2_8cluster','SC2_9cluster','SC2_10cluster',...
-            'SC2_11cluster','SC2_12cluster','SC2_13cluster','SC2_14cluster',...
-            'SC2_15cluster','SC2_16cluster','SC2_17cluster','SC2_18cluster',...
-            'SC2_19cluster','SC2_20cluster','SC2_21cluster','SC2_22cluster',...
-            'SC2_23cluster','SC2_24cluster'};
-        %         toPlot= {'lob10','bucknerRest','SC2_10cluster'};
+        toPlot= {'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC2_10cluster'};
         crossval=varargin{1}; % 0-uncrossval; 1-crossval
         evalNum=varargin{2}; % SC1-[1],SC2-[2],concat SC1+SC2 [3],average of SC1+SC2 eval [4]
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
