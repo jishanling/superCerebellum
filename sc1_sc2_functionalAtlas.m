@@ -485,7 +485,7 @@ switch what
         end
     case 'MAP:optimal'  % figure out optimal map for multiple clusters
         % example:
-        % sc1_sc2_functionalAtlas('MAP:optimal',returnSubjs,1,6,'group')
+        % sc1_sc2_functionalAtlas('MAP:optimal',<subjNums>,1,6,'group')
         sn=varargin{1}; % subject numbers
         study=varargin{2}; % 1 or 2 or [1,2]
         K=varargin{3};  % Number of clusters
@@ -519,30 +519,31 @@ switch what
             [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get current error
             
             % is lowestErr beaten ?
+            % no - count up
             if Info.error>bestErr
                 [~,Cl]=max(G,[],2);
                 mapSol(iter,:)=Cl;
                 errCounter(iter)=Info.error; % update bestErr
-                bestErrIdx(iter)=0;
+                bestErrIdx(iter)=0; % not a better solution than previous
                 count=count+1;
                 fprintf('CurrentErr is %2.2f: bestErr is %2.2f \n',Info.error,bestErr)
                 fprintf('iter %d of lowest Err (consecutive) \n',count+1)
-                % if lowestErr is beaten - find RandIndex
+            % yes - reset counter
             elseif Info.error<bestErr,
                 [~,Cl]=max(G,[],2); % current, best solution
                 mapSol(iter,:)=Cl; % update bestMap
                 errCounter(iter)=Info.error; % update bestErr
-                bestErrIdx(iter)=1;
+                bestErrIdx(iter)=1; % better solution than previous
                 fprintf('%2.2f beats current lowestErr (%2.2f), resetting counter \n',Info.error,bestErr)
                 bestErr=Info.error; % update best error
                 count=0;
             end
             iter=iter+1;
+            % error hasn't been beaten for 10 consecutive iterations
             if count>=numCount,
                 fprintf('lowest error has been found - stop now \n');
                 % make struct
                 M=struct('mapSol',mapSol,'errCounter',errCounter','bestErrIdx',bestErrIdx');
-                
                 sc1_sc2_functionalAtlas('MAP:randIndex',M,outName,'volIndx','V')
                 keyboard
             end
@@ -568,7 +569,7 @@ switch what
         end
         bestIdx=find(M.bestErrIdx==1);
         bestMapIdx=find(bestRI==max(bestRI));
-        finalIdx=bestIdx(bestMapIdx(1)) % take the first one if solutions are the same
+        finalIdx=bestIdx(bestMapIdx(1));  % take the first one if solutions are the same
         
         % best map
         Cl=M.mapSol(finalIdx,:);
