@@ -2,7 +2,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
@@ -486,11 +486,13 @@ switch what
     case 'MAP:optimal'  % figure out optimal map for multiple clusters
         % example:
         % sc1_sc2_functionalAtlas('MAP:optimal',<subjNums>,1,6,'group')
-        sn=varargin{1}; % subject numbers
-        study=varargin{2}; % 1 or 2 or [1,2]
-        K=varargin{3};  % Number of clusters
-        type=varargin{4}; % 'group' or 'indiv'
-        numCount=10;
+        sn=varargin{1};     % subject numbers
+        study=varargin{2};  % 1 or 2 or [1,2]
+        K=varargin{3};      % Number of clusters
+        type=varargin{4};   % 'group' or 'indiv'
+        numCount=8;         % How often the "same" solution needs to be found 
+        tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
+        plotDiagnostics = 1;% Plot diagnostic graph?  
         
         % figure out if individual or group
         switch type,
@@ -506,48 +508,49 @@ switch what
         % get data
         [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
         
-        % get starting map and fit error
-        [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01);
-        bestErr=Info.error;
-        errCounter=Info.error;
-        [~,bestSol]=max(G,[],2);
-        fprintf('iter 1: starting lowest error is %2.2f \n',bestErr)
-        
-        iter=1;
+        % Intialize iterations
+        bestErr = inf;
+        bestSol = ones(size(X_C,1),1);
+        iter=1; % How many iterations
         count=0;
         while 1,
             [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get current error
+            [~,Cl]=max(G,[],2);
+            mapSol(iter,:)=Cl;              % record solution
+            errors(iter)=Info.error;    % record error
+            randInd(iter)=RandIndex(bestSol,Cl); %
             
-            % is lowestErr beaten ?
-            % no - count up
-            if Info.error>bestErr
-                [~,Cl]=max(G,[],2);
-                mapSol(iter,:)=Cl;
-                errCounter(iter)=Info.error; % update bestErr
-                bestErrIdx(iter)=0; % not a better solution than previous
-                count=count+1;
-                fprintf('CurrentErr is %2.2f: bestErr is %2.2f \n',Info.error,bestErr)
-                fprintf('iter %d of lowest Err (consecutive) \n',count+1)
-            % yes - reset counter
-            elseif Info.error<bestErr,
-                [~,Cl]=max(G,[],2); % current, best solution
-                mapSol(iter,:)=Cl; % update bestMap
-                errCounter(iter)=Info.error; % update bestErr
-                bestErrIdx(iter)=1; % better solution than previous
-                fprintf('%2.2f beats current lowestErr (%2.2f), resetting counter \n',Info.error,bestErr)
-                bestErr=Info.error; % update best error
-                count=0;
-            end
-            iter=iter+1;
-            % error hasn't been beaten for 10 consecutive iterations
+            % Check if we have a similar solution
+            if randInd(iter)>tol_rand % Similar solution
+                count=count+1;       % count up one
+                if (Info.error<bestErr)  % If we got slightly better - update
+                    bestErr = Info.error;
+                    bestSol = Cl;
+                    bestG   = G;
+                end;
+            else                     % Different (enough) solution
+                if (Info.error<bestErr) % Is this a better solution
+                    bestErr = Info.error;
+                    bestSol = Cl;
+                    bestG   = G;
+                    count = 0;         % first time we found this solution: reset counter
+                end;
+            end;
+            fprintf('Error: %2.2f Rand:%2.2f, Best:%2.2f currently found %d times\n',errors(iter),bestErr,randInd(iter),count); 
             if count>=numCount,
-                fprintf('lowest error has been found - stop now \n');
-                % make struct
-                M=struct('mapSol',mapSol,'errCounter',errCounter','bestErrIdx',bestErrIdx');
-                sc1_sc2_functionalAtlas('MAP:randIndex',M,outName,'volIndx','V')
-                keyboard
-            end
-        end
+                fprintf('Existing loop....\n');
+                break;
+            end;
+            iter=iter+1; 
+        end; 
+        if (plotDiagnostics)
+            subplot(2,1,1); 
+            plot([1:iter],errors); 
+            subplot(2,1,2); 
+            plot([1:iter],randInd); 
+        end; 
+        varargout={bestG,bestErr}; 
+        
     case 'MAP:randIndex'
         M=varargin{1};
         outName=varargin{2};

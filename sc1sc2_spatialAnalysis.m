@@ -274,6 +274,11 @@ switch(what)
                 RI(i,j)=RandIndex(Cl(:,i),Cl(:,j)); 
             end; 
         end; 
+        subplot(3,1,[1:2])
+        imagesc(RI)
+        colorbar
+        subplot(3,1,3)
+        plot([1:10]',D.error); 
         keyboard; 
     case 'SNN:visualise_map'
         sn=varargin{1}; % subjNum or 'group'
