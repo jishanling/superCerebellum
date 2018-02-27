@@ -483,13 +483,13 @@ switch what
             case 'no'
                 suit_plotflatmap(M.data,'type','label','cmap',cmapF) % colorcube(max(M.data))
         end
-    case 'MAP:clusters'  % figure out optimal map for multiple clusters
+    case 'MAP:optimal'  % figure out optimal map for multiple clusters
+        % example:
+        % sc1_sc2_functionalAtlas('MAP:optimal',returnSubjs,1,6,'group')
         sn=varargin{1}; % subject numbers
         study=varargin{2}; % 1 or 2 or [1,2]
         K=varargin{3};  % Number of clusters
         type=varargin{4}; % 'group' or 'indiv'
-        
-        RI_thresh=.95;
         numCount=10;
         
         % figure out if individual or group
@@ -509,59 +509,96 @@ switch what
         % get starting map and fit error
         [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01);
         bestErr=Info.error;
+        errCounter=Info.error;
         [~,bestSol]=max(G,[],2);
+        fprintf('iter 1: starting lowest error is %2.2f \n',bestErr)
         
-        iter=0;
+        iter=1;
+        count=0;
         while 1,
             [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get current error
             
             % is lowestErr beaten ?
-            if Info.error>bestErr,
+            if Info.error>bestErr
+                [~,Cl]=max(G,[],2);
+                mapSol(iter,:)=Cl;
+                errCounter(iter)=Info.error; % update bestErr
+                bestErrIdx(iter)=0;
+                count=count+1;
                 fprintf('CurrentErr is %2.2f: bestErr is %2.2f \n',Info.error,bestErr)
-                iter=iter+1;
-                fprintf('iter %d of lowest Err \n',iter)
-            % if lowestErr is beaten - find RandIndex
-            elseif Info.error<=bestErr,
+                fprintf('iter %d of lowest Err (consecutive) \n',count+1)
+                % if lowestErr is beaten - find RandIndex
+            elseif Info.error<bestErr,
                 [~,Cl]=max(G,[],2); % current, best solution
-                RI=RandIndex(bestSol,Cl); % compare maps
-                bestSol=Cl; % update bestMap
-                bestErr=Info.error; % update bestErr
-                iter=0; % reset if new lowestErr
-                fprintf('beat current lowestErr, resetting counter \n')
+                mapSol(iter,:)=Cl; % update bestMap
+                errCounter(iter)=Info.error; % update bestErr
+                bestErrIdx(iter)=1;
+                fprintf('%2.2f beats current lowestErr (%2.2f), resetting counter \n',Info.error,bestErr)
+                bestErr=Info.error; % update best error
+                count=0;
             end
-            % check RI after 10 times of same lowestErr
-            if iter>numCount,
-                if RI>=RI_thresh, % if >.95. Keep this map
-                    fprintf('beat bestErr and thresh = %2.2f: this is best map \n',RI)
-                    keyboard;
-                    % if RI < 95%, then reset counter (but still keeping
-                    % bestMap and lowestErr)
-                else
-                    fprintf('beat bestErr but thresh = %2.2f \n',RI)
-                end
-            else
-                continue
+            iter=iter+1;
+            if count>=numCount,
+                fprintf('lowest error has been found - stop now \n');
+                % make struct
+                M=struct('mapSol',mapSol,'errCounter',errCounter','bestErrIdx',bestErrIdx');
+                
+                sc1_sc2_functionalAtlas('MAP:randIndex',M,outName,'volIndx','V')
+                keyboard
             end
         end
-        fprintf('Best SNN map (%d clusters) created for %s \n',K,type)
-        save(fullfile(outName),'F','Cl','volIndx','V');
-    case 'MAP:plot'
-        study=varargin{1}; % 1 or 2 or [1,2]
-        K=varargin{2};       % Number of clusters
-        type=varargin{3}; % 'group' or 'indiv'
+    case 'MAP:randIndex'
+        M=varargin{1};
+        outName=varargin{2};
+        volIndx=varargin{3};
+        V=varargin{4};
         
-        switch type,
-            case 'group'
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir);
-                outName=fullfile(outDir,'SNN_test.mat');
+        % now find the randIndex
+        for i=1:size(M.mapSol,1),
+            for j=1:size(M.mapSol,1),
+                M.RI(i,j)=RandIndex(M.mapSol(i,:),M.mapSol(j,:));
+            end
         end
-        load(outName)
+        
+        % decide on best map (which of the "lowest error" maps has best
+        % RI ?)
+        bestMaps=M.RI(M.bestErrIdx==1,M.bestErrIdx==1);
+        for i=1:length(bestMaps),
+            bestRI(i)=mean(bestMaps(i,:));
+        end
+        bestIdx=find(M.bestErrIdx==1);
+        bestMapIdx=find(bestRI==max(bestRI));
+        finalIdx=bestIdx(bestMapIdx(1)) % take the first one if solutions are the same
+        
+        % best map
+        Cl=M.mapSol(finalIdx,:);
+        
+        % plot stuff
+        sc1_sc2_functionalAtlas('MAP:plot',M,finalIdx)
+        
+        save(fullfile(outName),'Cl','volIndx','V');
+    case 'MAP:plot'
+        M=varargin{1};
+        finalIdx=varargin{2};
+        
+        % plot stuff
+        figure()
         subplot(2,1,1)
-        lineplot([1:5]',C.error')
-        ylabel('Error')
+        imagesc(M.RI)
         subplot(2,1,2)
-        lineplot([1:5]',C.RI')
-        ylabel('RandIndex')
+        lineplot([1:size(M.errCounter,1)]',M.errCounter,'subset',M.bestErrIdx==1,'linecolor',[1 0 1])
+        
+        hold on
+        lineplot([1:size(M.errCounter,1)]',M.errCounter,'subset',M.bestErrIdx==0,'linecolor',[0 1 0])
+        xlabel('iterations')
+        ylabel('fit error')
+        legend('best fits')
+        
+        hold on
+        x1 = finalIdx;
+        y1 = M.errCounter(finalIdx)+.01;
+        txt1 = 'winning map';
+        text(x1,y1,txt1)
     case 'MAP:visualise'
         sn=varargin{1}; % [2] or 'group'
         study=varargin{2}; % 1 or 2 or [1,2]
@@ -1050,7 +1087,8 @@ switch what
         wysiwyg;
         
     case 'FIGURES:CORR:GROUP' % Makes the summary figure of within / between correlations for GROUP
-        toPlot = {'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC2_9cluster'};
+        toPlot = {'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC2_7cluster','SC2_10cluster',...
+            'SC2_17cluster'};
         crossval=varargin{1}; % 0-uncrossval; 1-crossval
         evalNum=varargin{2}; % SC1-[1],SC2-[2],concat SC1+SC2 [3],average of SC1+SC2 eval [4]
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
