@@ -281,22 +281,33 @@ switch(what)
         plot([1:10]',D.error); 
         keyboard; 
     case 'visualise_map' % Plot any data on the cerebellar flatmap 
-        data = varargin{1}; % Data to plot 
-        volIndx = varargin{2}; % Indices into the volume (mask)
-        V = varargin{3};  % Cerebellar suit volume 
-        
+        data = varargin{1};     % Data to plot 
+        volIndx = varargin{2};  % Indices into the volume (mask)
+        V = varargin{3};        % Cerebellar suit volume 
+        cmap = [];  
+        type = 'label';     % func / label
+        vararginoptions(varargin(4:end),{'cmap','type'}); 
         
         % map features on group
-        Yy=zeros([V.dim(1) V.dim(2) V.dim(3)]);
-        Yy(volIndx)=groupFeat;  % JD: No reshaping necessary
-        Yy(Yy==0)=NaN;
-        Vv{1}.dat=Yy;
-        Vv{1}.dim=V.dim;
-        Vv{1}.mat=V.mat;
+        V.dat=zeros([V.dim(1) V.dim(2) V.dim(3)]);
+        V.dat(volIndx)=data;               
+        
+        switch (type)
+            case 'label'
+                stats = 'mode'; 
+                if (isempty(cmap))
+                    cmap = colorcube(max(data)); 
+                end; 
+            case 'func'
+                stats = 'nanmean'; 
+                if (isempty(cmap))
+                    cmap = hot; 
+                end; 
+        end; 
         
         % save out vol of ICA feats
-        M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
-        suit_plotflatmap(M.data,'type','label','cmap',colorcube(max(data)))
+        data=suit_map2surf(V,'space','SUIT','stats',stats);
+        suit_plotflatmap(data,'type',type,'cmap',cmap)
 end;
 
 % InterSubj Corr
