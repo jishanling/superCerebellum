@@ -490,7 +490,11 @@ switch what
         study=varargin{2};  % 1 or 2 or [1,2]
         K=varargin{3};      % Number of clusters
         type=varargin{4};   % 'group' or 'indiv'
+<<<<<<< HEAD
         numCount=3;         % How often the "same" solution needs to be found
+=======
+        numCount=5;         % How often the "same" solution needs to be found 
+>>>>>>> b074bfae2fae66d66a92db4bb73d77e343bbdf86
         tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
         plotDiagnostics = 1;% Plot diagnostic graph?
         
@@ -544,6 +548,7 @@ switch what
             iter=iter+1;
         end;
         if (plotDiagnostics)
+<<<<<<< HEAD
             subplot(2,1,1);
             plot([1:iter],errors);
             subplot(2,1,2);
@@ -551,6 +556,15 @@ switch what
         end;
         save(outName,'bestG','errors','randInd','iter','volIndx','V'); 
         varargout={bestG,bestErr};
+=======
+            subplot(2,1,1); 
+            plot([1:iter],errors); 
+            subplot(2,1,2); 
+            plot([1:iter],randInd); 
+        end; 
+        varargout={bestG,bestErr,V,volIndx}; 
+        
+>>>>>>> b074bfae2fae66d66a92db4bb73d77e343bbdf86
     case 'MAP:randIndex'
         M=varargin{1};
         outName=varargin{2};

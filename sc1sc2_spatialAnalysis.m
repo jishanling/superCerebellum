@@ -280,25 +280,11 @@ switch(what)
         subplot(3,1,3)
         plot([1:10]',D.error); 
         keyboard; 
-    case 'SNN:visualise_map'
-        sn=varargin{1}; % subjNum or 'group'
-        study=varargin{2}; % 1 or 2 or [1,2]
-        K=varargin{4};       % Number of clusters
+    case 'visualise_map' % Plot any data on the cerebellar flatmap 
+        data = varargin{1}; % Data to plot 
+        volIndx = varargin{2}; % Indices into the volume (mask)
+        V = varargin{3};  % Cerebellar suit volume 
         
-        % figure out if individual or group
-        outDir=fullfile(studyDir{study},encodeDir,'glm4','SNN');
-        switch type,
-            case 'group'
-                sn=returnSubjs;
-                outName=fullfile(outDir,sprintf('SNN_%d.mat',K));
-            case 'indiv'
-                outName=fullfile(outDir,sprintf('SNN_%d_indiv_%s.mat',K,subj_name{sn}));
-            case 'leaveOneOut'
-                outName=fullfile(outDir,sprintf('SNN_%d_loo_%s.mat',K,subj_name{sn}));
-        end
-        
-        load(outName);
-        [~,groupFeat]=max(G,[],2);
         
         % map features on group
         Yy=zeros([V.dim(1) V.dim(2) V.dim(3)]);
@@ -310,8 +296,7 @@ switch(what)
         
         % save out vol of ICA feats
         M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
-        suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
-        
+        suit_plotflatmap(M.data,'type','label','cmap',colorcube(max(data)))
 end;
 
 % InterSubj Corr
