@@ -2,7 +2,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
@@ -490,9 +490,9 @@ switch what
         study=varargin{2};  % 1 or 2 or [1,2]
         K=varargin{3};      % Number of clusters
         type=varargin{4};   % 'group' or 'indiv'
-        numCount=8;         % How often the "same" solution needs to be found 
+        numCount=3;         % How often the "same" solution needs to be found
         tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
-        plotDiagnostics = 1;% Plot diagnostic graph?  
+        plotDiagnostics = 1;% Plot diagnostic graph?
         
         % figure out if individual or group
         switch type,
@@ -516,7 +516,7 @@ switch what
         while 1,
             [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get current error
             [~,Cl]=max(G,[],2);
-            mapSol(iter,:)=Cl;              % record solution
+            mapSol(iter,:)=Cl;          % record solution
             errors(iter)=Info.error;    % record error
             randInd(iter)=RandIndex(bestSol,Cl); %
             
@@ -536,21 +536,21 @@ switch what
                     count = 0;         % first time we found this solution: reset counter
                 end;
             end;
-            fprintf('Error: %2.2f Rand:%2.2f, Best:%2.2f currently found %d times\n',errors(iter),bestErr,randInd(iter),count); 
+            fprintf('Error: %2.2f Rand:%2.2f, Best:%2.2f currently found %d times\n',errors(iter),bestErr,randInd(iter),count);
             if count>=numCount,
                 fprintf('Existing loop....\n');
                 break;
             end;
-            iter=iter+1; 
-        end; 
+            iter=iter+1;
+        end;
         if (plotDiagnostics)
-            subplot(2,1,1); 
-            plot([1:iter],errors); 
-            subplot(2,1,2); 
-            plot([1:iter],randInd); 
-        end; 
-        varargout={bestG,bestErr}; 
-        
+            subplot(2,1,1);
+            plot([1:iter],errors);
+            subplot(2,1,2);
+            plot([1:iter],randInd);
+        end;
+        save(outName,'bestG','errors','randInd','iter','volIndx','V'); 
+        varargout={bestG,bestErr};
     case 'MAP:randIndex'
         M=varargin{1};
         outName=varargin{2};
@@ -622,12 +622,12 @@ switch what
                 load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),sprintf('SNN_leaveOut_%s.mat',subj_name{sn})));
         end
         
-        %[~,groupFeat]=max(G,[],2);
+        [~,groupFeat]=max(bestG,[],2);
         
         % map features on group
-        V=spm_vol(which('Cerebellum-SUIT.nii'));
+        %V=spm_vol(which('Cerebellum-SUIT.nii'));
         Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
-        Yy(1,volIndx)=Cl;
+        Yy(1,volIndx)=groupFeat;
         Yy=reshape(Yy,[V.dim(1),V.dim(2),V.dim(3)]);
         Yy(Yy==0)=NaN;
         Vv{1}.dat=Yy;
