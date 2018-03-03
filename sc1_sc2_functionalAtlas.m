@@ -490,10 +490,11 @@ switch what
         study=varargin{2};  % 1 or 2 or [1,2]
         K=varargin{3};      % Number of clusters
         type=varargin{4};   % 'group' or 'indiv'
-        numCount=3;         % How often the "same" solution needs to be found
+        numCount=5;         % How often the "same" solution needs to be found
         tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
         plotDiagnostics = 1;% Plot diagnostic graph?
         
+        maxIter=100; % if it's not finding a similar solution - force stop at 100 iters
         % figure out if individual or group
         switch type,
             case 'group'
@@ -513,10 +514,10 @@ switch what
         bestSol = ones(size(X_C,1),1);
         iter=1; % How many iterations
         count=0;
-        while 1,
+        while iter<maxIter,
             [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get current error
             [~,Cl]=max(G,[],2);
-            mapSol(iter,:)=Cl;          % record solution
+%             mapSol(iter,:)=Cl;          % record solution
             errors(iter)=Info.error;    % record error
             randInd(iter)=RandIndex(bestSol,Cl); %
             
@@ -527,12 +528,14 @@ switch what
                     bestErr = Info.error;
                     bestSol = Cl;
                     bestG   = G;
+                    bestF   = F; 
                 end;
             else                     % Different (enough) solution
                 if (Info.error<bestErr) % Is this a better solution
                     bestErr = Info.error;
                     bestSol = Cl;
                     bestG   = G;
+                    bestF   = F; 
                     count = 0;         % first time we found this solution: reset counter
                 end;
             end;
@@ -549,60 +552,7 @@ switch what
             subplot(2,1,2);
             plot([1:iter],randInd);
         end;
-        save(outName,'bestG','errors','randInd','iter','volIndx','V');
-        varargout={bestG,bestErr,V,volIndx};      
-    case 'MAP:randIndex'
-        M=varargin{1};
-        outName=varargin{2};
-        volIndx=varargin{3};
-        V=varargin{4};
-        
-        % now find the randIndex
-        for i=1:size(M.mapSol,1),
-            for j=1:size(M.mapSol,1),
-                M.RI(i,j)=RandIndex(M.mapSol(i,:),M.mapSol(j,:));
-            end
-        end
-        
-        % decide on best map (which of the "lowest error" maps has best
-        % RI ?)
-        bestMaps=M.RI(M.bestErrIdx==1,M.bestErrIdx==1);
-        for i=1:length(bestMaps),
-            bestRI(i)=mean(bestMaps(i,:));
-        end
-        bestIdx=find(M.bestErrIdx==1);
-        bestMapIdx=find(bestRI==max(bestRI));
-        finalIdx=bestIdx(bestMapIdx(1));  % take the first one if solutions are the same
-        
-        % best map
-        Cl=M.mapSol(finalIdx,:);
-        
-        % plot stuff
-        sc1_sc2_functionalAtlas('MAP:plot',M,finalIdx)
-        
-        save(fullfile(outName),'Cl','volIndx','V');
-    case 'MAP:plot'
-        M=varargin{1};
-        finalIdx=varargin{2};
-        
-        % plot stuff
-        figure()
-        subplot(2,1,1)
-        imagesc(M.RI)
-        subplot(2,1,2)
-        lineplot([1:size(M.errCounter,1)]',M.errCounter,'subset',M.bestErrIdx==1,'linecolor',[1 0 1])
-        
-        hold on
-        lineplot([1:size(M.errCounter,1)]',M.errCounter,'subset',M.bestErrIdx==0,'linecolor',[0 1 0])
-        xlabel('iterations')
-        ylabel('fit error')
-        legend('best fits')
-        
-        hold on
-        x1 = finalIdx;
-        y1 = M.errCounter(finalIdx)+.01;
-        txt1 = 'winning map';
-        text(x1,y1,txt1)
+        save(outName,'bestG','bestF','errors','randInd','iter','count');
     case 'MAP:visualise'
         sn=varargin{1}; % [2] or 'group'
         study=varargin{2}; % 1 or 2 or [1,2]
@@ -643,8 +593,8 @@ switch what
         
         figure()
         title(sprintf('%d clusters',K))
-        M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
-        suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
+        data=suit_map2surf(Vv,'space','SUIT','stats','mode'); 
+        suit_plotflatmap(data,'type','label','cmap',colorcube(K))
     case 'MAP:compare' % this function is to compare OTHER map (Cole,Buckner7/17) with FUNC map (different cluster sizes)
         map1=varargin{1}; % either 'Cole_10Networks','Buckner_7Networks' or 'Buckner_17Networks'
         map2=varargin{2}; % 'SC<studyNum>_<clusterNum>cluster'
@@ -715,8 +665,8 @@ switch what
             case 'no'
                 figure()
                 title('final atlas')
-                M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
-                suit_plotflatmap(M.data,'type','label','cmap',colorcube(K))
+                data=suit_map2surf(Vv,'space','SUIT','stats','mode');
+                suit_plotflatmap(data,'type','label','cmap',colorcube(K))
         end
         
     case 'EVAL:get_data'
