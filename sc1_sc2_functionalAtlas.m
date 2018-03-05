@@ -493,22 +493,30 @@ switch what
         numCount=3;         % How often the "same" solution needs to be found
         tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
         plotDiagnostics = 1;% Plot diagnostic graph?
+        maxiter = 30; 
         
-        % figure out if individual or group
+        % Set the String correctly 
+        studyStr = sprintf('SC%d',study); 
+        if length(study)>1
+            studyStr = 'All'; 
+        end; 
+        
+        % Set output File name 
         switch type,
             case 'group'
                 sn=returnSubjs;
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir);
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%dcluster',studyStr,K));
+                dircheck(outDir);
                 outName=fullfile(outDir,'SNN.mat');
             case 'indiv'
                 outDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
-                outName=fullfile(outDir,sprintf('SNN_SC%d_%dcluster.mat',study,K));
+                outName=fullfile(outDir,sprintf('SNN_%s_%dcluster.mat',studyStr,K));
         end
         
         % get data
         [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
         
-        % Intialize iterations
+        % Intialize iterations[G
         bestErr = inf;
         bestSol = ones(size(X_C,1),1);
         iter=1; % How many iterations
@@ -537,7 +545,7 @@ switch what
                 end;
             end;
             fprintf('Error: %2.2f Rand:%2.2f, Best:%2.2f currently found %d times\n',errors(iter),randInd(iter),bestErr,count);
-            if count>=numCount,
+            if count>=numCount || iter>=maxiter,
                 fprintf('Existing loop....\n');
                 break;
             end;
