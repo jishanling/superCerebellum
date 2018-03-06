@@ -503,20 +503,30 @@ switch what
         
         maxIter=100; % if it's not finding a similar solution - force stop at 100 iters
         % figure out if individual or group
+        plotDiagnostics = 1;% Plot diagnostic graph?
+        
+        % Set the String correctly
+        studyStr = sprintf('SC%d',study);
+        if length(study)>1
+            studyStr = 'All';
+        end;
+        
+        % Set output File name
         switch type,
             case 'group'
                 sn=returnSubjs;
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K));dircheck(outDir);
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%dcluster',studyStr,K));
+                dircheck(outDir);
                 outName=fullfile(outDir,'SNN.mat');
             case 'indiv'
                 outDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
-                outName=fullfile(outDir,sprintf('SNN_SC%d_%dcluster.mat',study,K));
+                outName=fullfile(outDir,sprintf('SNN_%s_%dcluster.mat',studyStr,K));
         end
         
         % get data
         [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
         
-        % Intialize iterations
+        % Intialize iterations[G
         bestErr = inf;
         bestSol = ones(size(X_C,1),1);
         iter=1; % How many iterations
@@ -547,7 +557,7 @@ switch what
                 end;
             end;
             fprintf('Error: %2.2f Rand:%2.2f, Best:%2.2f currently found %d times\n',errors(iter),randInd(iter),bestErr,count);
-            if count>=numCount,
+            if count>=numCount || iter>=maxiter,
                 fprintf('Existing loop....\n');
                 break;
             end;
@@ -670,7 +680,7 @@ switch what
         end
     case 'MAP:plotMapErr'
         sn=varargin{1};     % 'group' or subjNum
-        study=varargin{2};  % 1 or 2 or [1,2]
+        study=varargin{2};  % 1 or 2 
         K=varargin{3};      % Number of clusters
         type=varargin{4};   % 'group' or 'indiv'
         
@@ -698,15 +708,15 @@ switch what
         
         subplot(2,2,4)
         lineplot([1:length(randInd)]',randInd')
-        ylabel('Rand Index')   
+        ylabel('Rand Index')
     case 'FIGURES:similarityMatrix' % this function will plot a matrix of map similarities (randIndex is the metric of similarity)
         clusters=[5:24];
         for k=1:length(clusters),
             toPlot{k}=sprintf('SC2_%dcluster',clusters(k));
-            toPlotNames{k}=sprintf('%dcluster',clusters(k)); 
+            toPlotNames{k}=sprintf('%dcluster',clusters(k));
         end
         toPlot={'SC2_10Cluster','Cole_10Networks','SC2_7Cluster','Buckner_7Networks','SC2_17Cluster','Buckner_17Networks'};
-        toPlotNames={'10Cluster','Cole','7Cluster','Buckner7','17Cluster','Buckner17'}; 
+        toPlotNames={'10Cluster','Cole','7Cluster','Buckner7','17Cluster','Buckner17'};
         
         [RI]=sc1_sc2_functionalAtlas('MAP:compare',toPlot);
         
@@ -931,7 +941,7 @@ switch what
             fprintf('%d cross\n',s);
             [~,~,corrVox]=mva_spatialCorr(D,BIN); % this function was changed to add corrVox as output
             
-            % loop over parcels - get avrg within and avrg between
+            % loop over voxels - get avrg within and avrg between
             % corr for each voxel (probably a neater way to do this !)
             allVox=1:size(corrVox,1);
             for v=1:length(allVox),
@@ -1105,11 +1115,13 @@ switch what
         
         figure()
         if exist('clusters'),
-            lineplot(W.m,W.diff,'subset',W.dist<=35);
+            lineplot(W.m,W.diff,'subset',W.dist<=35,'style_shade');
             t=set(gca,'XTickLabel',clusters');
         else
-            lineplot(W.m,W.diff,'subset',W.dist<=35);
+            lineplot(W.m,W.diff,'subset',W.dist<=35,'style_shade');
         end
+        ylabel('Within/Between Diff')
+        xlabel('Maps')
     case 'EVAL:PLOT:(UN)CROSSVAL'
         mapType=varargin{1}; % {'lob10','bucknerRest','atlasFinal9'}
         data=varargin{2}; % evaluating data from study [1] or [2] or [4]? (not [3] - because there is no crossval)
@@ -1175,7 +1187,7 @@ switch what
         
         vararginoptions({varargin{6:end}},{'sn'}); % option if doing individual map analysis
         
-        [~,volIndx,V]=sc1_sc2_functionalAtlas('EVAL:get_data',2,data,'build');  % put any subjNum (doesn't matter here)    
+        [~,volIndx,V]=sc1_sc2_functionalAtlas('EVAL:get_data',2,data,'build');  % put any subjNum (doesn't matter here)
         
         switch type,
             case 'group'
@@ -1187,11 +1199,11 @@ switch what
         end
         
         % groupMap
-        plotNames={'all','within','between'}; 
-        toPlot{1}=nanmean(T.allCorr,1); 
-        toPlot{2}=nanmean(T.withinCorr,1); 
-        toPlot{3}=nanmean(T.betweenCorr,1); 
-        for i=1:3,
+        plotNames={'within','between'};
+        toPlot{1}=nanmean(T.withinCorr,1);
+        toPlot{2}=nanmean(T.betweenCorr,1);
+        
+        for i=1:length(toPlot),
             groupFeat=toPlot{i};
             % map features on group
             Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
