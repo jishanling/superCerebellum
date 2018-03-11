@@ -455,7 +455,7 @@ switch what
     case 'MAP:vol2surf'
         % this function takes any labelled volume (already in SUIT space)
         % and plots to the surface
-        inputMap=varargin{1}; % some options are 'Buckner_7Networks','SC1_9cluster','lob10', 'Cole_10Networks' etc
+        inputMap=varargin{1}; % some options are 'Buckner_7Networks','SC1_9cluster','lob10', 'Cole_10Networks', 'SC2_90cluster' etc
         metric=varargin{2}; % 'yes' or 'no'
         
         inputDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',inputMap));
@@ -482,7 +482,7 @@ switch what
             case 'yes'
                 % make paint and area files
                 M=caret_struct('paint','data',M.data);
-                A=caret_struct('area','data',cmap,'column_name',M.paintnames,...
+                A=caret_struct('area','data',cmapF*255,'column_name',M.paintnames,...
                     'column_color_mapping',repmat([-5 5],M.num_paintnames),'paintnames',M.paintnames);
                 
                 % save out paint and area files
@@ -492,24 +492,21 @@ switch what
                 suit_plotflatmap(M.data,'type','label','cmap',cmapF) % colorcube(max(M.data))
         end
     case 'MAP:optimal'  % figure out optimal map for multiple clusters
-        % example:
-        % sc1_sc2_functionalAtlas('MAP:optimal',<subjNums>,1,6,'group')
+        % example:sc1_sc2_functionalAtlas('MAP:optimal',<subjNums>,1,6,'group')
         sn=varargin{1};     % subject numbers
         study=varargin{2};  % 1 or 2 or [1,2]
-        K=varargin{3};      % Number of clusters
+        K=varargin{3};      % K=numClusters (i.e. 5);
         type=varargin{4};   % 'group' or 'indiv'
         numCount=5;         % How often the "same" solution needs to be found
-        tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
         
+        tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
         maxIter=100; % if it's not finding a similar solution - force stop at 100 iters
-        % figure out if individual or group
-        plotDiagnostics = 1;% Plot diagnostic graph?
         
         % Set the String correctly
         studyStr = sprintf('SC%d',study);
         if length(study)>1
-            studyStr = 'All';
-        end;
+            studyStr='AtlasFinal';
+        end
         
         % Set output File name
         switch type,
@@ -532,57 +529,131 @@ switch what
         iter=1; % How many iterations
         count=0;
         while iter<maxIter,
-            [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get current error
-            [~,Cl]=max(G,[],2);
-            %             mapSol(iter,:)=Cl;          % record solution
+            [F,G,Info,winner]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get current error
             errors(iter)=Info.error;    % record error
-            randInd(iter)=RandIndex(bestSol,Cl); %
+            randInd(iter)=RandIndex(bestSol,winner); %
             
             % Check if we have a similar solution
             if randInd(iter)>tol_rand % Similar solution
                 count=count+1;       % count up one
                 if (Info.error<bestErr)  % If we got slightly better - update
                     bestErr = Info.error;
-                    bestSol = Cl;
+                    bestSol = winner;
                     bestG   = G;
                     bestF   = F;
                 end;
             else                     % Different (enough) solution
                 if (Info.error<bestErr) % Is this a better solution
                     bestErr = Info.error;
-                    bestSol = Cl;
+                    bestSol = winner;
                     bestG   = G;
                     bestF   = F;
                     count = 0;         % first time we found this solution: reset counter
                 end;
             end;
             fprintf('Error: %2.2f Rand:%2.2f, Best:%2.2f currently found %d times\n',errors(iter),randInd(iter),bestErr,count);
-            if count>=numCount || iter>=maxiter,
+            if count>=numCount || iter>=maxIter,
                 fprintf('Existing loop....\n');
                 break;
             end;
             iter=iter+1;
         end;
         save(outName,'bestG','bestF','errors','randInd','iter','count','volIndx','V');
+    case 'MAP:ICA'
+        % example:sc1_sc2_functionalAtlas('MAP:optimal',<subjNums>,1,6,'group')
+        sn=varargin{1};     % subject numbers
+        study=varargin{2};  % 1 or 2 or [1,2]
+        threshold=varargin{3};      % K=thresh (i.e. 90)
+        type=varargin{4};   % 'group' or 'indiv'
+        
+        %numCount=5;         % How often the "same" solution needs to be found
+        %tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
+        %maxIter=100; % if it's not finding a similar solution - force stop at 100 iters
+        
+        % Set the String correctly
+        studyStr = sprintf('SC%d',study);
+        if length(study)>1
+            studyStr='AtlasFinal';
+        end
+        
+        % Set output File name
+        switch type,
+            case 'group'
+                sn=returnSubjs;
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%dPOV',studyStr,K));
+                dircheck(outDir);
+                outName=fullfile(outDir,'ICAs.mat');
+            case 'indiv'
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
+                outName=fullfile(outDir,sprintf('ICAs_%s_%dPOV.mat',studyStr,K));
+        end
+        
+        % get data
+        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
+        
+        threshold=threshold/100;
+        [A_PW,S_PW,W_PW,winner]=pca_ica(X_C,'threshold',threshold);
+        
+        save(outName,'A_PW','S_PW','W_PW','volIndx','V');
+        
+        % Intialize iterations[G
+        %         bestSol = ones(size(X_C,1),1);
+        %         iter=1; % How many iterations
+        %         count=0;
+        %         K=K/100;
+        %         while iter<maxIter,
+        %             [F,G,~,winner]=pca_ica(X_C,'K',K); % .9 instead of 90
+        %             randInd(iter)=RandIndex(bestSol,winner);
+        %
+        %             % Check if we have a similar solution
+        %             if randInd(iter)>tol_rand % Similar solution
+        %                 count=count+1;       % count up one
+        %                 bestSol = winner;
+        %                 bestG   = G;
+        %                 bestF   = F;
+        %                 fprintf('RandIndex is %2.2f \n',randInd);
+        %             else                     % Different (enough) solution
+        %                 bestSol = winner;
+        %                 bestG   = G;
+        %                 bestF   = F;
+        %                 count = 0;         % first time we found this solution: reset counter
+        %                 fprintf('RandIndex is %2.2f \n',randInd);
+        %             end;
+        %             if count>=numCount || iter>=maxIter,
+        %                 fprintf('Existing loop....\n');
+        %                 break;
+        %             end;
+        %             iter=iter+1;
+        %         end;
+        %         save(outName,'bestG','bestF','randInd','iter','count','volIndx','V');
     case 'MAP:visualise'
         sn=varargin{1}; % [2] or 'group'
         study=varargin{2}; % 1 or 2 or [1,2]
-        K=varargin{3}; % number of clusters
-        type=varargin{4}; % 'group','indiv',or 'leaveOneOut'
+        anaType=varargin{3}; % 'SNN' or 'ICAs'
+        K=varargin{4}; % for SNN - number of clusters (i.e. 5), for ica - thresh (i.e. 90)
+        type=varargin{5}; % 'group', or 'indiv'
+        
+        % figure out if ICA or SNN
+        if strcmp(anaType,'SNN'),
+            anaName='cluster';
+        else
+            anaName='POV';
+        end
         
         % figure out if individual or group
         switch type,
             case 'group'
-                outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),'map.nii');
-                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),'SNN.mat'));
+                outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%d%s',study,K,anaName),'map.nii');
+                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%d%s',study,K,anaName),sprintf('%s.mat',anaType)));
             case 'indiv'
-                outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_SC%d_%dcluster.nii',study,K));
-                load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('SNN_SC%d_%dcluster.mat',study,K)));
-            case 'leaveOneOut'
-                outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),sprintf('map_leaveOut_%s.nii',subj_name{sn}));
-                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),sprintf('SNN_leaveOut_%s.mat',subj_name{sn})));
+                outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_SC%d_%d%s.nii',study,K,anaName));
+                load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_SC%d_%d%s.mat',anaType,study,K,anaName)));
         end
         
+        % transpose matrix from ICA
+        if size(S_PW,1)<1000,
+            bestG=S_PW';
+        end
         [~,groupFeat]=max(bestG,[],2);
         
         % map features on group
@@ -612,7 +683,7 @@ switch what
         
         % make sure all parcels are sampled into the same space
         for m=1:numMaps,
-            mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',maps{m}),'map.nii');
+            mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',maps{m}),'map_old.nii');
             [i,j,k]=ind2sub(V.dim,volIndx);
             [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
             VA=spm_vol(mapName);
@@ -680,16 +751,24 @@ switch what
         end
     case 'MAP:plotMapErr'
         sn=varargin{1};     % 'group' or subjNum
-        study=varargin{2};  % 1 or 2 
-        K=varargin{3};      % Number of clusters
+        study=varargin{2};  % 1 or 2
+        anaType=varargin{3}; % 'SNN' or 'cluster'
+        K=varargin{3};      % Number of clusters (i.e. 5) or ICA thresh (i.e. 90 etc)
         type=varargin{4};   % 'group' or 'indiv'
+        
+        % figure out if ICA or SNN
+        if strcmp(anaType,'SNN'),
+            anaName='cluster';
+        else
+            anaName='POV';
+        end
         
         % figure out if individual or group
         switch type,
             case 'group'
-                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dcluster',study,K),'SNN.mat'));
+                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%d%s',study,K,anaName),sprintf('%s.mat',anaType)));
             case 'indiv'
-                load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('SNN_SC%d_%dcluster.mat',study,K)));
+                load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_SC%d_%d%s.mat',anaType,study,K,anaName)));
         end;
         
         % plot bestF
@@ -702,28 +781,38 @@ switch what
         ylabel('taskConds')
         
         % plot errors
-        subplot(2,2,3)
-        lineplot([1:length(errors)]',errors')
-        ylabel('errors')
+        if strcmp(anaType{1},'SNN'),
+            subplot(2,2,3)
+            lineplot([1:length(errors)]',errors')
+            ylabel('errors')
+        end
         
+        % plot randInd
         subplot(2,2,4)
         lineplot([1:length(randInd)]',randInd')
         ylabel('Rand Index')
     case 'FIGURES:similarityMatrix' % this function will plot a matrix of map similarities (randIndex is the metric of similarity)
-        clusters=[5:24];
-        for k=1:length(clusters),
-            toPlot{k}=sprintf('SC2_%dcluster',clusters(k));
-            toPlotNames{k}=sprintf('%dcluster',clusters(k));
+        anaType=varargin{1}; % 'cluster' or 'POV'
+        toPlotNames={'1.10Cluster','2.Cole','3.7Cluster','4.Buckner7','5.17Cluster','6.Buckner17'};
+        
+        K=[50:5:95];
+        idx=1;
+        for s=1:2,
+            for k=1:length(K),
+                toPlot{idx}=sprintf('SC%d_%d%s',s,K(k),anaType);
+                toPlotNames{idx}=sprintf('%d.SC%d-%d',idx,s,K(k));
+                idx=idx+1;
+            end
+            idx=k+1;
         end
-        toPlot={'SC2_10Cluster','Cole_10Networks','SC2_7Cluster','Buckner_7Networks','SC2_17Cluster','Buckner_17Networks'};
-        toPlotNames={'10Cluster','Cole','7Cluster','Buckner7','17Cluster','Buckner17'};
+        
         
         [RI]=sc1_sc2_functionalAtlas('MAP:compare',toPlot);
         
         figure()
         imagesc_rectangle(RI,'YDir','reverse');
         caxis([0 1]);
-        t=set(gca,'Ytick',[1:length(toPlot)]','YTickLabel',toPlotNames','FontSize',7,'Xtick',[1:length(toPlot)]','XTickLabel',toPlotNames','FontSize',10);
+        t=set(gca,'Ytick',[1:length(toPlot)]','YTickLabel',toPlotNames','FontSize',7,'Xtick',[1:length(toPlot)]','FontSize',10);
         t.Color='white';
         colorbar
         
@@ -927,9 +1016,10 @@ switch what
         XYZ= [x;y;z];
         RR=[];
         R=[];
-        [BIN,~]=mva_spatialCorrBin(XYZ(:,voxIn),'Parcel',Parcel(1,voxIn));
+        [BIN,R]=mva_spatialCorrBin(XYZ(:,voxIn),'Parcel',Parcel(1,voxIn));
+        
         clear XYZ i k l x y z i1 j1 k1 VA; % Free memory
-        % Now calculate the uncrossvalidated and crossvalidated
+        % Now calculate the uncrossvalidated
         % Estimation of the correlation for each subject
         for s=unique(T.SN)';
             for c=1:length(idx),
@@ -939,24 +1029,15 @@ switch what
             D=(T.data(i1,voxIn)+T.data(i2,voxIn))/2;
             
             fprintf('%d cross\n',s);
-            [~,~,corrVox]=mva_spatialCorr(D,BIN); % this function was changed to add corrVox as output
+            [~,~,binCorrVox]=mva_spatialCorr(D,BIN,'saveVox','yes'); % this function was changed to add binCorrVox as output
             
-            % loop over voxels - get avrg within and avrg between
-            % corr for each voxel (probably a neater way to do this !)
-            allVox=1:size(corrVox,1);
-            for v=1:length(allVox),
-                withinIdx=allVox(Parcel==Parcel(v) & allVox~=v);
-                betweenIdx=allVox(Parcel~=Parcel(v) & allVox~=v);
-                R.allCorr(v)=nanmean(corrVox(v,allVox(allVox~=v))); % get corr between vox and all OTHER vox
-                R.withinCorr(v)=nanmean(corrVox(v,withinIdx)); % get corr between vox and all other vox WITHIN parcel
-                R.betweenCorr(v)=nanmean(corrVox(v,betweenIdx)); % get corr between vox and all other vox from OTHER parcels
-                fprintf('voxel %d ...\n',v)
-            end
-            R.SN=s;
-            R.crossval=0; % no crossval
+            R.corr=binCorrVox';
+            R.SN=repmat(s,size(R.corr,1),1);
+            R.crossval=repmat(0,size(R.corr,1),1); % no across-sess crossval (was taking too long !)
             RR=addstruct(RR,R);
         end;
-        save(outName,'-struct','RR');
+        voxIn=volIndx(voxIn);
+        save(outName,'RR','voxIn');
     case 'EVAL:crossval:LEAVEONEOUT' % NEED TO UPDATE FOR SNN !!
         sn=varargin{1}; % [2]
         study=varargin{2}; % 1 or 2
@@ -1004,12 +1085,12 @@ switch what
         R.crossval = zeros(length(R.corr),1);
         RR = addstruct(RR,R);
         save(outName,'-struct','RR');
-    case 'EVAL:averageClust' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
-        clusterNum=varargin{1}; % [5:2:23]
+    case 'EVAL:averageK' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
+        mapType=varargin{1}; % ex. '6cluster' (for snn) or '90POV' (for ica)
         condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
         type=varargin{3}; % 'group' or 'indiv' ?
         
-        mapType=[1,2]; % test on one dataset
+        studyType=[1,2]; % test on one dataset
         evalType=[2,1]; % evaluate on the other
         R=[];
         
@@ -1018,14 +1099,14 @@ switch what
         switch type,
             case 'group'
                 for i=1:2,
-                    T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_SC%d_%dcluster',mapType(i),clusterNum),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
+                    T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_SC%d_%s',studyType(i),mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
                     T.studyNum=repmat([i],length(T.SN),1);
                     R=addstruct(R,T);
                 end
-                outDir=fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_SC2_%dcluster',clusterNum),sprintf('spatialBoundfunc4_%s.mat',condType));
+                outDir=fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_SC2_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
             case 'indiv'
                 for i=1:2,
-                    T=load(fullfile(studyDir{2},'encoding','glm4',subj_name{sn},sprintf('SC%d_%dcluster_spatialBoundfunc%d_%s.mat',mapType(i),clusterNum,evalType(i),condType)));
+                    T=load(fullfile(studyDir{2},'encoding','glm4',subj_name{sn},sprintf('SC%d_%s_spatialBoundfunc%d_%s.mat',studyType(i),mapType,clusterNum,evalType(i),condType)));
                     T.studyNum=repmat([i],length(T.SN),1);
                     R=addstruct(R,T);
                 end
@@ -1090,7 +1171,7 @@ switch what
         crossval=varargin{3}; % [0]-no crossval; [1]-crossval
         condType=varargin{4}; % evaluating on 'unique' or 'all' taskConds ??
         
-        vararginoptions({varargin{5:end}},{'clusters'}); % option if plotting clusters
+        vararginoptions({varargin{5:end}},{'K'}); % option if plotting clusters
         
         P=[];
         for m=1:length(mapType),
@@ -1109,14 +1190,10 @@ switch what
         B=getrow(P,P.bwParcel==1); % between
         W.diff=W.corr-B.corr;
         
-        %         subplot(1,2,1);
-        %         myboxplot(W.m,W.diff,'subset',W.dist<=35,'style_twoblock','plotall',0) % within-between diff
-        %         ylabel('Within/Between Difference');
-        
         figure()
-        if exist('clusters'),
+        if exist('K'),
             lineplot(W.m,W.diff,'subset',W.dist<=35,'style_shade');
-            t=set(gca,'XTickLabel',clusters');
+            t=set(gca,'XTickLabel',K');
         else
             lineplot(W.m,W.diff,'subset',W.dist<=35,'style_shade');
         end
@@ -1185,47 +1262,46 @@ switch what
         type=varargin{3}; % 'group' or 'leaveOneOut' or 'indiv'
         condType=varargin{4}; % evaluating on 'all' or 'unique' taskConds ??
         
+        bins=[1:7]; % we only want bins 1-7 (<35 mm)
         vararginoptions({varargin{6:end}},{'sn'}); % option if doing individual map analysis
         
-        [~,volIndx,V]=sc1_sc2_functionalAtlas('EVAL:get_data',2,data,'build');  % put any subjNum (doesn't matter here)
+        [~,~,V]=sc1_sc2_functionalAtlas('EVAL:get_data',2,data,'build');  % put any subjNum (doesn't matter here)
         
         switch type,
             case 'group'
-                T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s_parcels.mat',data,condType)));
+                load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s_parcels.mat',data,condType)));
             case 'indiv'
-                T=load(fullfile(studyDir{2},'encoding','glm4',subj_name{sn},sprintf('%s_spatialBoundfunc%d_%s.mat',mapType,data,condType)));
+                load(fullfile(studyDir{2},'encoding','glm4',subj_name{sn},sprintf('%s_spatialBoundfunc%d_%s.mat',mapType,data,condType)));
             otherwise
                 fprintf('no such case')
         end
         
-        % groupMap
-        plotNames={'within','between'};
-        toPlot{1}=nanmean(T.withinCorr,1);
-        toPlot{2}=nanmean(T.betweenCorr,1);
-        
-        for i=1:length(toPlot),
-            groupFeat=toPlot{i};
+        for b=1:length(bins),
+            % compute diff for diff bins
+            within=getrow(RR,RR.bwParcel==0 & RR.bin==bins(b));
+            between=getrow(RR,RR.bwParcel==1 & RR.bin==bins(b));
+            diff=within.corr-between.corr;
+            
+            columnName{b}=sprintf('bin%d-%dmm',bins(b),unique(round(within.dist)));
+            
             % map features on group
             Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
-            Yy(1,volIndx)=groupFeat;
+            Yy(1,voxIn)=nanmean(diff,1);
             Yy=reshape(Yy,[V.dim(1),V.dim(2),V.dim(3)]);
             Yy(Yy==0)=NaN;
-            Vv{1}.dat=Yy;
-            Vv{1}.dim=V.dim;
-            Vv{1}.mat=V.mat;
-            
-            % map vol2surf
-            M=caret_suit_map2surf(Vv,'space','SUIT','stats','nanmean');
-            
-            % plot2surf
-            figure(i)
-            suit_plotflatmap(M.data,'type','func')
-            title(plotNames{i})
+            Vv{b}.dat=Yy;
+            Vv{b}.dim=V.dim;
+            Vv{b}.mat=V.mat;
+            clear Yy diff
         end
         
+        % map vol2surf
+        M=caret_suit_map2surf(Vv,'space','SUIT','stats','nanmean','column_names',columnName);
+        
+        caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4',sprintf('diff_%s.metric',mapType)),M);
+        
     case 'FIGURES:CORR:GROUP' % Makes the summary figure of within / between correlations for GROUP
-        toPlot = {'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC2_7cluster','SC2_10cluster',...
-            'SC2_17cluster'};
+        toPlot = {'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks'};
         crossval=varargin{1}; % 0-uncrossval; 1-crossval
         evalNum=varargin{2}; % SC1-[1],SC2-[2],concat SC1+SC2 [3],average of SC1+SC2 eval [4]
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
@@ -1255,19 +1331,26 @@ switch what
         %         set(gcf,'PaperPosition',[2 4 12 3]);
         %         wysiwyg;
     case 'FIGURES:DIFF:GROUP' % Makes the summary figure of within / between diff
-        % toPlot= {'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC2_10cluster'};
+        % example: toPlot= {'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC2_10cluster'};
         crossval=varargin{1}; % 0-uncrossval; 1-crossval
         evalNum=varargin{2}; % SC1-[1],SC2-[2],concat SC1+SC2 [3],average of SC1+SC2 eval [4]
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
-        studyNum=varargin{4}; % studyNum. If evalNum=1 or 4, then studyNum=2; if evalNum=2 then studyNum=1;
+        studyNum=varargin{4}; % if evaluating on 1,4: studyNum=2; if evaluating on 2,studyNum=1
         
-        clusters=[5:24];
-        for k=1:length(clusters),
-            toPlot{k}=sprintf('SC%d_%dcluster',studyNum,clusters(k));
-        end
+        %K=[50:5:95,5:24]; % whatever is hardcoded here will determine ICA or SNN
+        % what are we plotting ? SNN or ICA maps ?
+        %         for k=1:length(K),
+        %             if max(K)<50,
+        %                 toPlot{k}=sprintf('SC%d_%dcluster',studyNum,K(k));
+        %             else
+        %                 toPlot{k}=sprintf('SC%d_%dPOV',studyNum,K(k));
+        %             end
+        %         end
+        toPlot={'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC2_9cluster','SC2_90POV'};
         
-        if exist('clusters'),
-            sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNum,crossval,condType,'clusters',clusters);
+        
+        if exist('K'),
+            sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNum,crossval,condType,'K',K);
         else
             sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNum,crossval,condType);
         end
@@ -1298,7 +1381,7 @@ switch what
             title(sprintf('%s',subj_name{sn(s)}));
             clear W
         end
-    case 'FIGURES:GROUP_INDIV'
+    case 'FIGURES:GROUP:INDIV'
         sn=varargin{1}; % <subjNum>
         crossval=varargin{2}; % [0]-no crossval; [1]-crossval
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
