@@ -2561,11 +2561,11 @@ switch(what)
         switch type,
             case 'cereb'
                 sc1_sc2_imana('PREP:cereb:suit_betas',sn,study,glm)
-                sc1_sc2_imana('PREP:cereb:indiv_voxels',sn,study,glm,'grey_nan')
+                sc1_sc2_imana('PREP:cereb:voxels',sn,study,glm,'grey_nan')
             case 'cortex'
                 sc1_sc2_imana('PREP:cortex:surface_betas',sn,study,glm,'beta')
                 sc1_sc2_imana('PREP:cortex:surface_betas',sn,study,glm,'ResMS')
-                sc1_sc2_imana('PREP:cortex:indiv_vertices',sn,study,glm)
+                sc1_sc2_imana('PREP:cortex:vertices',sn,study,glm)
         end
     case 'PREP:run_allSubj'                  % STEP 11.2:
         study=varargin{1};
@@ -2574,13 +2574,13 @@ switch(what)
         
         switch type,
             case 'cereb'
-                %sc1_sc2_imana('PREP:betas_all',returnSubjs,glm,'cerebellum',[1])
+                sc1_sc2_imana('PREP:betas',returnSubjs,glm,'cerebellum',[1])
                 sc1_sc2_imana('PREP:avrg_betas',returnSubjs,study,glm,'cereb',[1])
             case 'cortex'
-                sc1_sc2_imana('PREP:betas_all',returnSubjs,glm,'cortex',[1:2])
+                sc1_sc2_imana('PREP:betas',returnSubjs,glm,'cortex',[1:2])
                 sc1_sc2_imana('PREP:avrg_betas',returnSubjs,study,glm,'cortex',[1:2])
         end
-        sc1_sc2_imana('PREP:IPM_all',returnSubjs,glm,type,[1:2])
+        sc1_sc2_imana('PREP:IPM',returnSubjs,glm,type,[1:2])
     case 'PREP:avrgMask_cereb'               % STEP 11.3:
         sn=varargin{1};
         
@@ -2682,7 +2682,7 @@ switch(what)
                 fprintf('%s map to surface for %s:%s \n',contrast,subj_name{sn(s)},hemName{h});
             end;
         end
-    case 'PREP:cereb:indiv_voxels'           % STEP 11.6: Get UW cerebellar data (voxels)
+    case 'PREP:cereb:voxels'                 % STEP 11.6: Get UW cerebellar data (voxels)
         sn=varargin{1};
         study=varargin{2};
         glm=varargin{3};
@@ -2764,7 +2764,7 @@ switch(what)
             fprintf('cerebellar voxels (%s) computed for %s \n',data,subj_name{sn(s)});
             clear B1 idx Bb indx
         end
-    case 'PREP:cortex:indiv_vertices'        % STEP 11.7: Get UW cortical data( vertices)
+    case 'PREP:cortex:vertices'              % STEP 11.7: Get UW cortical data (vertices)
         sn=varargin{1};
         study=varargin{2};
         glm=varargin{3};
@@ -2802,111 +2802,136 @@ switch(what)
                 clear B R Y
             end
         end
-    case 'PREP:betas_all'                    % STEP 11.8
+    case 'PREP:cortex:parcels'               % STEP 11.9: Parcel cortical vertices (i.e. 162_tessellation, yeo etc)
+        sn=varargin{1};
+        study=varargin{2};
+        glm=varargin{3};
+        type=varargin{4}; % '162_tessellation_hem', or 'cortical_lobes_hem' etc (whichever ROIs have been defined
+        % in 'ROI:define' step) - should be parcellated on both hemispheres
+        
+        subjs=length(sn);
+        for s=1:subjs,
+            load(fullfile(studyDir{1},regDir,'data',subj_name{sn(s)},sprintf('regions_%s.mat',type)))
+            regs=[1:length(R)/2;length(R)/2+1:length(R)];
+            for h=1:2,
+                encodeSubjDir = fullfile(studyDir{study},encodeDir,sprintf('glm%d',glm),subj_name{sn(s)});
+                load(fullfile(encodeSubjDir,sprintf('Y_info_glm%d_cortex_%s.mat',glm,hem{h})))
+                switch type,
+                    case '162_tessellation_hem'
+                        for t=regs(h,:),
+                            idx=R{t}.location; 
+                            data(:,t)=nanmean(Y.data(:,idx),2); 
+                        end
+                end
+            end
+            Y.data=data;
+            Y=rmfield(Y,'nonZeroInd');
+            outName=fullfile(encodeSubjDir,sprintf('Y_info_glm%d_%s.mat',glm,type));
+            save(outName,'Y','-v7.3');
+            fprintf('%s vertices: (Y data) computed for %s \n',type,subj_name{sn(s)});
+        end
+    case 'PREP:betas'                        % STEP 11.8
         sn=varargin{1};
         glm=varargin{2};
-        type=varargin{3}; % 'cortex' or 'cerebellum'
-        hemN=varargin{4}; % [1:2] for cortex and [1] for cerebellum
+        type=varargin{3}; % '162_tessellation_hem' or 'cerebellum'
         
         subjs=length(sn);
         
         C=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
-        for h=hemN,
-            for s=1:subjs,
-                for study=1:2,
-                    numTasks=length(C.condNames(C.StudyNum==study));
-                    condNum{study} = [kron(ones(numel(run),1),[1:numTasks]');ones(numel(run),1)*numTasks+1];
-                    partNum{study} = [kron([1:numel(run)]',ones(numTasks,1));[1:numel(run)]'];
-                    encodeSubjDir=fullfile(studyDir{study},encodeDir,sprintf('glm%d',glm),subj_name{sn(s)});
-                    switch type,
-                        case 'cortex'
-                            inFile=sprintf('Y_info_glm%d_%s_%s.mat',glm,type,hem{h});
-                            outFile=sprintf('allVert_sc1_sc2_sess_%s_%s.mat',type,hem{h});
-                        case 'cerebellum'
-                            inFile=sprintf('Y_info_glm%d_grey_nan.mat',glm);
-                            outFile=sprintf('allVox_sc1_sc2_sess_%s.mat',type);
-                    end
-                    load(fullfile(encodeSubjDir,inFile))
-                    Yy{s}{study}=Y.data;
-                    fprintf('subj%d study%d done \n',sn(s),study)
+        for s=1:subjs,
+            for study=1:2,
+                numTasks=length(C.condNames(C.StudyNum==study));
+                condNum{study} = [kron(ones(numel(run),1),[1:numTasks]');ones(numel(run),1)*numTasks+1];
+                partNum{study} = [kron([1:numel(run)]',ones(numTasks,1));[1:numel(run)]'];
+                encodeSubjDir=fullfile(studyDir{study},encodeDir,sprintf('glm%d',glm),subj_name{sn(s)});
+                switch type,
+                    case '162_tessellation_hem'
+                        inFile=sprintf('Y_info_glm%d_%s.mat',glm,type);
+                        outFile=sprintf('allVert_sc1_sc2_sess_%s.mat',type);
+                    case 'cerebellum'
+                        inFile=sprintf('Y_info_glm%d_grey_nan.mat',glm);
+                        outFile=sprintf('allVox_sc1_sc2_sess_%s.mat',type);
                 end
+                load(fullfile(encodeSubjDir,inFile))
+                Yy{s}{study}=Y.data;
+                fprintf('subj%d study%d done \n',sn(s),study)
             end
-            save(fullfile(studyDir{2},encodeDir,sprintf('glm%d',glm),outFile),'Yy','condNum','partNum','-v7.3');
         end
-    case 'PREP:IPM_all'                      % STEP 11.9
+        save(fullfile(studyDir{2},encodeDir,sprintf('glm%d',glm),outFile),'Yy','condNum','partNum','-v7.3');
+    case 'PREP:IPM'                          % STEP 11.9
         sn=varargin{1};
         glm=varargin{2};
-        type=varargin{3}; % 'cortex' or 'cerebellum'
-        hemN=varargin{4}; % [1:2] for cortex and [1] for cerebellum
-        step=varargin{5}; % 1- 1 IPM (sc1+sc2); 2 - 4 sIPM's (sc1+sc2)
+        type=varargin{3}; % '162_tessellation_hem' or 'cerebellum'
+        step=varargin{4}; % 1- 1 IPM (sc1+sc2); 2 - 4 sIPM's (sc1+sc2 separately)
         
         subjs=length(sn);
         
         % prep inputs for PCM modelling functions
-        for h=hemN,
-            for s=1:subjs,
-                V=[];
-                switch type,
-                    case 'cerebellum'
-                        load(fullfile(studyDir{2},encodeDir,sprintf('glm%d',glm),sprintf('allVox_sc1_sc2_sess_%s.mat',type))); % region stats (T)
-                        if step==1,
-                            outName=sprintf('G_hat_sc1_sc2_%s.mat',type);
-                        else
-                            outName=sprintf('G_hat_sc1_sc2_sess_%s.mat',type);
-                        end
-                    case 'cortex'
-                        load(fullfile(studyDir{2},encodeDir,sprintf('glm%d',glm),sprintf('allVert_sc1_sc2_sess_%s_%s.mat',type),hem{h})); % region stats (T)
-                        if step==1,
-                            outName=sprintf('G_hat_sc1_sc2_%s_%s.mat',type,hem{h});
-                        else
-                            outName=sprintf('G_hat_sc1_sc2_sess_%s_%s.mat',type,hem{h});
-                        end
-                end
-                for study=1:2,
-                    D = load(fullfile(studyDir{study},sprintf('GLM_firstlevel_%d',glm), subj_name{sn(s)}, 'SPM_info.mat'));   % load subject's trial structure
-                    betaW              = Yy{s}{study};
-                    % get subject's partitions and second moment matrix
-                    N                  = length(D.run);
-                    numConds(study)    = length(D.cond(D.cond~=1))/numel(run); % remove instruct
-                    betaW              = betaW(1:N,:);
-                    betaW              = [betaW(D.cond~=1,:);zeros(numel(run),size(betaW,2))]; % remove instruct & add rest
-                    B.partVec          = [D.run(D.cond~=1);[1:numel(run)]'];   % remove instruct & add rest
-                    B.sessNum          = [D.sess(D.cond~=1);kron([1:2],ones(1,numel(run)/2))'];   % remove instruct & add rest
-                    % subtract block mean from run
-                    I = indicatorMatrix('identity',B.partVec);
-                    R  = eye(N)-I*pinv(I);
-                    B.Y = R*betaW;            % Subtract block mean
-                    if study==1,
-                        B.condVec      = [repmat([1:numConds(study)],1,numel(run))';repmat(numConds(study)+1,numel(run),1)];  % remove instruct % add rest
+        for s=1:subjs,
+            V=[];
+            switch type,
+                case 'cerebellum'
+                    load(fullfile(studyDir{2},encodeDir,sprintf('glm%d',glm),sprintf('allVox_sc1_sc2_sess_%s.mat',type))); % region stats (T)
+                    if step==1,
+                        outName=sprintf('G_hat_sc1_sc2_%s.mat',type);
                     else
-                        B.condVec      = [repmat([numConds(2)-1:numConds(1)+numConds(2)+1],1,numel(run))';repmat(numConds(1)+numConds(2)+2,numel(run),1)];
+                        outName=sprintf('G_hat_sc1_sc2_sess_%s.mat',type);
                     end
-                    B.studyNum         = repmat(study,size(betaW,1),1);
-                    V=addstruct(V,B);
-                    clear B
-                end
-                
-                % Overall IPM or 4-session IPM's
-                if step==1,
-                    G_hat(:,:,s)=pcm_estGCrossval(V.Y,V.partVec,V.condVec);  % get IPM
+                case '162_tessellation_hem'
+                    load(fullfile(studyDir{2},encodeDir,sprintf('glm%d',glm),sprintf('allVert_sc1_sc2_sess_%s.mat',type))); % region stats (T)
+                    if step==1,
+                        outName=sprintf('G_hat_sc1_sc2_%s.mat',type);
+                    else
+                        outName=sprintf('G_hat_sc1_sc2_sess_%s.mat',type);
+                    end
+            end
+            for study=1:2,
+                D = load(fullfile(studyDir{study},sprintf('GLM_firstlevel_%d',glm), subj_name{sn(s)}, 'SPM_info.mat'));   % load subject's trial structure
+                betaW              = Yy{s}{study};
+                % get subject's partitions and second moment matrix
+                N                  = length(D.run);
+                numConds(study)    = length(D.cond(D.cond~=1))/numel(run); % remove instruct
+                betaW              = betaW(1:N,:);
+                betaW              = [betaW(D.cond~=1,:);zeros(numel(run),size(betaW,2))]; % remove instruct & add rest
+                B.partVec          = [D.run(D.cond~=1);[1:numel(run)]'];   % remove instruct & add rest
+                B.sessNum          = [D.sess(D.cond~=1);kron([1:2],ones(1,numel(run)/2))'];   % remove instruct & add rest
+                % subtract block mean from run
+                I = indicatorMatrix('identity',B.partVec);
+                R  = eye(N)-I*pinv(I);
+                B.Y = R*betaW;            % Subtract block mean
+                if study==1,
+                    B.condVec      = [repmat([1:numConds(study)],1,numel(run))';repmat(numConds(study)+1,numel(run),1)];  % remove instruct % add rest
                 else
-                    for study=1:2,
-                        for sess=1:2,
-                            sessStudyIdx=V.studyNum==study & V.sessNum==sess;
-                            if study==1,
-                                G_hat_sc1(:,:,sess,s)=pcm_estGCrossval(V.Y(sessStudyIdx,:),V.partVec(sessStudyIdx),V.condVec(sessStudyIdx));
-                            else
-                                G_hat_sc2(:,:,sess,s)=pcm_estGCrossval(V.Y(sessStudyIdx,:),V.partVec(sessStudyIdx),V.condVec(sessStudyIdx));
-                            end
+                    B.condVec      = [repmat([numConds(2)-1:numConds(1)+numConds(2)+1],1,numel(run))';repmat(numConds(1)+numConds(2)+2,numel(run),1)];
+                end
+                B.studyNum         = repmat(study,size(betaW,1),1);
+                V=addstruct(V,B);
+                clear B
+            end
+            
+            % Overall IPM or 4-session IPM's
+            if step==1,
+                G_hat(:,:,s)=pcm_estGCrossval(V.Y,V.partVec,V.condVec);  % get IPM
+                % save overall IPM
+                save(fullfile(studyDir{2},regDir,sprintf('glm%d',glm),outName),'G_hat');
+            else
+                for study=1:2,
+                    for sess=1:2,
+                        sessStudyIdx=V.studyNum==study & V.sessNum==sess;
+                        if study==1,
+                            G_hat_sc1(:,:,sess,s)=pcm_estGCrossval(V.Y(sessStudyIdx,:),V.partVec(sessStudyIdx),V.condVec(sessStudyIdx));
+                        else
+                            G_hat_sc2(:,:,sess,s)=pcm_estGCrossval(V.Y(sessStudyIdx,:),V.partVec(sessStudyIdx),V.condVec(sessStudyIdx));
                         end
                     end
                 end
-                fprintf('IPM calculated for subj%d \n',sn(s));
-                clear Y partVec condVec
+                % Save 4-session IPM's
+                save(fullfile(studyDir{2},regDir,sprintf('glm%d',glm),outName),'G_hat_sc1','G_hat_sc2');
             end
-            % Save overall IPM or 4-session IPM's
-            save(fullfile(studyDir{2},regDir,sprintf('glm%d',glm),outName),'G_hat_sc1','G_hat_sc2');
+            fprintf('IPM calculated for subj%d \n',sn(s));
+            clear Y partVec condVec
         end
+
     case 'PREP:avrg_betas'                   % STEP 11.10
         sn=varargin{1};
         study=varargin{2}; % studyNum
