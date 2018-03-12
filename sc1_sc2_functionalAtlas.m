@@ -31,7 +31,6 @@ switch what
             H=addstruct(H,T);
             clear T
         end
-        
         sn=unique(H.SN);
         
         % get session average for each study separately
@@ -272,7 +271,7 @@ switch what
         ttest(sqrt(A.within1.*A.within2),A.across,2,'paired');
         
     case 'REPRESENTATION:get_distances'
-        type=varargin{1}; % 'cortex' or 'cerebellum'
+        type=varargin{1}; % 'cerebellum'
         removeMotor=varargin{2}; % 'hands','saccades','all','none'
         
         load(fullfile(studyDir{2},regDir,'glm4',sprintf('G_hat_sc1_sc2_%s.mat',type)))
@@ -314,7 +313,7 @@ switch what
         varargout={fullRDM,T,X};
     case 'REPRESENTATION:reliability'
         glm=varargin{1};
-        type=varargin{2}; % 'cerebellum' or 'cortex'
+        type=varargin{2}; % 'cerebellum'
         % example 'sc1_sc2_imana('CHECK:DIST',4,'cerebellum')
         
         load(fullfile(regDir,sprintf('glm%d',glm),sprintf('G_hat_sc1_sc2_sess_%s.mat',type)));
@@ -344,7 +343,7 @@ switch what
             T.across(i,1)  = mean(mean(CORR(1:2,3:4,i)));
         end;
         
-        save(fullfile(studyDir{2},regDir,'glm4','distanceReliability.mat'),'T','dist')
+        save(fullfile(studyDir{2},regDir,'glm4',sprintf('distanceReliability_%s.mat'),type),'T','dist')
     case 'FIGURES:RDM'
         % load in fullRDM
         [fullRDM,T,~]=sc1_sc2_functionalAtlas('REPRESENTATION:get_distances','cerebellum','none');
@@ -451,6 +450,18 @@ switch what
         inputDir=which(inputImages{2});
         cd(fileparts(inputDir))
         suit_mni2suit(inputImages{2})
+    case 'CONVERT:cifti2paint'
+        inputImages={'CortexSubcortex_ColeAnticevic_NetPartition_netassignments_v1_R.dlabel.nii',...
+            'CortexSubcortex_ColeAnticevic_NetPartition_parcels_v1_L.dlabel.nii'};
+        
+        inputImage=which(inputImages{1});
+        cd(fileparts(inputImage))
+        
+        % Read CIFTI
+        cii=ft_read_cifti(inputImage);
+        
+        LH=cii.x1(cii.brainstructure==1); % LH is 1
+        RH=cii.x1(cii.brainstructure==2); % RH is 2
         
     case 'MAP:vol2surf'
         % this function takes any labelled volume (already in SUIT space)
@@ -1337,16 +1348,16 @@ switch what
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
         studyNum=varargin{4}; % if evaluating on 1,4: studyNum=2; if evaluating on 2,studyNum=1
         
-        %K=[50:5:95,5:24]; % whatever is hardcoded here will determine ICA or SNN
-        % what are we plotting ? SNN or ICA maps ?
-        %         for k=1:length(K),
-        %             if max(K)<50,
-        %                 toPlot{k}=sprintf('SC%d_%dcluster',studyNum,K(k));
-        %             else
-        %                 toPlot{k}=sprintf('SC%d_%dPOV',studyNum,K(k));
-        %             end
-        %         end
-        toPlot={'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC2_9cluster','SC2_90POV'};
+        K=[50:5:95]; % whatever is hardcoded here will determine ICA or SNN
+        %what are we plotting ? SNN or ICA maps ?
+                for k=1:length(K),
+                    if max(K)<50,
+                        toPlot{k}=sprintf('SC%d_%dcluster',studyNum,K(k));
+                    else
+                        toPlot{k}=sprintf('SC%d_%dPOV',studyNum,K(k));
+                    end
+                end
+        %toPlot={'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC2_9cluster','SC2_90POV'};
         
         
         if exist('K'),
