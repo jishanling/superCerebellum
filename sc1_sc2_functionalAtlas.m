@@ -2,7 +2,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+%baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
@@ -443,14 +443,14 @@ switch what
         wysiwyg;
         ttest(sqrt(T.within1.*T.within2),T.across,2,'paired');
         
-    case 'CONVERT:mni2suit'
+    case 'CONVERT:mni2suit' % converts from mni image to SUIT (there's also a cifti2nii if image is coming from HCP)
         inputImages={'N2C_subcortex_atlas_subcortexGSR.nii',...
             'Buckner2011_7Networks_MNI152_FreeSurferConformed1mm_TightMask.nii'};
         
         inputDir=which(inputImages{2});
         cd(fileparts(inputDir))
         suit_mni2suit(inputImages{2})
-    case 'CONVERT:cifti2paint'
+    case 'CONVERT:cifti2paint' % haven't finished this yet but want to make paint files from the cifti surface files 
         inputImages={'CortexSubcortex_ColeAnticevic_NetPartition_netassignments_v1_R.dlabel.nii',...
             'CortexSubcortex_ColeAnticevic_NetPartition_parcels_v1_L.dlabel.nii'};
         
@@ -462,7 +462,25 @@ switch what
         
         LH=cii.x1(cii.brainstructure==1); % LH is 1
         RH=cii.x1(cii.brainstructure==2); % RH is 2
-        
+    case 'CONVERT:makelob10'   % this makes lob10 map out of lob26 map
+          V=spm_vol(fullfile(studyDir{2},'encoding','glm4','groupEval_lob26','map.nii')); 
+          Vi=spm_read_vols(V); 
+          
+          % consolidate lob26 into lob10 (clunky but works)
+          labelsOld=[0:34];
+          labelsNew=[0,1,1,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10,0,0,0,0,0,0]; 
+          
+          tmp=Vi(:);
+          for l=1:length(labelsOld),
+              tmp(tmp==labelsOld(l))=labelsNew(l);
+          end
+          
+          % reconstruct and write out to volume
+          Vi=reshape(tmp,[V.dim]); 
+          outName=(fullfile(studyDir{2},'encoding','glm4','groupEval_lob10')); dircheck(outName)
+          V.fname=fullfile(outName,'map.nii');
+          spm_write_vol(V,Vi);
+
     case 'MAP:vol2surf'
         % this function takes any labelled volume (already in SUIT space)
         % and plots to the surface
@@ -516,7 +534,7 @@ switch what
         % Set the String correctly
         studyStr = sprintf('SC%d',study);
         if length(study)>1
-            studyStr='sc12';
+            studyStr='SC12'; % both studies combined
         end
         
         % Set output File name
@@ -584,19 +602,19 @@ switch what
         % Set the String correctly
         studyStr = sprintf('SC%d',study);
         if length(study)>1
-            studyStr='AtlasFinal';
+            studyStr='SC12'; % both studies combined
         end
         
         % Set output File name
         switch type,
             case 'group'
                 sn=returnSubjs;
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%dPOV',studyStr,K));
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%dPOV',studyStr,threshold));
                 dircheck(outDir);
                 outName=fullfile(outDir,'ICAs.mat');
             case 'indiv'
                 outDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
-                outName=fullfile(outDir,sprintf('ICAs_%s_%dPOV.mat',studyStr,K));
+                outName=fullfile(outDir,sprintf('ICAs_%s_%dPOV.mat',studyStr,threshold));
         end
         
         % get data
@@ -606,37 +624,6 @@ switch what
         [A_PW,S_PW,W_PW,winner]=pca_ica(X_C,'threshold',threshold);
         
         save(outName,'A_PW','S_PW','W_PW','volIndx','V');
-        
-        % Intialize iterations[G
-        %         bestSol = ones(size(X_C,1),1);
-        %         iter=1; % How many iterations
-        %         count=0;
-        %         K=K/100;
-        %         while iter<maxIter,
-        %             [F,G,~,winner]=pca_ica(X_C,'K',K); % .9 instead of 90
-        %             randInd(iter)=RandIndex(bestSol,winner);
-        %
-        %             % Check if we have a similar solution
-        %             if randInd(iter)>tol_rand % Similar solution
-        %                 count=count+1;       % count up one
-        %                 bestSol = winner;
-        %                 bestG   = G;
-        %                 bestF   = F;
-        %                 fprintf('RandIndex is %2.2f \n',randInd);
-        %             else                     % Different (enough) solution
-        %                 bestSol = winner;
-        %                 bestG   = G;
-        %                 bestF   = F;
-        %                 count = 0;         % first time we found this solution: reset counter
-        %                 fprintf('RandIndex is %2.2f \n',randInd);
-        %             end;
-        %             if count>=numCount || iter>=maxIter,
-        %                 fprintf('Existing loop....\n');
-        %                 break;
-        %             end;
-        %             iter=iter+1;
-        %         end;
-        %         save(outName,'bestG','bestF','randInd','iter','count','volIndx','V');
     case 'MAP:visualise'
         sn=varargin{1}; % [2] or 'group'
         study=varargin{2}; % 1 or 2 or [1,2]
@@ -708,58 +695,6 @@ switch what
             end
         end
         varargout={RI};
-    case 'MAP:final'
-        % example: 'sc1_sc2_functionalAtlas('ATLAS:finalMap',[2],1,13,'leaveOneOut')
-        K=varargin{1}; % number of clusters
-        metric=varargin{2}; % 'yes' or 'no'
-        
-        sn=returnSubjs;
-        dircheck(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_atlasFinal%d',K)));
-        outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_atlasFinal%d',K),'map.nii');
-        
-        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,[1,2],'build');
-        [F,G,Err1]=semiNonNegMatFac(X_C,K,'threshold',0.01);
-        save(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_atlasFinal%d',K),'parcels.mat'),'F','G','volIndx','V');
-        fprintf('final atlas created for %s \n',K)
-        
-        [~,groupFeat]=max(G,[],2);
-        
-        % map features on group
-        Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
-        Yy(1,volIndx)=groupFeat;
-        Yy=reshape(Yy,[V.dim(1),V.dim(2),V.dim(3)]);
-        Yy(Yy==0)=NaN;
-        Vv{1}.dat=Yy;
-        Vv{1}.dim=V.dim;
-        Vv{1}.mat=V.mat;
-        
-        % save out vol of feats
-        exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
-        X=spm_vol(exampleVol);
-        X.fname=outName;
-        X.private.dat.fname=V.fname;
-        spm_write_vol(X,Vv{1}.dat);
-        
-        % save out metric file
-        % map vol 2 surf
-        M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode','type','paint');
-        
-        switch metric,
-            case 'yes'
-                M.column_name={'atlasFinal'};
-                caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','atlasFinal.paint'),M);
-                % make areacolour
-                cmap=load(fullfile(studyDir{2},caretDir,'suit_flat','glm4','features.txt'));
-                M.column_name=M.paintnames;
-                M.column_color_mapping=repmat([-5 5],length(M.column_name),1);
-                M.data=cmap(1:length(M.column_name),2:4);
-                caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','atlasFinal.areacolor'),M);
-            case 'no'
-                figure()
-                title('final atlas')
-                data=suit_map2surf(Vv,'space','SUIT','stats','mode');
-                suit_plotflatmap(data,'type','label','cmap',colorcube(K))
-        end
     case 'MAP:plotMapErr'
         sn=varargin{1};     % 'group' or subjNum
         study=varargin{2};  % 1 or 2
@@ -875,50 +810,6 @@ switch what
         % center the data (remove overall mean)
         X_C=bsxfun(@minus,UFullAvrgAll,mean(UFullAvrgAll));
         varargout={X_C,volIndx,V,sn};
-    case 'EVAL:unCrossval:GROUP'
-        % code is written now so that func map is built on sc1+sc2 (allConds) and
-        % evaluated on sc1+sc2 (allConds)
-        mapType=varargin{1}; % options are 'lob10','lob26','Buckner_7Networks','Buckner_17Networks','Cole_12Networks', or 'atlasFinal<num>'
-        evalType=varargin{2}; % [1] [2] or [1,2]
-        
-        if size(evalType,2)==2,
-            outName='spatialBoundfunc3_all.mat';
-            outDir=fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),outName);
-        else
-            outName=sprintf('spatialBoundfunc%d.mat',evalType);
-            outDir=fullfile(studyDir{evalType},'encoding','glm4',sprintf('groupEval_%s',mapType),outName);
-        end
-        
-        % load in map
-        mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
-        
-        % load in func data (sc1+sc2) to test
-        [X_C,volIndx,V,sn] = sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,eval,'eval');
-        
-        % Now get the parcellation sampled into the same space
-        [i,j,k]=ind2sub(V.dim,volIndx);
-        [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
-        VA= spm_vol(mapName);
-        [i1,j1,k1]=spmj_affine_transform(x,y,z,inv(VA.mat));
-        Parcel = spm_sample_vol(VA,i1,j1,k1,0);
-        % Divide the voxel pairs into all the spatial bins that we want
-        fprintf('parcels\n');
-        voxIn = Parcel>0;
-        XYZ= [x;y;z];
-        RR=[];
-        [BIN,R]=mva_spatialCorrBin(XYZ(:,voxIn),'Parcel',Parcel(1,voxIn));
-        clear XYZ i k l x y z i1 j1 k1 VA Parcel; % Free memory
-        % Now calculate the uncrossvalidated estimation of the correlation for each subject
-        for s=1:length(sn),
-            B=X_C(:,:,s);
-            R.SN = ones(length(R.N),1)*sn(s);
-            fprintf('%d correl \n',sn(s));
-            R.corr=mva_spatialCorr(B,BIN);
-            R.crossval = zeros(length(R.corr),1);
-            RR = addstruct(RR,R);
-            fprintf('uncrossval eval done for subj %d \n',sn(s));
-        end;
-        save(outDir,'-struct','RR');
     case 'EVAL:crossval'
         sn=varargin{1}; % 'group' or <subjNum>
         mapType=varargin{2}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks', 'Cole_10Networks','SC<studyNum>_<num>cluster'
@@ -1049,53 +940,6 @@ switch what
         end;
         voxIn=volIndx(voxIn);
         save(outName,'RR','voxIn');
-    case 'EVAL:crossval:LEAVEONEOUT' % NEED TO UPDATE FOR SNN !!
-        sn=varargin{1}; % [2]
-        study=varargin{2}; % 1 or 2
-        var=varargin{3}; % .95
-        data=varargin{4}; % 'func1' or 'func2
-        
-        outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100),sprintf('spatialBound%s_eval_%s.mat',data,subj_name{sn}));
-        mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%dPOV',study,var*100),sprintf('map_leaveOut_%s.nii',subj_name{sn}));
-        
-        % load in func data to test
-        switch data
-            case 'func1'
-                load(fullfile(studyDir{1},'encoding','glm4','cereb_avrgDataStruct.mat'));
-            case 'func2'
-                load(fullfile(studyDir{2},'encoding','glm4','cereb_avrgDataStruct.mat'));
-        end
-        
-        % Now get the parcellation sampled into the same space
-        [i,j,k]=ind2sub(V.dim,volIndx);
-        [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
-        VA= spm_vol(mapName);
-        [i1,j1,k1]=spmj_affine_transform(x,y,z,inv(VA.mat));
-        Parcel = spm_sample_vol(VA,i1,j1,k1,0);
-        % Divide the voxel pairs into all the spatial bins that we want
-        fprintf('parcels\n');
-        voxIn = Parcel>0;
-        XYZ= [x;y;z];
-        RR=[];
-        [BIN,R]=mva_spatialCorrBin(XYZ(:,voxIn),'Parcel',Parcel(1,voxIn));
-        clear XYZ i k l x y z i1 j1 k1 VA Parcel; % Free memory
-        % Now calucalte the uncrossvalidated and crossvalidated
-        % Estimation of the correlation for each subject
-        i1 = find(T.SN==sn & T.sess==1);
-        i2 = find(T.SN==sn & T.sess==2);
-        D=(T.data(i1,voxIn)+T.data(i2,voxIn))/2; % why divide by 2 ?
-        
-        fprintf('%d cross\n',sn);
-        R.SN = ones(length(R.N),1)*sn;
-        R.corr = mva_spatialCorr(T.data([i1;i2],voxIn),BIN,...
-            'CrossvalPart',T.sess([i1;i2],1),'excludeNegVoxels',1);
-        R.crossval = ones(length(R.corr),1);
-        RR = addstruct(RR,R);
-        fprintf('%d correl\n',sn);
-        R.corr=mva_spatialCorr(D,BIN);
-        R.crossval = zeros(length(R.corr),1);
-        RR = addstruct(RR,R);
-        save(outName,'-struct','RR');
     case 'EVAL:averageK' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
         mapType=varargin{1}; % ex. '6cluster' (for snn) or '90POV' (for ica)
         condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
@@ -1210,27 +1054,6 @@ switch what
         end
         ylabel('Within/Between Diff')
         xlabel('Maps')
-    case 'EVAL:PLOT:(UN)CROSSVAL'
-        mapType=varargin{1}; % {'lob10','bucknerRest','atlasFinal9'}
-        data=varargin{2}; % evaluating data from study [1] or [2] or [4]? (not [3] - because there is no crossval)
-        condType=varargin{3}; % evaluating on 'unique' or 'all' ?
-        P=[];
-        for m=1:length(mapType),
-            T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d_%s.mat',data,condType)));
-            T.type=repmat({mapType{m}},length(T.bin),1);
-            T.m=repmat(m,length(T.bin),1);
-            P=addstruct(P,T);
-            clear T
-        end
-        %         pivottable(T.SN,[T.bin T.bwParcel],T.corr,'length','subset',T.crossval==crossval)
-        
-        % plot boxplot of different clusters
-        W=getrow(P,P.bwParcel==0); % within
-        B=getrow(P,P.bwParcel==1); % between
-        W.diff=W.corr-B.corr;
-        
-        lineplot([W.type],W.diff,'split',W.crossval,'leg',{'uncrossval','crossval'},'subset',W.dist<=35,'style_shade')
-        ylabel('Within/Between Diff')
     case 'EVAL:PLOT:INDIV' % NEED TO UPDATE FOR SNN !!
         study=varargin{1};
         var=varargin{2};
@@ -1350,13 +1173,13 @@ switch what
         
         K=[50:5:95,96:100]; % whatever is hardcoded here will determine ICA or SNN
         %what are we plotting ? SNN or ICA maps ?
-                for k=1:length(K),
-                    if max(K)<50,
-                        toPlot{k}=sprintf('SC%d_%dcluster',studyNum,K(k));
-                    else
-                        toPlot{k}=sprintf('SC%d_%dPOV',studyNum,K(k));
-                    end
-                end
+        for k=1:length(K),
+            if max(K)<50,
+                toPlot{k}=sprintf('SC%d_%dcluster',studyNum,K(k));
+            else
+                toPlot{k}=sprintf('SC%d_%dPOV',studyNum,K(k));
+            end
+        end
         %toPlot={'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC2_9cluster','SC2_90POV'};
         
         
