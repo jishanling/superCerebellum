@@ -2,7 +2,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-%baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
@@ -516,7 +516,7 @@ switch what
         % Set the String correctly
         studyStr = sprintf('SC%d',study);
         if length(study)>1
-            studyStr='AtlasFinal';
+            studyStr='sc12';
         end
         
         % Set output File name

@@ -22,11 +22,19 @@ function [corr,T,varargout]=mva_spatialCorr(Data,BIN,varargin)
 CrossvalPart =[]; 
 excludeNegVoxels = 1; 
 saveVox = 'no'; 
-vararginoptions(varargin,{'CrossvalPart','excludeNegVoxels','saveVox'}); 
+numBins =[]; 
+verbose =0; 
+vararginoptions(varargin,{'CrossvalPart','excludeNegVoxels','numBins','verbose','saveVox'}); 
 
-numBins = max(BIN(:)); 
 
-fprintf('cov'); 
+if (isempty(numBins))
+    numBins = max(BIN(:)); 
+end; 
+
+if (verbose) 
+    fprintf('cov'); 
+end; 
+
 if (~isempty(CrossvalPart)) 
     numPart = max(CrossvalPart); 
     if numPart>2 
@@ -60,7 +68,9 @@ end;
 %clear VAR;
 
 % And finally Covariance 
-fprintf('cov'); 
+if (verbose) 
+    fprintf('cov'); 
+end; 
 if (~isempty(CrossvalPart)) 
     COV = Data(i1,:)'*Data(i2,:)/K; 
 else

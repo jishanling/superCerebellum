@@ -2,6 +2,8 @@ function varargout=sc1sc2_spatialAnalysis(what,varargin)
 % Does some specific spatial analyses on the cerebellum - to be added later
 % to the final analysis routine
 baseDir = '/Users/jdiedrichsen/Data/super_cerebellum_new';
+baseDir = '/Volumes/MotorControl/Data/super_cerebellum_new';
+
 studyDir{1}     =fullfile(baseDir,'sc1');
 studyDir{2}     =fullfile(baseDir,'sc2');
 suitDir         ='/suit';
@@ -307,7 +309,245 @@ switch(what)
         
         % save out vol of ICA feats
         data=suit_map2surf(V,'space','SUIT','stats',stats);
-        suit_plotflatmap(data,'type',type,'cmap',cmap)
+        suit_plotflatmap(data,'type',type,'cmap',cmap); 
+        
+        P=caret_struct('paint','data',data); 
+        varargout={P}; 
+    case 'EVALBOUND:getBoundaries'  
+        % This goes from a group parcellation map and generates a 
+        % structure of clusters and boundaries from the volume 
+        mapType = varargin{1}; 
+        bDir    = fullfile(studyDir{2},'encoding','glm4'); 
+        EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
+        load(fullfile(bDir,'cereb_avrgDataStruct.mat'));
+        mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
+
+        % Get the parcellation data 
+        [i,j,k]=ind2sub(V.dim,volIndx);
+        [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
+        VA= spm_vol(mapName);
+        [i1,j1,k1]=spmj_affine_transform(x,y,z,inv(VA.mat));
+        Parcel = spm_sample_vol(VA,i1,j1,k1,0);
+        
+        % Find unique clusters for each parcel
+        numParcel = 28; % max(Parcel); 
+        Cluster = nan(size(Parcel)); 
+        n=1; 
+        coords=[i;j;k];     % Voxel coordinates in original image 
+        for p=1:numParcel
+            indx = find(Parcel==p);
+            A= spm_clusters(coords(:,indx)); 
+            numCluster=max(A);
+            for c=1:numCluster 
+                clInd = (A==c); 
+                N=sum(clInd); 
+                if N>=5  % ignore clusters of smaller than 5 
+                    Cluster(indx(clInd))=n; 
+                    n=n+1; 
+                end;
+            end; 
+        end; 
+        
+        % Check how assignment went 
+        pivottable(Cluster',Parcel',Cluster','length','subset',~isnan(Cluster')); 
+        
+        % Now detect boundaries between adjacent parcels 
+        numCluster = max(Cluster); 
+        n=1; 
+        for i=1:numCluster
+            for j=i+1:numCluster
+                D=surfing_eucldist(coords(:,Cluster==i),coords(:,Cluster==j)); 
+                if min(D(:))< 1.4 % direct connectivity scheme 
+                    Edge(n,:) = [i j]; 
+                    n=n+1; 
+                end; 
+            end; 
+        end; 
+        
+        % Visualise using graph toolbox 
+        G = graph(Edge(:,1),Edge(:,2));
+        plot(G)
+        save(fullfile(EvalDir,'boundaries.mat'),'V','volIndx','Parcel','Cluster','coords','Edge'); 
+    case 'EVALBOUND:evalBoundaries'  
+        mapType = varargin{1}; 
+        study   = varargin{2}; % evaluating data from study [1] or [2] ?
+
+        spatialBins = [0:3:20]; 
+        condType    = 'all'; 
+        
+        bDir    = fullfile(studyDir{2},'encoding','glm4'); 
+        EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
+        load(fullfile(EvalDir,'boundaries.mat'));
+        numBins = length(spatialBins)-1; 
+
+        % Get the condition numbers 
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        D1=getrow(D,D.StudyNum==study);
+        switch condType,
+            case 'unique'
+                % if funcMap - only evaluate unique tasks in sc1 or sc2
+                idx=D1.condNum(D1.overlap==0); % get index for unique tasks
+            case 'all'
+                idx=D1.condNum;
+        end; 
+        
+        % Load activity data 
+        load(fullfile(studyDir{study},encodeDir,'glm4','cereb_avrgDataStruct.mat'));
+        RR=[];    % Output structure. 
+        
+        % Now build a structure all boundaries
+        for i=1:size(Edge,1) 
+            indx = Cluster==Edge(i,1) | Cluster==Edge(i,2);  % Get all the involved voxels  
+            fprintf('Edge %d %d\n',Edge(i,1),Edge(i,2)); 
+            
+            % Determine the spatial bins for this pair of regions 
+            [BIN,R]=mva_spatialCorrBin(coords(:,indx),'Parcel',Cluster(indx)','spatialBins',spatialBins);
+            N=length(R.N); 
+            
+            % Now determine the correlation for each subject 
+            for s=unique(T.SN)';
+                fprintf('Subj:%d\n',s); 
+                for c=1:length(idx),
+                    i1(c) = find(T.SN==s & T.sess==1 & T.cond==idx(c));
+                    i2(c) = find(T.SN==s & T.sess==2 & T.cond==idx(c));
+                end
+                D=(T.data(i1,indx)+T.data(i2,indx))/2; % average data 
+                fprintf('%d cross\n',s);
+                R.Edge = repmat(Edge(i,:),N,1);
+                R.SN = ones(N,1)*s;
+                R.corr = mva_spatialCorr(T.data([i1;i2],indx),BIN,...
+                    'CrossvalPart',T.sess([i1;i2],1),'excludeNegVoxels',1,'numBins',N);
+                R.crossval = ones(N,1);
+                if (length(R.corr)~=N)
+                    keyboard; 
+                end; 
+                RR = addstruct(RR,R);
+                fprintf('%d correl\n',s);
+                R.corr=mva_spatialCorr(D,BIN,'numBins',N);
+                R.crossval = zeros(N,1);
+                if (length(R.corr)~=N)
+                    keyboard; 
+                end; 
+                RR = addstruct(RR,R);
+            end;
+        end; 
+        varargout={RR}; 
+        
+    case 'EVALBOUND:fullEval'   % Evaluate a parcellation on both studies and save
+        mapType = varargin{1}; 
+        EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
+        
+        T1=sc1sc2_spatialAnalysis('EVALBOUND:evalBoundaries',mapType,1);
+        T2=sc1sc2_spatialAnalysis('EVALBOUND:evalBoundaries',mapType,2);
+        T1.study = ones(length(T1.SN),1)*1; 
+        T2.study = ones(length(T1.SN),1)*2; 
+        T=addstruct(T1,T2); 
+        save(fullfile(EvalDir,'BoundariesFunc3_all.mat'),'-struct','T');
+        varargout={T}; 
+    case 'EVALBOUND:visualize' % Generates metric file and border file for the pacellation 
+        mapType = varargin{1}; 
+        EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
+        SurfDir = fullfile(studyDir{1},'surfaceCaret','suit_flat')
+        load(fullfile(EvalDir,'boundaries.mat'));
+        
+        % Map the clusters  
+        V.dat=zeros([V.dim(1) V.dim(2) V.dim(3)]);
+        V.dat(volIndx)=Cluster;               
+        Mcl=suit_map2surf(V,'space','SUIT','stats','mode','stats',@mode);
+
+        % Map the parcel 
+        V.dat(volIndx)=Parcel;
+        Mpa=suit_map2surf(V,'space','SUIT','stats','mode','stats',@mode);
+                
+        % Determine the border points 
+        COORD=gifti(fullfile('FLAT.coord.gii'));
+        TOPO=gifti(fullfile('CUT.topo.gii'));
+        
+        % Make matrix of all the unique edges of the flatmap 
+        Tedges=[TOPO.faces(:,[1 2]);TOPO.faces(:,[2 3]);TOPO.faces(:,[1 3])]; % Take 3 edges from the faces 
+        Tedges= [min(Tedges,[],2) max(Tedges,[],2)];     % Sort in ascending order  
+        Tedges = unique(Tedges,'rows');                  % Only retain each edge ones 
+        EdgeCl=Mcl(Tedges);                              % Which cluster does each node belong to? 
+        EdgeCl= [min(EdgeCl,[],2) max(EdgeCl,[],2)];     % Sort in ascending order  
+        
+        % Assemble the edges that lie on the boundary between clusters       
+        for  i=1:size(Edge,1) 
+            indxEdge = find(EdgeCl(:,1)==Edge(i,1) & EdgeCl(:,2)==Edge(i,2)); 
+            Border(i).numpoints=length(indxEdge); 
+            for e=1:length(indxEdge)
+                % find the boundary point: In the middle of the edge 
+                Border(i).data(e,:)=(COORD.vertices(Tedges(indxEdge(e),1),:)+...
+                                     COORD.vertices(Tedges(indxEdge(e),2),:))/2; % Average of coordinates 
+            end; 
+        end;
+        
+        % Evaluate the strength of each border 
+        T=load(fullfile(EvalDir,'BoundariesFunc3_all.mat'));
+        for  i=1:size(Edge,1) 
+            % Make sure that the bin is calcualted both for within and
+            % between
+            A=pivottable(T.bin,T.bwParcel,T.corr,'nanmean','subset',T.crossval==1 & ...
+                T.Edge(:,1)==Edge(i,1) & T.Edge(:,2)==Edge(i,2)); 
+            EdgeWeight(i,1)=nanmean(diff(A,[],2));  % Difference between within and between 
+        end; 
+        
+        % Make the plot 
+        suit_plotflatmap(Mpa,'type','label','border',[],'cmap',colorcube(max(Parcel))); 
+        hold on; 
+        for  b=1:length(Border)
+            if (Border(b).numpoints>0 & EdgeWeight(b)>0)
+                p=plot(Border(b).data(:,1),Border(b).data(:,2),'k.');
+                set(p,'MarkerSize',EdgeWeight(b)*300);
+            end; 
+        end; 
+        hold off; 
+
+        keyboard; 
+    case 'EVALBOUND:unCrossval:GROUP'
+        % code is written now so that func map is built on sc1+sc2 (allConds) and
+        % evaluated on sc1+sc2 (allConds)
+        mapType=varargin{1}; % options are 'lob10','lob26','Buckner_7Networks','Buckner_17Networks','Cole_12Networks', or 'atlasFinal<num>'
+        evalType=varargin{2}; % [1] [2] or [1,2]
+        
+        if size(evalType,2)==2,
+            outName='spatialBoundfunc3_all.mat';
+            outDir=fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),outName);
+        else
+            outName=sprintf('spatialBoundfunc%d.mat',evalType);
+            outDir=fullfile(studyDir{evalType},'encoding','glm4',sprintf('groupEval_%s',mapType),outName);
+        end
+        
+        % load in map
+        mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
+        
+        % load in func data (sc1+sc2) to test
+        [X_C,volIndx,V,sn] = sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,eval,'eval');
+        
+        % Now get the parcellation sampled into the same space
+        [i,j,k]=ind2sub(V.dim,volIndx);
+        [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
+        VA= spm_vol(mapName);
+        [i1,j1,k1]=spmj_affine_transform(x,y,z,inv(VA.mat));
+        Parcel = spm_sample_vol(VA,i1,j1,k1,0);
+        % Divide the voxel pairs into all the spatial bins that we want
+        fprintf('parcels\n');
+        voxIn = Parcel>0;
+        XYZ= [x;y;z];
+        RR=[];
+        [BIN,R]=mva_spatialCorrBin(XYZ(:,voxIn),'Parcel',Parcel(1,voxIn));
+        clear XYZ i k l x y z i1 j1 k1 VA Parcel; % Free memory
+        % Now calculate the uncrossvalidated estimation of the correlation for each subject
+        for s=1:length(sn),
+            B=X_C(:,:,s);
+            R.SN = ones(length(R.N),1)*sn(s);
+            fprintf('%d correl \n',sn(s));
+            R.corr=mva_spatialCorr(B,BIN);
+            R.crossval = zeros(length(R.corr),1);
+            RR = addstruct(RR,R);
+            fprintf('uncrossval eval done for subj %d \n',sn(s));
+        end;
+        save(outDir,'-struct','RR');
+
 end;
 
 % InterSubj Corr
