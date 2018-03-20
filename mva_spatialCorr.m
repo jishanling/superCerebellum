@@ -83,7 +83,7 @@ T.corr=T.meanCOV./sqrt(T.meanVAR);
 corr = T.corr; 
 
 % save out voxel-wise corr (binned)
-if strcmp('saveVox','yes'),
+if strcmp(saveVox,'yes'),
     % voxel-wise correlations
     corrVox = COV./sqrt(VAR);
     % binned voxel-wise correlations (probably a faster way of doing this ..)
