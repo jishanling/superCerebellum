@@ -99,7 +99,7 @@ switch(what)
         xlabels={'overall','0-0.5','0.5-1','1-1.5','1.5-2','>2'}
         T=varargin{1}; % Input from case 'intersubjectCorrSpatial'
         T=tapply(T,{'subj','freq'},{'withinSubj'},{'betweenSubj'},{'totSS'},'subset',ismember(T.subj,returnSubjs));
-        T.freqK = T.freq>0; 
+        T.freqK = T.freq>0;
         [ss,sn]=pivottable(T.subj,[],T.totSS,'mean','subset',T.freq==0);
         a(sn,1)=ss;
         T.relSS=T.totSS./a(T.subj);
@@ -113,7 +113,7 @@ switch(what)
         lineplot([T.freqK T.freq],[T.withinSubj T.betweenSubj],'style_thickline','leg',{'within','between'});
         ylabel('Correlationa');
         xlabel('Cycles/cm');
-        drawline(0,'dir','horz'); 
+        drawline(0,'dir','horz');
         set(gca,'XTickLabel',xlabels);
         title('Within and between-subject correlation');
         set(gcf,'PaperPosition',[2 2 4.5 5.5]);
@@ -121,8 +121,8 @@ switch(what)
     case 'freqPlot'
         exper= varargin{1};
         sn   = [26 26 27];
-        se   = [1 2 1]; 
-        con  = varargin{2}; 
+        se   = [1 2 1];
+        con  = varargin{2};
         
         frequencyBands  = [0 0.5 1.5 2 inf];
         load(fullfile(studyDir{exper},'encoding','glm4','cereb_avrgDataStruct.mat'));
@@ -133,10 +133,10 @@ switch(what)
             X=zeros(V.dim);
             X(volIndx)=S.data;
             X(isnan(X))=0;
-                    % Y=mva_frequency3D(X,frequencyBands,'Voxelsize',[2 2 2],'plotSlice',15);
-            figure(i); 
-            set(gcf,'PaperPosition',[2 2 4 12]); 
-            wysiwyg; 
+            % Y=mva_frequency3D(X,frequencyBands,'Voxelsize',[2 2 2],'plotSlice',15);
+            figure(i);
+            set(gcf,'PaperPosition',[2 2 4 12]);
+            wysiwyg;
             Y=mva_frequency3D(X,frequencyBands,'Voxelsize',[2 2 2],'plotSlice',22,'numRows',5);
         end;
     case 'functionalBounds'
@@ -244,7 +244,7 @@ switch(what)
         Err2(end)
     case 'SNN:make_map'
         % example: 'sc1_sc2_functionalAtlas('ICA:make_map',[2],1,.95)
-        sn=varargin{1}; % subject numbers 
+        sn=varargin{1}; % subject numbers
         study=varargin{2}; % 1 or 2 or [1,2]
         K=varargin{3};       % Number of clusters
         % figure out if individual or group or leave one out
@@ -255,55 +255,55 @@ switch(what)
         save(fullfile(outName),'F','G','volIndx','V');
     case 'SNN:check_convergence'
         % example: 'sc1_sc2_functionalAtlas('ICA:make_map',[2],1,.95)
-        sn=varargin{1}; % subject numbers 
+        sn=varargin{1}; % subject numbers
         study=varargin{2}; % 1 or 2 or [1,2]
         K=varargin{3};       % Number of clusters
-        D=[]; 
-        numFits=10; 
+        D=[];
+        numFits=10;
         % figure out if individual or group or leave one out
         [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
         for i=1:numFits
-            fprintf('%d\n',i); 
+            fprintf('%d\n',i);
             [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01);
-            [~,Cl(:,i)]=max(G,[],2); 
-            D=addstruct(D,Info);    
-        end; 
-        for i=1:numFits 
+            [~,Cl(:,i)]=max(G,[],2);
+            D=addstruct(D,Info);
+        end;
+        for i=1:numFits
             for j=1:numFits
-                fprintf('%d,%d\n',i,j); 
-                RI(i,j)=RandIndex(Cl(:,i),Cl(:,j)); 
-            end; 
-        end; 
+                fprintf('%d,%d\n',i,j);
+                RI(i,j)=RandIndex(Cl(:,i),Cl(:,j));
+            end;
+        end;
         subplot(3,1,[1:2])
         imagesc(RI)
         colorbar
         subplot(3,1,3)
-        plot([1:10]',D.error); 
-        keyboard; 
-    case 'visualise_map' % Plot any data on the cerebellar flatmap 
-        data = varargin{1};     % Data to plot 
+        plot([1:10]',D.error);
+        keyboard;
+    case 'visualise_map' % Plot any data on the cerebellar flatmap
+        data = varargin{1};     % Data to plot
         volIndx = varargin{2};  % Indices into the volume (mask)
-        V = varargin{3};        % Cerebellar suit volume 
-        cmap = [];  
+        V = varargin{3};        % Cerebellar suit volume
+        cmap = [];
         type = 'label';     % func / label
-        vararginoptions(varargin(4:end),{'cmap','type'}); 
+        vararginoptions(varargin(4:end),{'cmap','type'});
         
         % map features on group
         V.dat=zeros([V.dim(1) V.dim(2) V.dim(3)]);
-        V.dat(volIndx)=data;               
+        V.dat(volIndx)=data;
         
         switch (type)
             case 'label'
-                stats = 'mode'; 
+                stats = 'mode';
                 if (isempty(cmap))
-                    cmap = colorcube(max(data)); 
-                end; 
+                    cmap = colorcube(max(data));
+                end;
             case 'func'
-                stats = 'nanmean'; 
+                stats = 'nanmean';
                 if (isempty(cmap))
-                    cmap = hot; 
-                end; 
-        end; 
+                    cmap = hot;
+                end;
+        end;
         
         % save out vol of ICA feats
         data=suit_map2surf(V,'space','SUIT','stats',stats);
