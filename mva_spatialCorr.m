@@ -94,4 +94,4 @@ if strcmp('saveVox','yes'),
         end
     end
 end
-varargout={'binCorrVox'}; 
+varargout={binCorrVox}; 
