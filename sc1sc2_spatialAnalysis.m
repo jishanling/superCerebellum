@@ -458,23 +458,24 @@ switch(what)
         % Map the parcel 
         V.dat(volIndx)=Parcel;
         Mpa=suit_map2surf(V,'space','SUIT','stats','mode','stats',@mode);
-        
-        
+                
         % Determine the border points 
         COORD=gifti(fullfile('FLAT.coord.gii'));
         TOPO=gifti(fullfile('CUT.topo.gii'));
-        % Make edges structure 
-        Tedges=[TOPO.faces(:,[1 2]);TOPO.faces(:,[2 3]);TOPO.faces(:,[1 3])];
-        Tedges= [min(Tedges,[],2) max(Tedges,[],2)]; % Sort in ascending order  
-        Tedges = unique(Tedges,'rows');                  % Only retain each edge ones 
-        EdgeCl=Mcl(Tedges);                                  % Which cluster does each node belong to? 
-        EdgeCl= [min(EdgeCl,[],2) max(EdgeCl,[],2)]; % Sort in ascending order  
         
-        % Assemble the edges that lie on each edge between clusters       
+        % Make matrix of all the unique edges of the flatmap 
+        Tedges=[TOPO.faces(:,[1 2]);TOPO.faces(:,[2 3]);TOPO.faces(:,[1 3])]; % Take 3 edges from the faces 
+        Tedges= [min(Tedges,[],2) max(Tedges,[],2)];     % Sort in ascending order  
+        Tedges = unique(Tedges,'rows');                  % Only retain each edge ones 
+        EdgeCl=Mcl(Tedges);                              % Which cluster does each node belong to? 
+        EdgeCl= [min(EdgeCl,[],2) max(EdgeCl,[],2)];     % Sort in ascending order  
+        
+        % Assemble the edges that lie on the boundary between clusters       
         for  i=1:size(Edge,1) 
             indxEdge = find(EdgeCl(:,1)==Edge(i,1) & EdgeCl(:,2)==Edge(i,2)); 
             Border(i).numpoints=length(indxEdge); 
             for e=1:length(indxEdge)
+                % find the boundary point: In the middle of the edge 
                 Border(i).data(e,:)=(COORD.vertices(Tedges(indxEdge(e),1),:)+...
                                      COORD.vertices(Tedges(indxEdge(e),2),:))/2; % Average of coordinates 
             end; 
@@ -483,9 +484,11 @@ switch(what)
         % Evaluate the strength of each border 
         T=load(fullfile(EvalDir,'BoundariesFunc3_all.mat'));
         for  i=1:size(Edge,1) 
+            % Make sure that the bin is calcualted both for within and
+            % between
             A=pivottable(T.bin,T.bwParcel,T.corr,'nanmean','subset',T.crossval==1 & ...
                 T.Edge(:,1)==Edge(i,1) & T.Edge(:,2)==Edge(i,2)); 
-            EdgeWeight(i,1)=nanmean(diff(A,[],2)); 
+            EdgeWeight(i,1)=nanmean(diff(A,[],2));  % Difference between within and between 
         end; 
         
         % Make the plot 
@@ -494,7 +497,7 @@ switch(what)
         for  b=1:length(Border)
             if (Border(b).numpoints>0 & EdgeWeight(b)>0)
                 p=plot(Border(b).data(:,1),Border(b).data(:,2),'k.');
-                set(p,'MarkerSize',20); % EdgeWeight(b)*300);
+                set(p,'MarkerSize',EdgeWeight(b)*300);
             end; 
         end; 
         hold off; 
