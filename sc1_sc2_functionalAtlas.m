@@ -1348,7 +1348,7 @@ switch what
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
         studyNum=varargin{4}; % if evaluating on 1,4: studyNum=2; if evaluating on 2,studyNum=1
         
-        K=[50:5:95]; % whatever is hardcoded here will determine ICA or SNN
+        K=[50:5:95,96:100]; % whatever is hardcoded here will determine ICA or SNN
         %what are we plotting ? SNN or ICA maps ?
                 for k=1:length(K),
                     if max(K)<50,
