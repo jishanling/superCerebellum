@@ -12,6 +12,8 @@ caretDir        ='/surfaceCaret';
 regDir          ='/RegionOfInterest/';
 encodeDir       ='/encoding';
 
+run = {'01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16'};
+
 subj_name = {'s01','s02','s03','s04','s05','s06','s07','s08','s09','s10','s11',...
     's12','s13','s14','s15','s16','s17','s18','s19','s20','s21','s22','s23','s24',...
     's25','s26','s27','s28','s29','s30','s31'};
@@ -22,190 +24,156 @@ switch what
     
     case 'TASKSPACE:overlap'
         
-    case 'ACTIVITY:get_data'
-        % load in allSubjs data struct from sc1 & sc2
-        H=[];
-        for study=1:2,
-            load(fullfile(studyDir{study},encodeDir,'glm4','cereb_avrgDataStruct.mat'));
-            T.studyNum=repmat(study,size(T.SN,1),1);
-            H=addstruct(H,T);
-            clear T
-        end
-        sn=unique(H.SN);
+    case 'ACTIVITY:encoding'  % this case runs 35 models (all cross-validated with fixed lambda)
+        sn=varargin{1};
+        study=varargin{2};
         
-        % get session average for each study separately
-        for s=1:length(sn),
-            idx=1;
-            for study=1:2,
-                numConds=length(unique(H.cond(H.studyNum==study)));
-                for c=1:numConds, % get average across sessions
-                    indx = H.cond==c & H.studyNum==study & H.SN==(sn(s));
-                    avrgData(idx,:)=nanmean(H.data(indx,:),1);
-                    idx=idx+1;
-                    clear indx
+        lambdas=[.01:.1:.5];
+        subjs=length(sn);
+        l=1;
+        
+        % load X
+        [X,M,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:featModel',study,'yes');
+        
+        % loop over subjects
+        Ys=[];
+        for s=1:subjs,
+            
+            encodeSubjDir = fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn(s)}); % set directory
+            
+            % load Y (per subj)
+            load(fullfile(encodeSubjDir,'Y_info_glm4_grey_nan.mat'));
+            Yp=getrow(Y,Y.cond~=0);
+            
+            % loop over models
+            for m=1:length(M.modelIdx),
+                
+                % modify X
+                Xm=X(:,M.modelIdx{m});
+                
+                % normalise
+                N = (numConds)*numel(run);
+                B = indicatorMatrix('identity',Yp.run);
+                R  = eye(N)-B*pinv(B);
+                Xm = R*Xm;            % Subtract block mean (from X)
+                Xm=bsxfun(@rdivide,Xm,sqrt(sum(Xm.*Xm)/(size(Xm,1)-numel(run))));
+                Yact = R*Yp.data;    % Subtract block mean (from Y)
+                Yact=bsxfun(@rdivide,Yact,sqrt(sum(Yact.*Yact)/(size(Yact,1)-numel(run))));
+                
+                % run encoding model (+ ridge regress) 
+                [M.R2(m,1),~,M.R2_vox(m,:)]=encode_crossval(Yact,Xm,Yp.run,'ridgeFixed','lambda',lambdas(l));
+                
+                M.modelNum(m,1)=m; % modelNum
+                M.lambdas(m,1)=l;
+                fprintf('subj%d:model %s ...\n',sn(s),M.modelNames{m})
+                clear Xm
+            end
+            M.SN=repmat(sn(s),m,1);
+            M.idx=repmat(Yp.nonZeroInd(1,:),m,1);
+            Ys=addstruct(Ys,M);
+            clear Yp
+        end
+        
+        % save out results
+        save(fullfile(studyDir{study},encodeDir,'glm4','encode_models.mat'),'Ys','-v7.3');
+    case 'ACTIVITY:featModel' % this makes X - the feature model
+        study=varargin{1}; % studyNum
+        type=varargin{2};  % 'yes' or 'no' to modelling each run separately ?
+        
+        F=dload(fullfile(baseDir,'motorFeats.txt')); % load in motor features
+        
+        Fs=getrow(F,F.studyNum==study);
+        numConds=length(Fs.studyNum);
+        
+        % make feature model
+        x=[eye(numConds) Fs.lHand./Fs.duration Fs.rHand./Fs.duration Fs.saccades./Fs.duration];
+        
+        switch type,
+            case 'yes'
+                % make cond x run x features
+                for f=1:size(x,2),
+                    X.x(:,f)=repmat(x(:,f),numel(run),1);
+                    X.idx=repmat(Fs.condNum,numel(run),1);
                 end
-                fprintf('subj%d averaged sessions for study%d \n',sn(s),study)
-            end
-            % subtract condition avrg baseline (across 61-1 conditions)
-            all=[1:size(avrgData,1)];
-            for c=1:size(avrgData,1),
-                X=nanmean(avrgData(all(all~=c),:),1);
-                data(c,:,s)=avrgData(c,:)-X;
-            end
-            clear avrgData
-            fprintf('subj%d new baseline \n',sn(s))
+            case 'no'
+                % do nothing
+                X.x=x;
+                X.idx=[1:size(x,1)]';
         end
+        featNames=Fs.condNames;
+        featNames{numConds+1}='lHand';
+        featNames{numConds+2}='rHand';
+        featNames{numConds+3}='saccades';
         
-        varargout={data,sn,V,volIndx};
-    case 'ACTIVITY:get_motorFeats'
-        D.saccades=[28;28;98;31;31;37;37;29;29;46;38;38;36;41;38;38;20;20;25;25;50;22;22;26;26;32;32;32;45;...
-            60;15;15;15;26;26;50;16;30;35;71;60;58;38;38;43;43;43;25;25;30;30;23;23;50;40;40;40;98;21;21;45];
-        D.duration = [15;15;30;15;15;15;15;15;15;30;15;15;30;30;15;15;15;15;15;15;30;15;15;15;15;10;10;10;30;...
-            30;10;10;10;15;15;30;10;10;10;30;30;30;15;15;10;10;10;15;15;15;15;10;10;10;10;10;10;30;15;15;30];
-        D.lHand = [0;15;2;0;0;8;7;0;0;0;0;0;0;0;12;12;0;7;0;0;0;3.5;4;0;0;5;5;5;0;...
-            2;2;2;2;0;0;0;1;1;1;0;0;0;12;12;0;0;0;0;0;0;0;1;1;1;5;5;5;2;0;0;0];
-        D.rHand = [0;0;0;0;0;0;0;5;5;0;8;7;15;0;12;12;0;0;0;7;0;3.5;4;0;0;0;0;0;0;...
-            2;0;0;0;0;0;0;1;1;1;0;0;0;12;12;3;3;3;0;7;5;5;1;1;1;0;0;0;0;0;0;0];
-        featNames={'lHand','rHand','saccades'};
-        varargout={D,featNames};
-    case 'ACTIVITY:taskConds'
-        stats=varargin{1}; % 'yes' or 'no'
+        % normalise features
+        X.x   = bsxfun(@minus,X.x,mean(X.x));
+        X.x   = bsxfun(@rdivide,X.x,sqrt(sum(X.x.^2)));  % Normalize to unit length vectors
         
-        pThresh=.05;
+        % add rest to the end (better way of doing this !)
+        rest=X.x(X.idx==numConds,:);
+        X.x(X.idx==numConds,:)=[];
+        X=[X.x; rest];
         
-        [data,sn,V,volIndx]=sc1_sc2_functionalAtlas('ACTIVITY:get_data');
-        numTasks=size(data,1);
+        % list out all models here
+        for m=1:size(X,2),
+            M.modelIdx{m,1}=m;
+            M.modelNames{m,1}=featNames{m};
+        end
+        M.modelIdx{m+1}=[1:m];
+        M.modelIdx{m+2}=[numConds+1:m];
+        M.modelIdx{m+3}=[1:numConds];
+        M.modelIdx{m+4}=[Fs.condNum(Fs.overlap==1)]';
+        M.modelNames{m+1,1}='task+Motor';
+        M.modelNames{m+2,1}='allMotor';
+        M.modelNames{m+3,1}='task';
+        M.modelNames{m+4,1}='sharedTasks';
         
-        [D,featNames]=sc1_sc2_functionalAtlas('ACTIVITY:get_motorFeats');
+        varargout={X,M,numConds};
+    case 'ACTIVITY:vol2surf'
+        study=varargin{1};
+        metric=varargin{2}; % 'yes' or 'no'
         
-        T=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        load(fullfile(studyDir{study},encodeDir,'glm4','encode_models.mat'))
         
-        condNames=[T.condNames;featNames'];
+        numModels=length(unique(Ys.modelNum));
+        SN=length(unique(Ys.SN));
         
-        X=[eye(numTasks) D.lHand./D.duration D.rHand./D.duration D.saccades./D.duration];
-        numTasks=size(X,2);
-        
-        % set up volume info
-        Yy=zeros(numTasks,length(sn),V.dim(1)*V.dim(2)*V.dim(3));
+        V=spm_vol(fullfile(studyDir{1},suitDir,'anatomicals','cerebellarGreySUIT.nii'));
         C{1}.dim=V.dim;
         C{1}.mat=V.mat;
         
-        % do ridge regression
-        for s=1:length(sn),
-            X1=bsxfun(@minus,X,mean(X));
-            X1=bsxfun(@rdivide,X1,sum(X1.^2));
-            B=(X1'*X1+eye(numTasks)*.5)\(X1'*data(:,:,s));
-            % make volume
-            Yy(:,s,volIndx)=B;
-            clear X1 B
-            fprintf('subj%d done \n',sn(s))
-        end;
+        Yy=zeros(SN,V.dim(1)*V.dim(2)*V.dim(3));
         
-        switch stats,
+        % loop over models
+        for m=1:numModels,
+            
+            M=getrow(Ys,Ys.modelNum==m);
+            
+            % make vol
+            Yy(:,M.idx(1,:))=M.R2_vox;
+            
+            % get avrg across subjs
+            indices=nanmean(Yy,1);
+            
+            % map vol2surf
+            data=reshape(indices,[V.dim(1),V.dim(2),V.dim(3)]);
+            C{m}.dat=data;
+            modelNames(m)=unique(M.modelNames);
+        end
+        
+        M=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',modelNames);  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
+        
+        % save out metric ?
+        switch metric,
             case 'yes'
-                Yy(Yy==0)=nan;
-                for ii=1:numTasks,
-                    data=ssqrt(Yy(ii,:,:));
-                    data=reshape(data,[size(data,2),size(data,3)]);
-                    cStats{ii}= caret_getcSPM('onesample_t','data',data(1:length(sn),:)');
-                    P=spm_P_FDR(cStats{ii}.con.Z,cStats{ii}.con.df,'Z',1,sort(cStats{ii}.con.Z_P,'ascend'));
-                    %                     P=spm_P_Bonf(cStats{ii}.con.Z,cStats{ii}.con.df,'Z',size(cStats{ii}.data,1),1);
-                    c=cStats{ii}.con.Z;
-                    c(P>pThresh)=nan;
-                    indices(ii,:)=c;
-                    clear c
-                end
+                caret_save(fullfile(studyDir{study},caretDir,'suit_flat','glm4','encode_models.metric'),M);
             case 'no'
-                % if numSubjs > 1 get avg
-                Yy=permute(Yy,[2 1 3]);
-                indices=nanmean(Yy,1);
-                indices=reshape(indices,[size(indices,2),size(indices,3)]);
-        end
-        clear data
-        
-        % map vol2surf
-        indices=reshape(indices,[size(indices,1) V.dim(1),V.dim(2),V.dim(3)]);
-        for i=1:size(indices,1),
-            data=reshape(indices(i,:,:,:),[C{1}.dim]);
-            C{i}.dat=data;
-        end
-        M=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',condNames);  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
-        
-        % save out metric file
-        if strcmp(stats,'yes'),
-            save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','FDRCorr_taskConds.metric'),M);
-        else
-            caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','unCorr_taskConds.metric'),M);
-        end
-    case 'ACTIVITY:motorFeats'
-        stats=varargin{1}; % 'yes' or 'no'
-        
-        pThresh=.05;
-        
-        [data,sn,V,volIndx]=sc1_sc2_functionalAtlas('ACTIVITY:get_data');
-        
-        [D,featNames]=sc1_sc2_functionalAtlas('ACTIVITY:get_motorFeats');
-        
-        X=[D.lHand./D.duration D.rHand./D.duration D.saccades./D.duration];
-        
-        % set up volume info
-        numFeat=size(X,2);
-        Yy=zeros(numFeat,length(sn),V.dim(1)*V.dim(2)*V.dim(3));
-        C{1}.dim=V.dim;
-        C{1}.mat=V.mat;
-        
-        % do ridge regression
-        for s=1:length(sn),
-            X1=bsxfun(@minus,X,mean(X));
-            X1=bsxfun(@rdivide,X1,sum(X1.^2));
-            B=(X1'*X1+eye(numFeat)*.5)\(X1'*data(:,:,s));
-            % make volume
-            Yy(:,s,volIndx)=B;
-            clear X1 B
-            fprintf('subj%d done \n',sn(s))
-        end;
-        
-        switch stats,
-            case 'yes'
-                Yy(Yy==0)=nan;
-                for ii=1:numFeat,
-                    data=ssqrt(Yy(ii,:,:));
-                    data=reshape(data,[size(data,2),size(data,3)]);
-                    cStats{ii}= caret_getcSPM('onesample_t','data',data(1:length(sn),:)');
-                    P=spm_P_FDR(cStats{ii}.con.Z,cStats{ii}.con.df,'Z',1,sort(cStats{ii}.con.Z_P,'ascend'));
-                    %                     P=spm_P_Bonf(cStats{ii}.con.Z,cStats{ii}.con.df,'Z',size(cStats{ii}.data,1),1);
-                    c=cStats{ii}.con.Z;
-                    c(P>pThresh)=nan;
-                    indices(ii,:)=c;
-                    clear c
+                % visualise motor features
+                for m=1:M.num_cols,
+                    figure(m)
+                    title(M.column_name{m})
+                    suit_plotflatmap(M.data(:,m))
                 end
-            case 'no'
-                % if numSubjs > 1 get avg
-                Yy=permute(Yy,[2 1 3]);
-                indices=nanmean(Yy,1);
-                indices=reshape(indices,[size(indices,2),size(indices,3)]);
-        end
-        clear data
-        
-        % map vol2surf
-        indices=reshape(indices,[size(indices,1) V.dim(1),V.dim(2),V.dim(3)]);
-        for i=1:size(indices,1),
-            data=reshape(indices(i,:,:,:),[C{1}.dim]);
-            C{i}.dat=data;
-        end
-        M=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',featNames');  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
-        
-        % visualise motor features
-        for m=1:numFeat,
-            figure()
-            suit_plotflatmap(M.data(:,m))
-        end
-        
-        % save out metric file
-        if strcmp(stats,'yes'),
-            save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','FDRCorr_motorFeats.metric'),M);
-        else
-            caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','unCorr_motorFeats.metric'),M);
         end
     case 'ACTIVITY:reliability'
         glm=varargin{1};
@@ -257,13 +225,13 @@ switch what
         save(fullfile(studyDir{2},regDir,'glm4','patternReliability.mat'),'S','CORR')
     case 'FIGURES:reliabilityA'
         % load relability
-        load(fullfile(studyDir{2},regDir,'glm4','patternReliability.mat'));
+        load(fullfile(studyDir{2},regDir,'glm4','patternReliability_cerebellum.mat'));
         
         figure();lineplot(S.condNum,[S.within1,S.within2,S.across],'leg',{'within1','within2','across'})
         A=tapply(S,{'SN'},{'across'},{'within1'},{'within2'});
         
         % within & between-subj reliability
-        myboxplot([],[A.within1 A.within2 A.across],'style_tukey');
+        myboxplot([],[A.within1 A.within2 A.across],'style_block','plotall',2);
         drawline(0,'dir','horz');
         set(gca,'XTickLabel',{'SC1','SC2','across'});
         set(gcf,'PaperPosition',[2 2 4 3]);
@@ -434,10 +402,10 @@ switch what
         clear X1  indxShort
     case 'FIGURES:reliabilityD'
         % load relability
-        load(fullfile(studyDir{2},regDir,'glm4','distanceReliability.mat'));
+        load(fullfile(studyDir{2},regDir,'glm4','distanceReliability_cerebellum.mat'));
         
         % within & between-subj reliability
-        myboxplot([],[T.within1 T.within2 T.across],'style_tukey');
+        myboxplot([],[T.within1 T.within2 T.across],'style_block','plotall',2);
         set(gca,'XTickLabel',{'SC1','SC2','across'});
         set(gcf,'PaperPosition',[2 2 4 3]);
         wysiwyg;
@@ -450,7 +418,7 @@ switch what
         inputDir=which(inputImages{2});
         cd(fileparts(inputDir))
         suit_mni2suit(inputImages{2})
-    case 'CONVERT:cifti2paint' % haven't finished this yet but want to make paint files from the cifti surface files 
+    case 'CONVERT:cifti2paint' % haven't finished this yet but want to make paint files from the cifti surface files
         inputImages={'CortexSubcortex_ColeAnticevic_NetPartition_netassignments_v1_R.dlabel.nii',...
             'CortexSubcortex_ColeAnticevic_NetPartition_parcels_v1_L.dlabel.nii'};
         
@@ -463,24 +431,24 @@ switch what
         LH=cii.x1(cii.brainstructure==1); % LH is 1
         RH=cii.x1(cii.brainstructure==2); % RH is 2
     case 'CONVERT:makelob10'   % this makes lob10 map out of lob26 map
-          V=spm_vol(fullfile(studyDir{2},'encoding','glm4','groupEval_lob26','map.nii')); 
-          Vi=spm_read_vols(V); 
-          
-          % consolidate lob26 into lob10 (clunky but works)
-          labelsOld=[0:34];
-          labelsNew=[0,1,1,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10,0,0,0,0,0,0]; 
-          
-          tmp=Vi(:);
-          for l=1:length(labelsOld),
-              tmp(tmp==labelsOld(l))=labelsNew(l);
-          end
-          
-          % reconstruct and write out to volume
-          Vi=reshape(tmp,[V.dim]); 
-          outName=(fullfile(studyDir{2},'encoding','glm4','groupEval_lob10')); dircheck(outName)
-          V.fname=fullfile(outName,'map.nii');
-          spm_write_vol(V,Vi);
-
+        V=spm_vol(fullfile(studyDir{2},'encoding','glm4','groupEval_lob26','map.nii'));
+        Vi=spm_read_vols(V);
+        
+        % consolidate lob26 into lob10 (clunky but works)
+        labelsOld=[0:34];
+        labelsNew=[0,1,1,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,10,10,0,0,0,0,0,0];
+        
+        tmp=Vi(:);
+        for l=1:length(labelsOld),
+            tmp(tmp==labelsOld(l))=labelsNew(l);
+        end
+        
+        % reconstruct and write out to volume
+        Vi=reshape(tmp,[V.dim]);
+        outName=(fullfile(studyDir{2},'encoding','glm4','groupEval_lob10')); dircheck(outName)
+        V.fname=fullfile(outName,'map.nii');
+        spm_write_vol(V,Vi);
+        
     case 'MAP:vol2surf'
         % this function takes any labelled volume (already in SUIT space)
         % and plots to the surface
@@ -638,18 +606,24 @@ switch what
             anaName='POV';
         end
         
+        % Set the String correctly
+        studyStr = sprintf('SC%d',study);
+        if length(study)>1
+            studyStr='SC12'; % both studies combined
+        end
+        
         % figure out if individual or group
         switch type,
             case 'group'
-                outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%d%s',study,K,anaName),'map.nii');
-                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%d%s',study,K,anaName),sprintf('%s.mat',anaType)));
+                outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%d%s',studyStr,K,anaName),'map.nii');
+                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%d%s',studyStr,K,anaName),sprintf('%s.mat',anaType)));
             case 'indiv'
                 outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_SC%d_%d%s.nii',study,K,anaName));
                 load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_SC%d_%d%s.mat',anaType,study,K,anaName)));
         end
         
         % transpose matrix from ICA
-        if size(S_PW,1)<1000,
+        if strcmp(anaType,'ICAs'),
             bestG=S_PW';
         end
         [~,groupFeat]=max(bestG,[],2);
@@ -665,7 +639,7 @@ switch what
         Vv{1}.mat=V.mat;
         
         % save out vol of SNN feats
-        exampleVol=fullfile(studyDir{study},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
+        exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
         X=spm_vol(exampleVol);
         X.fname=outName;
         X.private.dat.fname=V.fname;
@@ -681,7 +655,7 @@ switch what
         
         % make sure all parcels are sampled into the same space
         for m=1:numMaps,
-            mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',maps{m}),'map_old.nii');
+            mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',maps{m}),'map.nii');
             [i,j,k]=ind2sub(V.dim,volIndx);
             [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
             VA=spm_vol(mapName);
@@ -695,58 +669,98 @@ switch what
             end
         end
         varargout={RI};
-    case 'MAP:plotMapErr'
+    case 'MAP:PLOT:ICA' % evaluate POV (ICA) as a function of clusters
+        mapDir=varargin{1}; % {'SC1','SC2','SC12'}
+        mapType=varargin{2}; 
+        POV=varargin{3}; % [50:5:95,96:100]
+
+        S=[]; 
+        for s=1:length(mapDir),
+            for m=1:length(mapType),
+                load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s_%s',mapDir{s},mapType{m}),'ICAs.mat'));
+                T.K(m,1)=size(S_PW,1);
+                T.mapName{m,1}=mapType{m};
+                T.m(m,1)=m;
+                T.type{m,1}=mapDir{s};
+            end
+            T.POV=POV'; 
+            S=addstruct(S,T); 
+        end
+        figure()
+        lineplot(S.POV,S.K,'split',S.type,'leg','auto','style_thickline2x3','linewidth',4)
+        ylabel('clusters')
+        xlabel('variance')
+    case 'MAP:PLOT:SNN'
+        mapDir=varargin{1}; % {'SC1','SC2','SC12'}
+        mapType=varargin{2}; 
+        K=varargin{3}; % [5:24]
+
+        S=[]; 
+        for s=1:length(mapDir),
+            for m=1:length(mapType),
+                load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s_%s',mapDir{s},mapType{m}),'SNN.mat'));
+                T.error(m,1)=min(errors(end-5:end));
+                T.mapName{m,1}=mapType{m};
+                T.m(m,1)=m;
+                T.type{m,1}=mapDir{s};
+            end
+            T.K=K'; 
+            S=addstruct(S,T); 
+        end
+        figure()
+        lineplot(S.K,S.error,'split',S.type,'leg','auto','style_thickline2x3','linewidth',4)
+        ylabel('minErr')
+        xlabel('clusters')
+    case 'FIGURES:plotMapErr'
         sn=varargin{1};     % 'group' or subjNum
-        study=varargin{2};  % 1 or 2
-        anaType=varargin{3}; % 'SNN' or 'cluster'
+        study=varargin{2};  % 1 or 2 or [1,2]
         K=varargin{3};      % Number of clusters (i.e. 5) or ICA thresh (i.e. 90 etc)
         type=varargin{4};   % 'group' or 'indiv'
         
-        % figure out if ICA or SNN
-        if strcmp(anaType,'SNN'),
-            anaName='cluster';
-        else
-            anaName='POV';
+        anaName='cluster';
+        
+        % Set the String correctly
+        studyStr = sprintf('SC%d',study);
+        if length(study)>1
+            studyStr='SC12'; % both studies combined
         end
         
         % figure out if individual or group
         switch type,
             case 'group'
-                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC%d_%d%s',study,K,anaName),sprintf('%s.mat',anaType)));
+                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%d%s',studyStr,K,anaName),'SNN.mat'));
             case 'indiv'
-                load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_SC%d_%d%s.mat',anaType,study,K,anaName)));
+                load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('SNN_%s_%d%s.mat',studyStr,study,K,anaName)));
         end;
         
-        % plot bestF
-        subplot(2,2,[1,2])
-        title(sprintf('Map with %d clusters',K))
-        imagesc_rectangle(bestF,'YDir','reverse')
-        caxis([0 1]);
-        t=set(gca,'Xtick',[1:size(bestF,2)]','Ytick',[1:size(bestF,1)]');
-        xlabel('clusters')
-        ylabel('taskConds')
+        %         % plot bestF
+        %         subplot(2,2,[1,2])
+        %         title(sprintf('Map with %d clusters',K))
+        %         imagesc_rectangle(bestF,'YDir','reverse')
+        %         caxis([0 1]);
+        %         t=set(gca,'Xtick',[1:size(bestF,2)]','Ytick',[1:size(bestF,1)]');
+        %         xlabel('clusters')
+        %         ylabel('taskConds')
         
         % plot errors
-        if strcmp(anaType{1},'SNN'),
-            subplot(2,2,3)
-            lineplot([1:length(errors)]',errors')
-            ylabel('errors')
-        end
+        subplot(2,1,1)
+        lineplot([1:length(errors)]',errors')
+        ylabel('errors')
         
         % plot randInd
-        subplot(2,2,4)
+        subplot(2,1,2)
         lineplot([1:length(randInd)]',randInd')
         ylabel('Rand Index')
     case 'FIGURES:similarityMatrix' % this function will plot a matrix of map similarities (randIndex is the metric of similarity)
         anaType=varargin{1}; % 'cluster' or 'POV'
-        toPlotNames={'1.10Cluster','2.Cole','3.7Cluster','4.Buckner7','5.17Cluster','6.Buckner17'};
+        %toPlotNames={'1.10Cluster','2.Cole','3.7Cluster','4.Buckner7','5.17Cluster','6.Buckner17'};
         
-        K=[50:5:95];
+        K=[50:5:95,96:100];
         idx=1;
         for s=1:2,
             for k=1:length(K),
                 toPlot{idx}=sprintf('SC%d_%d%s',s,K(k),anaType);
-                toPlotNames{idx}=sprintf('%d.SC%d-%d',idx,s,K(k));
+                toPlotNames{idx}=sprintf('%d',K(k));
                 idx=idx+1;
             end
             idx=k+1;
@@ -758,9 +772,29 @@ switch what
         figure()
         imagesc_rectangle(RI,'YDir','reverse');
         caxis([0 1]);
-        t=set(gca,'Ytick',[1:length(toPlot)]','YTickLabel',toPlotNames','FontSize',7,'Xtick',[1:length(toPlot)]','FontSize',10);
+        t=set(gca,'Ytick',[1:length(toPlot)]','YTickLabel',toPlotNames','FontSize',7,'Xtick',[1:length(toPlot)]','XTickLabel',toPlotNames','FontSize',10);
         t.Color='white';
         colorbar
+    case 'FIGURES:GROUP:ICA'
+        mapDir={'SC1','SC2','SC12'}; 
+        % OR plot upper and lower bounds of multi-task map
+        POV=[50:5:95,96:100];
+        for p=1:length(POV),
+            toPlot{p}=sprintf('%dPOV',POV(p));
+        end
+        
+        sc1_sc2_functionalAtlas('MAP:PLOT:ICA',mapDir,toPlot,POV);
+        set(gcf,'PaperPosition',[2 4 12 3]);    
+    case 'FIGURES:GROUP:SNN'
+        mapDir={'SC1','SC2','SC12'}; 
+        % OR plot upper and lower bounds of multi-task map
+        K=[6:24];
+        for p=1:length(K),
+            toPlot{p}=sprintf('%dcluster',K(p));
+        end
+        
+        sc1_sc2_functionalAtlas('MAP:PLOT:SNN',mapDir,toPlot,K);
+        set(gcf,'PaperPosition',[2 4 12 3]); 
         
     case 'EVAL:get_data'
         sn=varargin{1}; % Subj numbers to include
@@ -973,7 +1007,7 @@ switch what
         
         save(outDir,'-struct','A');
     case 'EVAL:averageOther'
-        mapType=varargin{1}; % options are 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','atlasFinal<num>' etc'
+        mapType=varargin{1}; % options are 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_<K>cluster' or 'SC12_<thresh>POV' etc'
         condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
         
         R=[];
@@ -1030,30 +1064,27 @@ switch what
         
         P=[];
         for m=1:length(mapType),
-            T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d_%s.mat',data,condType)));
-            
+            T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d_%s.mat',data(m),condType)));
             A=getrow(T,T.crossval==crossval);
-            A.type=repmat({mapType{m}},length(A.bin),1);
+            A.type=repmat({sprintf('%d.%s',m,mapType{m})},length(A.bin),1);
             A.m=repmat(m,length(A.bin),1);
             P=addstruct(P,A);
             clear A
         end
-        %         pivottable(T.SN,[T.bin T.bwParcel],T.corr,'length','subset',T.crossval==crossval)
         
         % plot boxplot of different clusters
         W=getrow(P,P.bwParcel==0); % within
         B=getrow(P,P.bwParcel==1); % between
         W.diff=W.corr-B.corr;
         
-        figure()
-        if exist('K'),
-            lineplot(W.m,W.diff,'subset',W.dist<=35,'style_shade');
-            t=set(gca,'XTickLabel',K');
-        else
-            lineplot(W.m,W.diff,'subset',W.dist<=35,'style_shade');
-        end
+        figure(1)
+        lineplot(W.dist,W.diff,'split',W.type,'subset',W.dist<=35,'style_shade','leg','auto');
         ylabel('Within/Between Diff')
-        xlabel('Maps')
+        xlabel('spatial dist')
+        
+        figure(2)
+        lineplot(W.m,W.diff,'subset',W.dist<=35,'style_shade','leg','auto');
+        ylabel('Within/Between Diff') 
     case 'EVAL:PLOT:INDIV' % NEED TO UPDATE FOR SNN !!
         study=varargin{1};
         var=varargin{2};
@@ -1133,9 +1164,9 @@ switch what
         M=caret_suit_map2surf(Vv,'space','SUIT','stats','nanmean','column_names',columnName);
         
         caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4',sprintf('diff_%s.metric',mapType)),M);
-        
+
     case 'FIGURES:CORR:GROUP' % Makes the summary figure of within / between correlations for GROUP
-        toPlot = {'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks'};
+        toPlot = {'lob10','Buckner_7Networks','Cole_10Networks','Buckner_17Networks','SC12_9cluster'};
         crossval=varargin{1}; % 0-uncrossval; 1-crossval
         evalNum=varargin{2}; % SC1-[1],SC2-[2],concat SC1+SC2 [3],average of SC1+SC2 eval [4]
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
@@ -1169,25 +1200,18 @@ switch what
         crossval=varargin{1}; % 0-uncrossval; 1-crossval
         evalNum=varargin{2}; % SC1-[1],SC2-[2],concat SC1+SC2 [3],average of SC1+SC2 eval [4]
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ??
-        studyNum=varargin{4}; % if evaluating on 1,4: studyNum=2; if evaluating on 2,studyNum=1
         
-        K=[50:5:95,96:100]; % whatever is hardcoded here will determine ICA or SNN
-        %what are we plotting ? SNN or ICA maps ?
-        for k=1:length(K),
-            if max(K)<50,
-                toPlot{k}=sprintf('SC%d_%dcluster',studyNum,K(k));
-            else
-                toPlot{k}=sprintf('SC%d_%dPOV',studyNum,K(k));
-            end
-        end
-        %toPlot={'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC2_9cluster','SC2_90POV'};
+        % OR plot upper and lower bounds of multi-task map
+%         POV=[50:5:95,96:100]; 
+%         for p=1:length(POV),
+%             toPlot{p}=sprintf('SC2_%dPOV',POV(p)); 
+%             evalNums(p)=evalNum; 
+%         end
+        %toPlot={'SC1_95POV','SC2_95POV','SC12_95POV','SC12_95POV'};
+        toPlot={'lob10','Buckner_7Networks','Cole_10Networks','Buckner_17Networks','SC12_9cluster'}; 
+        evalNums=[4,4,4,4,4];
         
-        
-        if exist('K'),
-            sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNum,crossval,condType,'K',K);
-        else
-            sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNum,crossval,condType);
-        end
+        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNums,crossval,condType);
         set(gcf,'PaperPosition',[2 4 12 3]);
         %         wysiwyg;
     case 'FIGURES:DIFF:INDIV'
@@ -1246,7 +1270,7 @@ switch what
         Dd=tapply(D,{'SN','mapType','type'},{'diff'});
         
         lineplot(Dd.SN,Dd.diff,'split',Dd.mapType,'leg','auto','style_thickline2x3')
-        
+
     case 'ENCODE:project_taskSpace'
         K=varargin{1}; % how many clusters ?
         
