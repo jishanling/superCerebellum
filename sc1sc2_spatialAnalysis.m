@@ -449,6 +449,7 @@ switch(what)
         EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
         SurfDir = fullfile(studyDir{1},'surfaceCaret','suit_flat')
         load(fullfile(EvalDir,'boundaries.mat'));
+       
         
         % Map the clusters  
         V.dat=zeros([V.dim(1) V.dim(2) V.dim(3)]);
@@ -488,16 +489,27 @@ switch(what)
             % between
             A=pivottable(T.bin,T.bwParcel,T.corr,'nanmean','subset',T.crossval==1 & ...
                 T.Edge(:,1)==Edge(i,1) & T.Edge(:,2)==Edge(i,2)); 
-            EdgeWeight(i,1)=nanmean(diff(A,[],2));  % Difference between within and between 
+            EdgeWeight(i,1)=nanmean(A(:,1)-A(:,2));  % Difference within - between 
         end; 
         
-        % Make the plot 
-        suit_plotflatmap(Mpa,'type','label','border',[],'cmap',colorcube(max(Parcel))); 
+        % check if a color map is provided 
+        if exist(fullfile(EvalDir,'colourMap.txt'),'file'),
+            cmap=load('colourMap.txt');
+            cmap=cmap(:,2:4);
+            cmapF=cmap/255;
+        else
+            cmapF=colorcube(max(Parcel));
+        end
+        
+        % Make the plot
+        suit_plotflatmap(Mpa,'type','label','border',[],'cmap',cmapF); 
         hold on; 
+        LineWeight=EdgeWeight*200; 
+        % LineWeight(LineWeight>20)=20; 
         for  b=1:length(Border)
             if (Border(b).numpoints>0 & EdgeWeight(b)>0)
                 p=plot(Border(b).data(:,1),Border(b).data(:,2),'k.');
-                set(p,'MarkerSize',EdgeWeight(b)*300);
+                set(p,'MarkerSize',LineWeight(b));
             end; 
         end; 
         hold off; 
