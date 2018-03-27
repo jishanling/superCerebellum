@@ -93,5 +93,6 @@ if strcmp(saveVox,'yes'),
             fprintf('bin%d: voxel %d \n',i,v)
         end
     end
+    varargout={binCorrVox}; 
 end
-varargout={binCorrVox}; 
+
