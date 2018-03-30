@@ -474,10 +474,18 @@ switch what
         inputMap=varargin{1}; % some options are 'Buckner_7Networks','SC1_9cluster','lob10', 'Cole_10Networks', 'SC2_90cluster' etc
         metric=varargin{2}; % 'yes' or 'no'
         
-        inputDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',inputMap));
+        vararginoptions({varargin{3:end}},{'border','sn'}); % option if doing individual map analysis
+
+        if exist('sn'),
+            inputDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
+            mapName=sprintf('map_%s.nii',inputMap); 
+        else
+            inputDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',inputMap));
+            mapName='map.nii'; 
+        end
         cd(inputDir);
         
-        Vo=spm_vol(fullfile(inputDir,'map.nii'));
+        Vo=spm_vol(fullfile(inputDir,mapName));
         Vi=spm_read_vols(Vo);
         Vv{1}.dat=Vi;
         Vv{1}.dim=Vo.dim;
@@ -505,8 +513,11 @@ switch what
                 caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.paint',inputMap)),M);
                 caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.areacolor',inputMap)),A);
             case 'no'
-                suit_plotflatmap(M.data,'type','label','cmap',cmapF) % colorcube(max(M.data))
-                set(gca,'XColor',[1 1 1],'YColor',[1 1 1],'FontSize',18,'XTickLabel',[],'YTickLabel',[]);
+                if exist('border'),
+                    suit_plotflatmap(M.data,'type','label','cmap',cmapF,'border',[])
+                else
+                    suit_plotflatmap(M.data,'type','label','cmap',cmapF) % colorcube(max(M.data))
+                end
         end
     case 'MAP:optimal'  % figure out optimal map for multiple clusters
         % example:sc1_sc2_functionalAtlas('MAP:optimal',<subjNums>,1,6,'group')
@@ -1328,22 +1339,33 @@ switch what
              [0 .9 .2],[.1 .3 0],[.2 .4 0],[.63 0 .25],[0 .43 .21],[.4 0 .8]}; 
          CAT.markersize=10;
          CAT.markertype='o'; 
-         CAT.labelsize=8; 
+         CAT.labelsize=12; 
 
          sc1_sc2_functionalAtlas('REPRESENTATION:MDS',CAT,colour)
-         set(gcf,'PaperPosition',[2 2 8 8]);
+         set(gcf,'units','points','position',[5,5,1000,1000])
          axis equal;
          set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
          xlabel('PC1');ylabel('PC2');zlabel('PC3')
          view([81 9]);
     case 'AXES:map' % takes any volume and plots on surface
-        toPlot='SC12_10cluster'; 
-        toPlotName='Multi-Task Parcellation'; 
+        toPlot=varargin{1};  
+        toPlotName=varargin{2}; 
         
-        sc1_sc2_functionalAtlas('MAP:vol2surf',toPlot,'no')
+        vararginoptions({varargin{3:end}},{'border','sn'}); % option if doing individual map analysis
+        
+        % plot borders ?
+        if exist('border'),
+            sc1_sc2_functionalAtlas('MAP:vol2surf',toPlot,'no','border',[])
+        else
+            sc1_sc2_functionalAtlas('MAP:vol2surf',toPlot,'no')
+        end
+        
+        % one subject or group ?
+        if exist('sn'),
+            sc1_sc2_functionalAtlas('MAP:vol2surf',toPlot,'no','sn',sn)
+        end
         
         title(toPlotName);
-        set(gcf,'PaperPosition',[2 4 12 3]);
         set(gca,'XColor',[1 1 1],'YColor',[1 1 1],'FontSize',18,'XTickLabel',[],'YTickLabel',[]);
     case 'AXES:allSNN_similarity' % matrix of rand indices between all SNN maps (SC12)
         K=[5:25];
@@ -1361,7 +1383,7 @@ switch what
             'FontSize',10,'Xtick',[1:length(toPlot)]','XTickLabel',toPlotNames','FontSize',14);
         t.Color='white';
         colorbar
-        set(gcf,'PaperPosition',[2 4 12 3]);
+        set(gcf,'units','points','position',[5,5,1000,1000])
     case 'AXES:allSNN_fit' % plot SSE as a function of clusters
         % OR plot upper and lower bounds of multi-task map
         K=[5:24,25];
@@ -1378,30 +1400,25 @@ switch what
         CAT.markerfill={'r','k'};
         
         sc1_sc2_functionalAtlas('MAP:PLOT:SNN',{'SC12'},toPlot,K,'CAT',CAT);
-        set(gcf,'PaperPosition',[2 4 12 3]);
+        set(gcf,'units','points','position',[5,5,1000,1000])
         ylabel('R2')
         xlabel('clusters')
         legend('R2','R2adj','Location','SouthEast')
     case 'AXES:RS_similarity' % RS: resting state maps (Buckner, Cole)
-        toPlot={'Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_10cluster'};
-        toPlotNames={'Buckner7','Buckner17','Cole10','Multi-Task'};
+        toPlot=varargin{1};
+        toPlotNames=varargin{2};
         
         [RI]=sc1_sc2_functionalAtlas('MAP:compare',toPlot);
         
-        figure()
         imagesc_rectangle(RI,'YDir','reverse');
         caxis([0 1]);
         t=set(gca,'Ytick',[1:length(toPlot)]','YTickLabel',toPlotNames',...
             'FontSize',10,'Xtick',[1:length(toPlot)]','XTickLabel',toPlotNames','FontSize',18,'Color','white');
         colorbar
-        set(gcf,'PaperPosition',[2 4 12 3]);
+        set(gcf,'units','points','position',[5,5,1000,1000])
     case 'AXES:group_curves' % make separate graphs for 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_10cluster'
-        toPlot={'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_10cluster'};
-        plotName={'Lobular Parcellation','Resting State (Buckner7)',....
-            'Resting State (Buckner17)','Resting State (Cole10)','Multi-Task'};
-        
-        % which map are we plotting ?
-        plotNum=5;
+        toPlot=varargin{1};
+        plotName=varargin{2};
         
         % Aesthetics
         CAT.markersize=8;
@@ -1411,15 +1428,15 @@ switch what
         CAT.markercolor={'r','k'};
         CAT.markerfill={'r','k'};
         
-        sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',toPlot{plotNum},4,'group',1,'unique','CAT',CAT);
+        sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',toPlot,4,'group',1,'unique','CAT',CAT);
         
         % Labelling
         set(gca,'YLim',[0 0.6],'XLim',[0 8],'FontSize',18);
         xlabel('Spatial Bins');
         ylabel('Activity Correlation (R)');
-        title(plotName{plotNum});
-        set(gcf,'PaperPosition',[2 4 12 3]);
-        legend('within parcels', 'between parcels','Location','SouthEast')
+        title(plotName);
+        set(gcf,'units','points','position',[5,5,1000,1000])
+        legend('within parcels', 'between parcels','Location','SouthWest')
     case 'AXES:MT_UpperLower' % makes graph for upper and lower bounds of multi-task plot
         toPlot={'SC12_10cluster','SC2_10cluster'};
         evalNums=[4,4];
@@ -1438,13 +1455,12 @@ switch what
         set(gca,'FontSize',18);
         xlabel('Spatial Bins');
         ylabel('Difference');
-        set(gcf,'PaperPosition',[2 4 12 3]);
+        set(gcf,'units','points','position',[5,5,1000,1000])
         legend('upper bound', 'lower bound','Location','SouthEast')
     case 'AXES:diff_allMaps'  % make summary graph for diff curves for all maps
-        toPlot={'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_10cluster'};
-        plotName={'Lobular Parcellation','Resting State (Buckner7)',....
-            'Resting State (Buckner17)','Resting State (Cole10)','Multi-Task'};
-        evalNums=[4,4,4,4,4];
+        toPlot=varargin{1};
+        plotName=varargin{2};
+        evalNums=varargin{3};
         
         % aesthetics
         CAT.markersize=8;
@@ -1461,9 +1477,12 @@ switch what
         set(gca,'FontSize',11);
         xlabel('Spatial Bins');
         ylabel('Difference');
-        set(gcf,'PaperPosition',[2 4 15 5]);
+        set(gcf,'units','points','position',[5,5,1000,1000])
         legend(plotName,'Location','NorthWest')
     case 'AXES:MT_indiv_curves' % make average curve graph for individual subjects
+        sn=varargin{1};
+        plotName=varargin{2};
+        
         % aesthetics
         CAT.markersize=8;
         CAT.markertype='^';
@@ -1472,16 +1491,14 @@ switch what
         CAT.markercolor={'r','k'};
         CAT.markerfill={'r','k'};
         
-        tmp=[1:17];
-        
-        sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES','SC12_10cluster',4,'indiv',1,'unique','CAT',CAT,'sn',returnSubjs(tmp)); % always take crossval + unique
+        sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES','SC12_10cluster',4,'indiv',1,'unique','CAT',CAT,'sn',sn); % always take crossval + unique
         
         % Labelling
         set(gca,'YLim',[0 0.55],'XLim',[0 8],'FontSize',18);
         xlabel('Spatial Bins');
         ylabel('Activity Correlation (R)');
-        title('Multi-Task:Individuals')
-        set(gcf,'PaperPosition',[2 4 12 3]);
+        title(plotName)
+        set(gcf,'units','points','position',[5,5,1000,1000])
         legend('within parcels', 'between parcels','Location','SouthEast')
     case 'AXES:MT_group_indiv' % group versus indiv for multi-task map
         % aesthetics
@@ -1492,28 +1509,77 @@ switch what
         CAT.linecolor={'r'};
         CAT.markercolor={'r'};
         CAT.markerfill={'r'};
-        
-        tmp=[1:17];
-        
+
         sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',{'SC12_10cluster'},4,'group',1,'unique','CAT',CAT); % always take crossval + unique
         hold on
         CAT.errorcolor={'k'};
         CAT.linecolor={'k'};
         CAT.markercolor={'k'};
         CAT.markerfill={'k'};
-        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',{'SC12_10cluster'},4,'indiv',1,'unique','CAT',CAT,'sn',returnSubjs(tmp)); 
+        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',{'SC12_10cluster'},4,'indiv',1,'unique','CAT',CAT,'sn',returnSubjs); 
         
         % Labelling
-        set(gca,'FontSize',11);
+        set(gca,'FontSize',18);
         xlabel('Spatial Bins');
         ylabel('Difference');
-        set(gcf,'PaperPosition',[2 4 15 5]);
+        set(gcf,'units','points','position',[5,5,1000,1000])
         legend('group','individual','Location','NorthWest')
     case 'AXES:boundary_strength' % makes separate graphs for 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_10cluster'
       
-    case 'FIG1'
-        
-        
+    case 'FIGURE1' % Motor Feature Model
+    case 'FIGURE2' % Representational Structure
+        sc1_sc2_functionalAtlas('AXES:MDS')
+    case 'FIGURE3' % Lobular versus Functional
+        subplot(2,2,1)
+        sc1_sc2_functionalAtlas('AXES:group_curves','lob10','Lobular Parcellation')
+        subplot(2,2,2)
+        sc1_sc2_functionalAtlas('AXES:group_curves','SC12_10cluster','Multi-Task Parcellation')
+        subplot(2,2,3)
+        sc1_sc2_functionalAtlas('AXES:map','lob10','Lobular Parcellation')
+        subplot(2,2,4)
+        sc1_sc2_functionalAtlas('AXES:map','SC12_10cluster','Multi-Task Parcellation')
+    case 'FIGURE4' % Resting State Parcellations 
+        subplot(2,3,1)
+        sc1_sc2_functionalAtlas('AXES:group_curves','Buckner_7Networks','Buckner7')
+        subplot(2,3,2)
+        sc1_sc2_functionalAtlas('AXES:group_curves','Buckner_17Networks','Buckner17')
+        subplot(2,3,3)
+        sc1_sc2_functionalAtlas('AXES:group_curves','Cole_10Networks','Cole10')
+        subplot(2,3,4)
+        sc1_sc2_functionalAtlas('AXES:map','Buckner_7Networks','Buckner7')
+        subplot(2,3,5)
+        sc1_sc2_functionalAtlas('AXES:map','Buckner_17Networks','Buckner17')
+        subplot(2,3,6)
+        sc1_sc2_functionalAtlas('AXES:map','Cole_10Networks','Cole10')
+%         subplot(2,3,4)
+%         sc1_sc2_functionalAtlas('AXES:RS_similarity',{'Buckner_7Networks','Buckner_17Networks','Cole_10Networks'},...
+%             {'Buckner7','Buckner17','Cole10'})
+    case 'FIGURE5' % Boundary Strength + Summary Graph
+        subplot(2,4,1)
+        sc1_sc2_functionalAtlas('AXES:map','lob10','Lobular','border',[])
+        subplot(2,4,2)
+        sc1_sc2_functionalAtlas('AXES:map','Cole_10Networks','Cole10','border',[])
+        subplot(2,4,3)
+        sc1_sc2_functionalAtlas('AXES:map','SC12_10cluster','Multi-Task','border',[])
+        subplot(2,4,4)
+        sc1_sc2_functionalAtlas('AXES:map','Buckner_7Networks','Buckner7','border',[])
+
+        subplot(2,4,[5:8])
+        sc1_sc2_functionalAtlas('AXES:diff_allMaps',{'lob10','Cole_10Networks','SC12_10cluster','Buckner_7Networks'},...
+            {'Lobular','Cole10','Multi-Task','Buckner7'},...
+            [4,4,4,4,4])
+    case 'FIGURE6' % Group Versus Individual
+        subplot(2,4,1)
+        sc1_sc2_functionalAtlas('AXES:MT_indiv_curves',2,'S02')
+        subplot(2,4,2)
+        sc1_sc2_functionalAtlas('AXES:map','SC12_10cluster','S02','sn',2)
+        subplot(2,4,3)
+        sc1_sc2_functionalAtlas('AXES:MT_indiv_curves',4,'S04')
+        subplot(2,4,4)
+        sc1_sc2_functionalAtlas('AXES:map','SC12_10cluster','S04','sn',4)
+
+        subplot(2,4,[5:8])
+        sc1_sc2_functionalAtlas('AXES:MT_group_indiv')
 end
 % Local functions
 function dircheck(dir)
