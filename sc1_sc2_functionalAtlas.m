@@ -22,71 +22,85 @@ returnSubjs=[2,3,4,6,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
 
 switch what
     
-    case 'TASKSPACE:overlap'
+    case 'ACTIVITY:get_data'   % get tasksConds (averaged across runs + sessions for each dataset)
+        subjs=length(returnSubjs);
         
-    case 'ACTIVITY:encoding'  % this case runs 35 models (all cross-validated with fixed lambda)
-        sn=varargin{1};
-        study=varargin{2};
+        F=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         
-        lambdas=[.01:.1:.5];
-        subjs=length(sn);
-        l=1;
-        
-        % load X
-        [X,M,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:featModel',study,'yes');
-        
-        % loop over subjects
-        Ys=[];
-        for s=1:subjs,
-            
-            encodeSubjDir = fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn(s)}); % set directory
-            
-            % load Y (per subj)
-            load(fullfile(encodeSubjDir,'Y_info_glm4_grey_nan.mat'));
-            Yp=getrow(Y,Y.cond~=0);
-            
-            % loop over models
-            for m=1:length(M.modelIdx),
-                
-                % modify X
-                Xm=X(:,M.modelIdx{m});
-                
-                % normalise
-                N = (numConds)*numel(run);
-                B = indicatorMatrix('identity',Yp.run);
-                R  = eye(N)-B*pinv(B);
-                Xm = R*Xm;            % Subtract block mean (from X)
-                Xm=bsxfun(@rdivide,Xm,sqrt(sum(Xm.*Xm)/(size(Xm,1)-numel(run))));
-                Yact = R*Yp.data;    % Subtract block mean (from Y)
-                Yact=bsxfun(@rdivide,Yact,sqrt(sum(Yact.*Yact)/(size(Yact,1)-numel(run))));
-                
-                % run encoding model (+ ridge regress)
-                [M.R2(m,1),~,M.R2_vox(m,:)]=encode_crossval(Yact,Xm,Yp.run,'ridgeFixed','lambda',lambdas(l));
-                
-                M.modelNum(m,1)=m; % modelNum
-                M.lambdas(m,1)=l;
-                fprintf('subj%d:model %s ...\n',sn(s),M.modelNames{m})
-                clear Xm
-            end
-            M.SN=repmat(sn(s),m,1);
-            M.idx=repmat(Yp.nonZeroInd(1,:),m,1);
-            Ys=addstruct(Ys,M);
-            clear Yp
+        % load in allSubjs data struct from sc1 & sc2
+        H=[];
+        for study=1:2,
+            load(fullfile(studyDir{study},encodeDir,'glm4','cereb_avrgDataStruct.mat'));
+            T.studyNum=repmat(study,size(T.SN,1),1);
+            H=addstruct(H,T);
+            clear T
         end
         
-        % save out results
-        save(fullfile(studyDir{study},encodeDir,'glm4','encode_models.mat'),'Ys','-v7.3');
-    case 'ACTIVITY:featModel' % this makes X - the feature model
-        study=varargin{1}; % studyNum
+        % get session average for each study separately
+        for s=1:subjs,
+            idx=1;
+            for study=1:2,
+                numConds=length(unique(H.cond(H.studyNum==study)));
+                for c=1:numConds, % get average across sessions
+                    indx = H.cond==c & H.studyNum==study & H.SN==(returnSubjs(s));
+                    avrgData(idx,:)=nanmean(H.data(indx,:),1);
+                    idx=idx+1;
+                    clear indx
+                end
+                fprintf('subj%d averaged sessions for study%d \n',returnSubjs(s),study)
+            end
+            % zero to NaN
+            avrgData(avrgData==0)=NaN;
+            
+            % subtract condition avrg baseline (across 61-1 conditions)
+            all=[1:size(avrgData,1)];
+            for c=1:size(avrgData,1),
+                X=nanmean(avrgData(all(all~=c),:),1);
+                data(c,:,s)=avrgData(c,:)-X;
+            end
+            
+            clear avrgData
+            fprintf('subj%d new baseline \n',returnSubjs(s))
+        end
+        varargout={data,V,volIndx};
+    case 'ACTIVITY:make_model' % make X matrix (feature models)
+        study=varargin{1}; % 1, 2, or [1,2]
         type=varargin{2};  % 'yes' or 'no' to modelling each run separately ?
+        model=varargin{3}; % 'task' or 'motor' model ?
         
         F=dload(fullfile(baseDir,'motorFeats.txt')); % load in motor features
         
-        Fs=getrow(F,F.studyNum==study);
+        % sort out which study we're taking (or both) ?
+        if length(study)>1,
+            Fs=F;
+        else
+            Fs=getrow(F,F.studyNum==study);
+        end
         numConds=length(Fs.studyNum);
         
         % make feature model
         x=[eye(numConds) Fs.lHand./Fs.duration Fs.rHand./Fs.duration Fs.saccades./Fs.duration];
+        featNames=Fs.condNames;
+        featNames{numConds+1}='lHand';
+        featNames{numConds+2}='rHand';
+        featNames{numConds+3}='saccades';
+        
+        switch model,
+            case 'task'
+                % make model output struct
+                for m=1:length(featNames),
+                    M.modelIdx{m,1}=m;
+                    M.modelNames{m,1}=featNames{m};
+                end
+                M.modelIdx{m+1}=[1:numConds];
+                M.modelNames{m+1,1}='task';
+            case 'motor'
+                % make model output struct
+                for m=1:length(featNames),
+                    M.modelIdx{m,1}=m;
+                    M.modelNames{m,1}=featNames{m};
+                end
+        end
         
         switch type,
             case 'yes'
@@ -100,10 +114,6 @@ switch what
                 X.x=x;
                 X.idx=[1:size(x,1)]';
         end
-        featNames=Fs.condNames;
-        featNames{numConds+1}='lHand';
-        featNames{numConds+2}='rHand';
-        featNames{numConds+3}='saccades';
         
         % normalise features
         X.x   = bsxfun(@minus,X.x,mean(X.x));
@@ -114,67 +124,66 @@ switch what
         X.x(X.idx==numConds,:)=[];
         X=[X.x; rest];
         
-        % list out all models here
-        for m=1:size(X,2),
-            M.modelIdx{m,1}=m;
-            M.modelNames{m,1}=featNames{m};
-        end
-        M.modelIdx{m+1}=[1:m];
-        M.modelIdx{m+2}=[numConds+1:m];
-        M.modelIdx{m+3}=[1:numConds];
-        M.modelIdx{m+4}=[Fs.condNum(Fs.overlap==1)]';
-        M.modelNames{m+1,1}='task+Motor';
-        M.modelNames{m+2,1}='allMotor';
-        M.modelNames{m+3,1}='task';
-        M.modelNames{m+4,1}='sharedTasks';
+        varargout={X,M,numConds,F};
+    case 'ACTIVITY:patterns'   % estimate each of the task conditions (motor features are subtracted)
+        sharedTasks=varargin{1}; % 'average' or 'all'
         
-        varargout={X,M,numConds};
-    case 'ACTIVITY:vol2surf'
-        study=varargin{1};
-        metric=varargin{2}; % 'yes' or 'no'
+        subjs=length(returnSubjs);
+        lambda=.01;
         
-        load(fullfile(studyDir{study},encodeDir,'glm4','encode_models.mat'))
+        % load in task structure file
+        F=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         
-        numModels=length(unique(Ys.modelNum));
-        SN=length(unique(Ys.SN));
+        % load in activity patterns for sc1+sc2 (averaged across sessions,
+        % within dataset)
+        [data,V,volIndx]=sc1_sc2_functionalAtlas('ACTIVITY:get_data','average'); % sharedTasks are averaged
         
-        V=spm_vol(fullfile(studyDir{1},suitDir,'anatomicals','cerebellarGreySUIT.nii'));
+        % get motor feature model
+        [X,M,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:make_model',[1,2],'no','motor'); % load in model
+        
+        % set up volume info
+        numFeat=size(X,2)-numConds;
+        Yy=zeros(numConds+numFeat,subjs,V.dim(1)*V.dim(2)*V.dim(3));
         C{1}.dim=V.dim;
         C{1}.mat=V.mat;
         
-        Yy=zeros(SN,V.dim(1)*V.dim(2)*V.dim(3));
+        % NaN to zero
+        data(isnan(data))=0;
         
-        % loop over models
-        for m=1:numModels,
-            
-            M=getrow(Ys,Ys.modelNum==m);
-            
-            % make vol
-            Yy(:,M.idx(1,:))=M.R2_vox;
-            
-            % get avrg across subjs
-            indices=nanmean(Yy,1);
-            
-            % map vol2surf
-            data=reshape(indices,[V.dim(1),V.dim(2),V.dim(3)]);
-            C{m}.dat=data;
-            modelNames(m)=unique(M.modelNames);
+        % do ridge regression
+        for s=1:subjs,
+            X1=bsxfun(@minus,X,mean(X));
+            X1=bsxfun(@rdivide,X1,sum(X1.^2));
+            B=(X1'*X1+eye(numConds+numFeat)*lambda)\(X1'*data(:,:,s));
+            % make volume
+            Yy(:,s,volIndx)=B;
+            clear X1 B
+            fprintf('ridge regress done for subj%d done \n',returnSubjs(s))
+        end;
+        clear data
+        
+        % if numSubjs > 1 get avg
+        Yy=permute(Yy,[2 1 3]);
+        indices=nanmean(Yy,1);
+        indices=reshape(indices,[size(indices,2),size(indices,3)]);
+        
+        % map vol2surf
+        indices=reshape(indices,[size(indices,1) V.dim(1),V.dim(2),V.dim(3)]);
+        for i=1:size(indices,1),
+            data=reshape(indices(i,:,:,:),[C{1}.dim]);
+            C{i}.dat=data;
+        end
+        M=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',M.modelNames);  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
+        
+        switch sharedTasks,
+            case 'all'
+                % do nothing
+            case 'average'
+                
         end
         
-        M=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',modelNames);  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
-        
-        % save out metric ?
-        switch metric,
-            case 'yes'
-                caret_save(fullfile(studyDir{study},caretDir,'suit_flat','glm4','encode_models.metric'),M);
-            case 'no'
-                % visualise motor features
-                for m=1:M.num_cols,
-                    figure(m)
-                    title(M.column_name{m})
-                    suit_plotflatmap(M.data(:,m))
-                end
-        end
+        % save out metric
+        caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','unCorr_taskConds.metric'),M);
     case 'ACTIVITY:reliability'
         glm=varargin{1};
         type=varargin{2}; % 'cerebellum' or 'cortex'
@@ -237,6 +246,128 @@ switch what
         set(gcf,'PaperPosition',[2 2 4 3]);
         wysiwyg;
         ttest(sqrt(A.within1.*A.within2),A.across,2,'paired');
+        
+    case 'PREDICTIONS:motorFeats'   % predict motor feature model + task model (cross-validated with fixed lambda)
+        sn=varargin{1};
+        study=varargin{2};
+        
+        lambdas=[.01:.1:.5];
+        subjs=length(sn);
+        l=1;
+        
+        % load X
+        [X,M,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:make_model',study,'yes','task');
+        
+        % loop over subjects
+        Ys=[];
+        for s=1:subjs,
+            
+            encodeSubjDir = fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn(s)}); % set directory
+            
+            % load Y (per subj)
+            load(fullfile(encodeSubjDir,'Y_info_glm4_grey_nan.mat'));
+            Yp=getrow(Y,Y.cond~=0);
+            
+            % loop over models
+            for m=1:length(M.modelIdx),
+                
+                % modify X
+                Xm=X(:,M.modelIdx{m});
+                
+                % normalise
+                N = (numConds)*numel(run);
+                B = indicatorMatrix('identity',Yp.run);
+                R  = eye(N)-B*pinv(B);
+                Xm = R*Xm;            % Subtract block mean (from X)
+                Xm=bsxfun(@rdivide,Xm,sqrt(sum(Xm.*Xm)/(size(Xm,1)-numel(run))));
+                Yact = R*Yp.data;    % Subtract block mean (from Y)
+                Yact=bsxfun(@rdivide,Yact,sqrt(sum(Yact.*Yact)/(size(Yact,1)-numel(run))));
+                
+                % run encoding model (+ ridge regress)
+                [M.R2(m,1),~,M.R2_vox(m,:)]=encode_crossval(Yact,Xm,Yp.run,'ridgeFixed','lambda',lambdas(l));
+                
+                M.modelNum(m,1)=m; % modelNum
+                M.lambdas(m,1)=l;
+                fprintf('subj%d:model %s ...\n',sn(s),M.modelNames{m})
+                clear Xm
+            end
+            M.SN=repmat(sn(s),m,1);
+            M.idx=repmat(Yp.nonZeroInd(1,:),m,1);
+            Ys=addstruct(Ys,M);
+            clear Yp
+        end
+        
+        % save out results
+        save(fullfile(studyDir{study},encodeDir,'glm4','encode_models.mat'),'Ys','-v7.3');
+    case 'PREDICTIONS:average_SC12' % get the average predictions across datasets
+        
+        F=dload(fullfile(baseDir,'motorFeats.txt')); % load in motor features
+        
+        YN=[];
+        for i=1:2,
+            numCond=length(F.condNum(F.studyNum==i));
+            load(fullfile(studyDir{i},encodeDir,'glm4','encode_models.mat'))
+            tmp=getrow(Ys,Ys.modelNum>numCond);
+            tmp.studyNum=repmat(i,size(tmp.SN,1),1);
+            YN=addstruct(YN,tmp);
+        end
+        
+        % get average of models across datasets
+        avrgStudy=tapply(YN,{'R2_vox','idx','SN','modelNames','modelIdx','modelNum','lambdas'},{'studyNum'}); % tapply can't deal with multi-cols
+    case 'PREDICTIONS:vol2surf'     % visualise predictions for motor feats
+        study=varargin{1}; % 1 or 2 or [1,2]
+        metric=varargin{2}; % 'yes' or 'no'
+        
+        % are we visualising studies separately or combined ?
+        if length(study)>1, % studies [1,2]
+            study=2;
+            load(fullfile(studyDir{study},encodeDir,'glm4','encode_models_SC12.mat'))
+            outName='encode_models_SC12';
+        else
+            load(fullfile(studyDir{study},encodeDir,'glm4','encode_models.mat'))
+            outName='encode_models';
+        end
+        
+        numModels=length(unique(Ys.modelNum));
+        SN=length(unique(Ys.SN));
+        
+        V=spm_vol(fullfile(studyDir{1},suitDir,'anatomicals','cerebellarGreySUIT.nii'));
+        C{1}.dim=V.dim;
+        C{1}.mat=V.mat;
+        
+        Yy=zeros(SN,V.dim(1)*V.dim(2)*V.dim(3));
+        
+        % loop over models
+        for m=1:numModels,
+            
+            M=getrow(Ys,Ys.modelNum==m);
+            
+            % make vol
+            Yy(:,M.idx(1,:))=M.R2_vox;
+            
+            % get avrg across subjs
+            indices=nanmean(Yy,1);
+            
+            % map vol2surf
+            data=reshape(indices,[V.dim(1),V.dim(2),V.dim(3)]);
+            C{m}.dat=data;
+            modelNames(m)=unique(M.modelNames);
+        end
+        
+        M=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',modelNames);  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
+        
+        % save out metric ?
+        switch metric,
+            case 'yes'
+                caret_save(fullfile(studyDir{study},caretDir,'suit_flat','glm4',sprintf('%s.metric',outName)),M);
+            case 'no'
+                % visualise motor features
+                for m=1:M.num_cols,
+                    figure(m)
+                    title(M.column_name{m})
+                    suit_plotflatmap(M.data(:,m))
+                end
+        end
         
     case 'RELIABILITY:get_spatialFreq'
         study=varargin{1};
@@ -323,7 +454,7 @@ switch what
         save(fullfile(studyDir{2},'encoding','glm4','cereb_spatialCorr_freq.mat'),'-struct','RR');
         varargout={RR};
     case 'PLOT:spatialFreqCorr'
-        CAT=varargin{1}; 
+        CAT=varargin{1};
         
         % load in spatialCorrFreq struct
         T=load(fullfile(studyDir{2},'encoding','glm4','cereb_spatialCorr_freq.mat'));
@@ -341,12 +472,12 @@ switch what
         xlabel('Cycles/cm');
         title('Relative amount of Variance per Frequency band');
     case 'PLOT:interSubjCorr'
-        CAT=varargin{1}; 
+        CAT=varargin{1};
         
         % load in spatialCorrFreq struct
         T=load(fullfile(studyDir{2},'encoding','glm4','cereb_spatialCorr_freq.mat'));
         xlabels={'overall','0-0.5','0.5-1','1-1.5','1.5-2','>2'};
-
+        
         T=tapply(T,{'subj','freq'},{'withinSubj'},{'betweenSubj'},{'totSS'},'subset',ismember(T.subj,returnSubjs));
         T.freqK = T.freq>0;
         lineplot([T.freqK T.freq],[T.withinSubj T.betweenSubj],'CAT',CAT);
@@ -357,7 +488,7 @@ switch what
         title('Within and Between-subject correlation');
         set(gcf,'PaperPosition',[2 2 4.5 5.5]);
         wysiwyg;
-
+        
     case 'REPRESENTATION:get_distances'
         type=varargin{1}; % 'cerebellum'
         removeMotor=varargin{2}; % 'hands','saccades','all','none'
@@ -438,22 +569,22 @@ switch what
         T=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         load(fullfile(studyDir{2},regDir,'glm4',sprintf('G_hat_sc1_sc2_%s.mat','cerebellum')))
         
-%                 R=[];
-%                 for s=1:2,
-%                     SC=getrow(T,T.StudyNum==s);
-%                     idx=SC.condNum;
-%                     numDist=length(idx);
-%                     avrgG_hat=nanmean(G_hat(idx,idx),3);
-%                     H=eye(numDist)-ones(numDist)/length(numDist);
-%                     avrgG_hat=(H*avrgG_hat*H);  % center G matrix
-%         
-%                     [V,L]   = eig(avrgG_hat);
-%                     [l,i]   = sort(diag(L),1,'descend');
-%                     S.study=repmat(s,length(i),1);
-%                     S.eig=real(l);
-%                     R=addstruct(R,S);
-%                 end
-%                   lineplot([1:size(R.study,1)]',R.eig,'split',R.study,'CAT',CAT);
+        %                 R=[];
+        %                 for s=1:2,
+        %                     SC=getrow(T,T.StudyNum==s);
+        %                     idx=SC.condNum;
+        %                     numDist=length(idx);
+        %                     avrgG_hat=nanmean(G_hat(idx,idx),3);
+        %                     H=eye(numDist)-ones(numDist)/length(numDist);
+        %                     avrgG_hat=(H*avrgG_hat*H);  % center G matrix
+        %
+        %                     [V,L]   = eig(avrgG_hat);
+        %                     [l,i]   = sort(diag(L),1,'descend');
+        %                     S.study=repmat(s,length(i),1);
+        %                     S.eig=real(l);
+        %                     R=addstruct(R,S);
+        %                 end
+        %                   lineplot([1:size(R.study,1)]',R.eig,'split',R.study,'CAT',CAT);
         idx=T.condNum;
         numDist=length(idx);
         avrgG_hat=nanmean(G_hat(idx,idx),3);
@@ -556,7 +687,7 @@ switch what
         wysiwyg;
         ttest(sqrt(T.within1.*T.within2),T.across,2,'paired');
         
-    case 'CONVERT:mni2suit' % converts from mni image to SUIT (there's also a cifti2nii if image is coming from HCP)
+    case 'CONVERT:mni2suit'    % converts from mni image to SUIT (there's also a cifti2nii if image is coming from HCP)
         inputImages={'N2C_subcortex_atlas_subcortexGSR.nii',...
             'Buckner2011_7Networks_MNI152_FreeSurferConformed1mm_TightMask.nii'};
         
@@ -627,7 +758,7 @@ switch what
         else
             cmapF=colorcube(max(M.data));
         end
-        figure()
+        
         switch metric,
             case 'yes'
                 % make paint and area files
@@ -689,7 +820,7 @@ switch what
         
         % save out paint and area files
         caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.paint',outName)),M);
-    case 'MAP:optimal'  % figure out optimal map for multiple clusters
+    case 'MAP:optimal'     % figure out optimal map for multiple clusters
         % example:sc1_sc2_functionalAtlas('MAP:optimal',<subjNums>,1,6,'group')
         sn=varargin{1};     % 'group' or <subjNum>
         study=varargin{2};  % 1 or 2 or [1,2]
@@ -757,7 +888,7 @@ switch what
             iter=iter+1;
         end;
         save(outName,'bestG','bestF','bestInfo','errors','randInd','iter','count','volIndx','V');
-    case 'MAP:computeR2' % temporary function to compute SSE for SNN
+    case 'MAP:computeR2'   % temporary function to compute SSE for SNN
         study=varargin{1}; % 1 or 2 or [1,2]
         K=varargin{2};     % K=numClusters (i.e. 5);
         
@@ -883,7 +1014,7 @@ switch what
         X.fname=outName;
         X.private.dat.fname=V.fname;
         spm_write_vol(X,Vv{1}.dat);
-    case 'MAP:compare' % this function is will compute randindex between maps (pairwise if more than 2 maps are provided)
+    case 'MAP:compare'  % this function is will compute randindex between maps (pairwise if more than 2 maps are provided)
         maps=varargin{1}; % give cell with any number of maps {'Cole_10Networks','Buckner_7Networks'} etc
         % example
         % sc1_sc2_functionalAtlas('MAP:compare',{'Cole_10Networks','Buckner_7Networks,'SC1_10cluster'})
@@ -909,7 +1040,7 @@ switch what
         end
         
         % print out values for all pairwise RI
-        idx=combnk(1:length(maps),2); 
+        idx=combnk(1:length(maps),2);
         for i=1:length(idx),
             fprintf('RI:%s with %s is %2.2f \n',char(maps(idx(i,1))),char(maps(idx(i,2))),RI(idx(i,1),idx(i,2)))
         end
@@ -1215,7 +1346,7 @@ switch what
         condType=varargin{5}; % evaluating on 'all' or 'unique' taskConds ??
         
         vararginoptions({varargin{6:end}},{'CAT','sn'}); % option if doing individual map analysis
-
+        
         switch type,
             case 'group'
                 T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',data,condType)));
@@ -1229,17 +1360,17 @@ switch what
             otherwise
                 fprintf('no such case')
         end
-
-        xyplot(T.bin,T.corr,T.bin,'split',T.bwParcel,'subset',T.crossval==crossval & T.dist<=35,'CAT',CAT);
+        
+        xyplot(T.bin,T.corr,T.bin,'split',T.bwParcel,'subset',T.crossval==crossval & T.dist<=35,'CAT',CAT,'leg',{'within','between'});
         
         % do stats (over all bins)
         C=getrow(T,T.crossval==1 & T.dist<=35); % only crossval and dist<35
-        S=tapply(C,{'bwParcel','SN'},{'corr'}); 
+        S=tapply(C,{'bwParcel','SN'},{'corr'});
         fprintf('overall \n')
-        ttest(S.corr(S.bwParcel==1), S.corr(S.bwParcel==0),2,'independent'); 
-
+        ttest(S.corr(S.bwParcel==1), S.corr(S.bwParcel==0),2,'independent');
+        
         % do stats (per bin)
-        bins=unique(C.bin); 
+        bins=unique(C.bin);
         for b=1:length(bins),
             fprintf('bin %d \n',b)
             ttest(C.corr(C.bwParcel==1 & C.bin==b), C.corr(C.bwParcel==0 & C.bin==b),2,'independent');
@@ -1288,11 +1419,11 @@ switch what
         lineplot(W.bin,W.diff,'split',W.type,'subset',W.dist<=35,'CAT',CAT,'leg','auto');
         
         % do stats (integrate over spatial bins)
-        C=getrow(W,W.dist<=35); 
+        C=getrow(W,W.dist<=35);
         S=tapply(C,{'m','SN','type'},{'corr'});
         
         for m=1:length(mapType),
-            y(m,:)=S.corr(S.m==m); 
+            y(m,:)=S.corr(S.m==m);
         end
         
         % do F test first - are there any differences across maps ?
@@ -1303,7 +1434,6 @@ switch what
             fprintf('%s:%s \n',mapType{idx(1,t)},mapType{idx(2,t)});
             ttest(y(idx(1,t),:),y(idx(2,t),:),2,'independent')
         end
-
     case 'EVAL:PLOT:Parcels'
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
         data=varargin{2}; % evaluating data from study [1] or [2]
@@ -1622,20 +1752,20 @@ switch what
             if (Border(b).numpoints>0 & EdgeWeight(b)>0)
                 p=plot(Border(b).data(:,1),Border(b).data(:,2),'k.');
                 set(p,'MarkerSize',LineWeight(b));
-                weights(b)=EdgeWeight(b); 
+                weights(b)=EdgeWeight(b);
             end;
         end;
         
-%         % plot percent (%) of variance explained by each functional boundary ?
-%         for b=1:length(weights),
-%             weightPer=(100/sum(weights))*weights(b);
-%             if (Border(b).numpoints>0 & EdgeWeight(b)>0)
-%                 p=text(double(Border(b).data(1,1)),double(Border(b).data(1,2)),sprintf('%s%%',num2str(round(weightPer))));
-%                 set(p,'FontSize',20);
-%             end
-%         end
+        %         % plot percent (%) of variance explained by each functional boundary ?
+        %         for b=1:length(weights),
+        %             weightPer=(100/sum(weights))*weights(b);
+        %             if (Border(b).numpoints>0 & EdgeWeight(b)>0)
+        %                 p=text(double(Border(b).data(1,1)),double(Border(b).data(1,2)),sprintf('%s%%',num2str(round(weightPer))));
+        %                 set(p,'FontSize',20);
+        %             end
+        %         end
         hold off;
-   
+        
     case 'ENCODE:get_features'
         mapType=varargin{1};
         
@@ -1687,30 +1817,31 @@ switch what
             % get 3 highest corrs
             for f=1:3,
                 B.featNames{i,f}=FeatureNames{b(f)};
+                B.featIdx(i,f)=b(f);
                 B.featCorrs(i,f)=a(f);
             end
         end;
         
-        varargout={B};
+        varargout={B,F,W};
         
-        %         % Make word lists for word map
-        %         figure(2);
-        %         DD = U;WORD=FeatureNames;
-        %         DD(DD<0)=0;
-        %         DD=DD./max(DD(:));
-        %         for j=1:numClusters,
-        %             subplot(3,4,j);
-        %             set(gca,'XLim',[0 2.5],'YLim',[-0.2 1.2]);
-        %             title(sprintf('Cluster%d',j))
-        %             for i=1:numFeat
-        %                 if (DD(i,j)>0)
-        %                     siz=ceil(DD(i,j)*20);
-        %                     text(unifrnd(0,1,1),unifrnd(0,1,1),WORD{i},'FontSize',siz);
-        %                 end;
-        %             end;
-        %         end;
-        %         set(gcf,'PaperPosition',[1 1 60 30]);
-        %         wysiwyg;
+%                 % Make word lists for word map
+%                 figure(2);
+%                 DD = U;WORD=FeatureNames;
+%                 DD(DD<0)=0;
+%                 DD=DD./max(DD(:));
+%                 for j=1:numClusters,
+%                     subplot(3,4,j);
+%                     set(gca,'XLim',[0 2.5],'YLim',[-0.2 1.2]);
+%                     title(sprintf('Cluster%d',j))
+%                     for i=1:numFeat
+%                         if (DD(i,j)>0)
+%                             siz=ceil(DD(i,j)*20);
+%                             text(unifrnd(0,1,1),unifrnd(0,1,1),WORD{i},'FontSize',siz);
+%                         end;
+%                     end;
+%                 end;
+%                 set(gcf,'PaperPosition',[1 1 60 30]);
+%                 wysiwyg;
     case 'ENCODE:make_featureMap'
         mapType=varargin{1};
         
@@ -1731,6 +1862,55 @@ switch what
                 text(unifrnd(0,1,1),unifrnd(0,1,1),B.featNames{i,j},'FontSize',siz,'Color',cmap(i,2:4));
             end
         end
+    case 'ENCODE:project_taskSpace'
+        mapType=varargin{1};
+        toPlot=varargin{2}; % 1 is [4,10] - left & right hand tasks etc          
+
+        vararginoptions({varargin{3:end}},{'CAT'});
+        
+        % get features
+        [B,F,W]=sc1_sc2_functionalAtlas('ENCODE:get_features',mapType);
+
+        D=dload(fullfile(baseDir,'motorFeats.txt')); % Read feature table
+        S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt')); % List of task conditions
+
+        % project back to task-space
+        load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'SNN.mat'));
+%         W=bestF; 
+        L=W'*W;
+        I=diag(diag(sqrt(L))); % diag not sum
+        X=W/I;
+        
+        % load in colourMap
+        cmap=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'colourMap.txt')); 
+        cmap=cmap(:,2:4)/255; 
+        
+        % feature loadings on network
+        net1=B.featIdx(toPlot(1),1); 
+        net2=B.featIdx(toPlot(2),1); 
+
+        % assign tasks to features (to colour-code)
+        for i=1:size(X,1),
+            if F(i,net1)>0 & F(i,net2)==0, % assign to network1
+                colourIdx{i,:}=cmap(toPlot(1),:);
+            elseif F(i,net2)>0 & F(i,net1)==0, % assign to network2
+                colourIdx{i,:}=cmap(toPlot(2),:);
+            elseif F(i,net1)>0 & F(i,net2)>0,
+                colourIdx{i,:}=[0 0 0]; % tasks that load onto both features
+            elseif F(i,net1)==0 & F(i,net2)==0,
+                colourIdx{i,:}=[.7 .7 .7]; % tasks that don't load onto features - grey out
+            else
+                colourIdx{i,:}=[.7 .7 .7];
+            end
+        end
+        CAT.markersize=8;
+        CAT.labelsize=10;
+        CAT.markercolour=colourIdx;
+        CAT.markerfill=colourIdx;
+        CAT.labelcolor=colourIdx;
+        
+        scatterplot(X(:,toPlot(1)),X(:,toPlot(2)),'label',S.condNames,'regression','linear','intercept',0,'draworig','CAT',CAT);
+        xlabel(sprintf('Network%d',toPlot(1)));ylabel(sprintf('Network%d',toPlot(2)));
         
     case 'AXES:eigenValues'
         % Aesthetics
@@ -1850,12 +2030,12 @@ switch what
         sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',toPlot,4,'group',1,'unique','CAT',CAT);
         
         % Labelling
-        set(gca,'YLim',[0 0.6],'XLim',[0 8],'FontSize',18);
-        xlabel('Spatial Bins');
+        set(gca,'YLim',[0 0.6],'XLim',[0 8],'FontSize',18,'xtick',[0 8],'XTickLabel',{'0','35'});
+        xlabel('Spatial Distances (mm)');
         ylabel('Activity Correlation (R)');
         title(plotName);
         set(gcf,'units','points','position',[5,5,1000,1000])
-        legend('within parcels', 'between parcels','Location','SouthWest')
+        %         legend({'within parcels', 'between parcels'},'Location','SouthWest')
     case 'AXES:MT_UpperLower' % makes graph for upper and lower bounds of multi-task plot
         toPlot={'SC12_10cluster','SC2_10cluster'};
         toPlotName='Multi-Task Parcellation';
@@ -1878,12 +2058,12 @@ switch what
         hold off
         
         % Labelling
-        set(gca,'YLim',[0 0.6],'XLim',[0 8],'FontSize',18);
-        xlabel('Spatial Bins');
+        set(gca,'YLim',[0 0.6],'XLim',[0 8],'FontSize',18,'xtick',[0 8],'XTickLabel',{'0','35'});
+        xlabel('Spatial Distances (mm)');
         ylabel('Activity Correlation (R)');
         title(toPlotName)
         set(gcf,'units','points','position',[5,5,1000,1000])
-        legend('within parcels', 'between parcels','Location','SouthWest')     
+        %         legend('within parcels', 'between parcels','Location','SouthWest')
     case 'AXES:diff_allMaps'  % make summary graph for diff curves for all maps
         toPlot=varargin{1}; % {'lob10','Buckner_7Networks','Cole_10Networks','SC12_10cluster','SC2_10cluster'}
         plotName=varargin{2}; % {'Lobular','Buckner7','Cole10','Multi-Task:Upper','Multi-Task:Lower'}
@@ -1903,8 +2083,8 @@ switch what
         sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNums,'group',1,'unique','CAT',CAT); % always take crossval + unique
         
         % Labelling
-        set(gca,'YLim',[0 0.18],'XLim',[0 8],'FontSize',18);
-        xlabel('Spatial Bins');
+        set(gca,'YLim',[0 0.18],'XLim',[0 8],'FontSize',18,'xtick',[0 8],'XTickLabel',{'0','35'});
+        xlabel('Spatial Distances (mm)');
         ylabel('Difference');
         set(gcf,'units','points','position',[5,5,1000,1000])
         legend(plotName,'Location','NorthWest')
@@ -1915,20 +2095,20 @@ switch what
         
         % aesthetics
         CAT.markersize=8;
-        CAT.markertype='^';
+        CAT.markertype={'^','v','s'};
         CAT.linewidth=4;
-        CAT.errorcolor={'m','y','c','b','k'};
-        CAT.linecolor={'m','y','c','b','k'};
-        CAT.markercolor={'m','y','c','b','k'};
-        CAT.markerfill={'m','y','c','b','k'};
-        CAT.linestyle={'-','-','-','--','-'};
-        CAT.linewidth={4, 4, 4, 4, 1};
+        CAT.errorcolor={'g','y','c','m'};
+        CAT.linecolor={'k','k','k','m'};
+        CAT.markercolor={'g','y','c','m'};
+        CAT.markerfill={'g','y','c','m'};
+        CAT.linestyle={'-','-','-','-'};
+        CAT.linewidth={4, 4, 4, 2};
         
         sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNums,'group',1,'unique','CAT',CAT); % always take crossval + unique
         
         % Labelling
-        set(gca,'YLim',[0 0.18],'XLim',[0 8],'FontSize',18);;
-        xlabel('Spatial Bins');
+        set(gca,'YLim',[0 0.18],'XLim',[0 8],'FontSize',18,'xtick',[0 8],'XTickLabel',{'0','35'});;
+        xlabel('Spatial Distances (mm)');
         ylabel('Difference');
         set(gcf,'units','points','position',[5,5,1000,1000])
         legend(plotName,'Location','NorthWest')
@@ -1983,15 +2163,25 @@ switch what
         toPlotName=varargin{2}; % 'Lobular', 'Buckner7' etc
         
         sc1_sc2_functionalAtlas('STRENGTH:visualise_bound',toPlot)
-        title(toPlotName);
+%         title(toPlotName);
         set(gca,'FontSize',18);
         set(gca,'Xticklabel',[],'Yticklabel',[])
         axis off
         set(gcf,'units','points','position',[5,5,1000,1000])
-    case 'AXES:featMapping'  % graph the "winner" features for each cluster 
+    case 'AXES:winnerFeats'  % graph the "winner" features for each cluster
         sc1_sc2_functionalAtlas('ENCODE:make_featureMap','SC12_10cluster')
         
         set(gcf,'units','points','position',[5,5,1000,1000])
+    case 'AXES:taskSpace'
+        toPlot=varargin{1}; 
+        
+        % Aesthetics
+        CAT.markersize=8;
+        CAT.labelsize=10;
+        sc1_sc2_functionalAtlas('ENCODE:project_taskSpace','SC12_10cluster',toPlot,'CAT',CAT)
+        
+        set(gcf,'units','points','position',[5,5,1000,1000])
+        set(gca,'YLim',[-.25 0.45],'XLim',[-.25 .45],'FontSize',18);
     case 'AXES:varianceFreq'
         % Aesthetics
         CAT.markersize=8;
@@ -2024,52 +2214,68 @@ switch what
     case 'FIGURE2' % Representational Structure
         sc1_sc2_functionalAtlas('AXES:MDS')
     case 'FIGURE3' % Lobular versus Functional
-        subplot(2,2,3)
-        sc1_sc2_functionalAtlas('AXES:group_curves','lob10','Lobular Parcellation')
-        subplot(2,2,4)
-        sc1_sc2_functionalAtlas('AXES:MT_UpperLower','Multi-Task Parcellation')
         subplot(2,2,1)
-        sc1_sc2_functionalAtlas('AXES:boundary_strength','lob10','Lobular Parcellation')
+        sc1_sc2_functionalAtlas('AXES:group_curves','lob10','Lobular Parcellation')
         subplot(2,2,2)
+        sc1_sc2_functionalAtlas('AXES:MT_UpperLower','Multi-Task Parcellation')
+        subplot(2,2,3)
+        sc1_sc2_functionalAtlas('AXES:boundary_strength','lob10','Lobular Parcellation')
+        subplot(2,2,4)
         sc1_sc2_functionalAtlas('AXES:boundary_strength','SC12_10cluster','Multi-Task Parcellation')
     case 'FIGURE4' % Map Similarity
         sc1_sc2_functionalAtlas('AXES:map_similarity',{'lob10','SC12_10cluster','Buckner_7Networks','Buckner_17Networks','Cole_10Networks'},...
-           {'Lobular','Multi-Task','Buckner7','Buckner17','Cole10'}); 
+            {'Lobular','Multi-Task','Buckner7','Buckner17','Cole10'});
     case 'FIGURE5' % Resting State Parcellations
-        subplot(2,3,4)
-        sc1_sc2_functionalAtlas('AXES:group_curves','Buckner_7Networks','Buckner7')
-        subplot(2,3,5)
-        sc1_sc2_functionalAtlas('AXES:group_curves','Buckner_17Networks','Buckner17')
-        subplot(2,3,6)
-        sc1_sc2_functionalAtlas('AXES:group_curves','Cole_10Networks','Cole10')
         subplot(2,3,1)
-        sc1_sc2_functionalAtlas('AXES:boundary_strength','Buckner_7Networks','Buckner7')
+        sc1_sc2_functionalAtlas('AXES:group_curves','Buckner_7Networks','Buckner7')
         subplot(2,3,2)
-        sc1_sc2_functionalAtlas('AXES:boundary_strength','Buckner_17Networks','Buckner17')
+        sc1_sc2_functionalAtlas('AXES:group_curves','Buckner_17Networks','Buckner17')
         subplot(2,3,3)
+        sc1_sc2_functionalAtlas('AXES:group_curves','Cole_10Networks','Cole10')
+        subplot(2,3,4)
+        sc1_sc2_functionalAtlas('AXES:boundary_strength','Buckner_7Networks','Buckner7')
+        subplot(2,3,5)
+        sc1_sc2_functionalAtlas('AXES:boundary_strength','Buckner_17Networks','Buckner17')
+        subplot(2,3,6)
         sc1_sc2_functionalAtlas('AXES:boundary_strength','Cole_10Networks','Cole10')
     case 'FIGURE6' % Summary Graph
         sc1_sc2_functionalAtlas('AXES:diff_allMaps',{'lob10','Cole_10Networks','Buckner_7Networks','SC12_10cluster','SC2_10cluster'},...
             {'Lobular','Cole10','Buckner7','Multi-Task:Upper','Multi-Task:Lower'},...
             [4,4,4,4,4])
-    case 'FIGURE7' % Deriving the Multi-Task Parcellations
+    case 'FIGURE7' % Multiple Multi-Task Parcellations
         subplot(2,2,[3 4])
         sc1_sc2_functionalAtlas('AXES:diff_SNNMaps',{'SC12_7cluster','SC12_10cluster','SC12_17cluster','lob10'},{'Multi-Task:7','Multi-Task:10','Multi-Task:17','Lobular'},repmat([4],4,1))
         subplot(2,2,2)
         sc1_sc2_functionalAtlas('AXES:boundary_strength','SC12_17cluster','Multi-Task17')
         subplot(2,2,1)
         sc1_sc2_functionalAtlas('AXES:boundary_strength','SC12_7cluster','Multi-Task7')
-    case 'FIGURE8' % Group Versus Individual
-%         subplot(2,4,1)
-%         sc1_sc2_functionalAtlas('AXES:MT_indiv_curves',2,'S02')
-%         subplot(2,4,3)
-%         sc1_sc2_functionalAtlas('AXES:MT_indiv_curves',4,'S04')
-%         subplot(2,4,[5:8])
-%         sc1_sc2_functionalAtlas('AXES:MT_group_indiv')
-%         subplot(2,4,2)
-%         sc1_sc2_functionalAtlas('AXES:map','SC12_10cluster','S02','sn',2)
-%         subplot(2,4,4)
-%         sc1_sc2_functionalAtlas('AXES:map','SC12_10cluster','S04','sn',4)
+    case 'FIGURE8a'% Multi-Task Map
+        sc1_sc2_functionalAtlas('AXES:map','SC12_10cluster','Multi-Task')
+    case 'FIGURE8b'
+    case 'FIGURE8c'% Assigning Semantic Labels
+        subplot(1,3,1)
+        sc1_sc2_functionalAtlas('AXES:taskSpace',[4,10])
+        subplot(1,3,2)
+        sc1_sc2_functionalAtlas('AXES:taskSpace',[3,6])
+        subplot(1,3,3)
+        sc1_sc2_functionalAtlas('AXES:taskSpace',[9,1])
+%         subplot(1,6,3)
+%         sc1_sc2_functionalAtlas('AXES:taskSpace',[10,3])
+%         subplot(1,6,4)
+%         sc1_sc2_functionalAtlas('AXES:taskSpace',[6,10]) % [3,5]
+%         subplot(1,6,5)
+%         sc1_sc2_functionalAtlas('AXES:taskSpace',[10,5])
+    case 'FIGURE9' % Group Versus Individual
+        %         subplot(2,4,1)
+        %         sc1_sc2_functionalAtlas('AXES:MT_indiv_curves',2,'S02')
+        %         subplot(2,4,3)
+        %         sc1_sc2_functionalAtlas('AXES:MT_indiv_curves',4,'S04')
+        %         subplot(2,4,[5:8])
+        %         sc1_sc2_functionalAtlas('AXES:MT_group_indiv')
+        %         subplot(2,4,2)
+        %         sc1_sc2_functionalAtlas('AXES:map','SC12_10cluster','S02','sn',2)
+        %         subplot(2,4,4)
+        %         sc1_sc2_functionalAtlas('AXES:map','SC12_10cluster','S04','sn',4)
         
         subplot(2,2,1)
         sc1_sc2_functionalAtlas('AXES:varianceFreq')
@@ -2077,7 +2283,7 @@ switch what
         sc1_sc2_functionalAtlas('AXES:interSubjCorr')
         subplot(2,2,[3,4])
         sc1_sc2_functionalAtlas('AXES:MT_group_indiv')
-    
+        
 end
 % Local functions
 function dircheck(dir)
