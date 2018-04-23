@@ -186,7 +186,7 @@ switch what
         caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','unCorr_taskConds.metric'),M);
     case 'ACTIVITY:reliability'
         glm=varargin{1};
-        type=varargin{2}; % 'cerebellum' or 'cortex'
+        type=varargin{2}; % 'cerebellum' or 'cortex' 'basalGanglia'
         
         D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         
@@ -236,15 +236,12 @@ switch what
         % load relability
         load(fullfile(studyDir{2},regDir,'glm4','patternReliability_cerebellum.mat'));
         
-        figure();lineplot(S.condNum,[S.within1,S.within2,S.across],'leg',{'within1','within2','across'})
+        %         figure();lineplot(S.condNum,[S.within1,S.within2,S.across],'leg',{'within1','within2','across'})
         A=tapply(S,{'SN'},{'across'},{'within1'},{'within2'});
         
         % within & between-subj reliability
-        myboxplot([],[A.within1 A.within2 A.across],'style_block','plotall',2);
+        myboxplot([],[A.within1 A.within2 A.across],'style_twoblock','plotall',1);
         drawline(0,'dir','horz');
-        set(gca,'XTickLabel',{'SC1','SC2','across'});
-        set(gcf,'PaperPosition',[2 2 4 3]);
-        wysiwyg;
         ttest(sqrt(A.within1.*A.within2),A.across,2,'paired');
         
     case 'PREDICTIONS:motorFeats'   % predict motor feature model + task model (cross-validated with fixed lambda)
@@ -598,8 +595,10 @@ switch what
         
         lineplot(S.idx,S.eig,'CAT',CAT)
     case 'REPRESENTATION:RDM'
+        type=varargin{1}; % 'all' or 'none'
+        
         % load in fullRDM
-        [fullRDM,T,~]=sc1_sc2_functionalAtlas('REPRESENTATION:get_distances','cerebellum','none');
+        [fullRDM,T,~]=sc1_sc2_functionalAtlas('REPRESENTATION:get_distances','cerebellum',type);
         
         % Plot RDM
         reOrder=[1,2,6,7,8,9,10,11,12,13,14,17,18,22,23,3,4,5,15,16,19,20,21,24,25,26,...
@@ -616,6 +615,7 @@ switch what
         t(p>.00001)=0; % thresholded distances
         
         % use spm_P_FDR or hand code the multiple comparisons
+        fprintf('%2.2f%% of the pairwise distances are significantly different from zero \n',(length(t(t>0))/length(t))*100);
         
         % get group
         avrgFullRDM=ssqrt(nanmean(fullRDM,3));
@@ -629,15 +629,22 @@ switch what
         squareT(isnan(squareT))=0;
         figure();imagesc_rectangle(squareT(reOrder,reOrder),'YDir','reverse')
         caxis([0 1]);
-        t=set(gca,'Ytick',[1:numDist]','YTickLabel',T.condNames(reOrder)','FontSize',7);
-        t.Color='white';
+        g=set(gca,'Ytick',[1:numDist]','YTickLabel',T.condNames(reOrder)','FontSize',7);
+        g.Color='white';
         colorbar
     case 'REPRESENTATION:MDS'
-        CAT=varargin{1};
-        colour=varargin{2};
+        type=varargin{1}; % 'all','hands','saccades','none'
+        
+        % colour
+        colour={[1 0 0],[0 1 0],[0 0 1],[0.3 0.3 0.3],[1 0 1],[1 1 0],[0 1 1],...
+            [0.5 0 0.5],[0.8 0.8 0.8],[.07 .48 .84],[.99 .76 .21],[.11 .7 .68],...
+            [.39 .74 .52],[.21 .21 .62],[0.2 0.2 0.2],[.6 .6 .6],[.3 0 .8],[.8 0 .4],...
+            [0 .9 .2],[.1 .3 0],[.2 .4 0],[.63 0 .25],[0 .43 .21],[.4 0 .8]};
+        
+        vararginoptions({varargin{2:end}},{'CAT','colour'}); % option if doing individual map analysis
         
         % load in fullRDM
-        [fullRDM,T,X]=sc1_sc2_functionalAtlas('REPRESENTATION:get_distances','cerebellum','none');
+        [fullRDM,T,X]=sc1_sc2_functionalAtlas('REPRESENTATION:get_distances','cerebellum',type); % remove all motorFeats
         
         avrgFullRDM=ssqrt(nanmean(fullRDM,3));
         
@@ -669,11 +676,11 @@ switch what
         hold on;
         plot3(0,0,0,'+');
         % Draw connecting lines
-        for i=1:15,
-            ind=clustTree(i,1:2);
-            X(end+1,:)=(X(ind(1),:)+X(ind(2),:))/2;
-            line(X(ind,1),X(ind,2),X(ind,3));
-        end;
+        %         for i=1:15,
+        %             ind=clustTree(i,1:2);
+        %             X(end+1,:)=(X(ind(1),:)+X(ind(2),:))/2;
+        %             line(X(ind,1),X(ind,2),X(ind,3));
+        %         end;
         hold off;
         clear X1  indxShort
     case 'PLOT:reliabilityD'
@@ -681,10 +688,7 @@ switch what
         load(fullfile(studyDir{2},regDir,'glm4','distanceReliability_cerebellum.mat'));
         
         % within & between-subj reliability
-        myboxplot([],[T.within1 T.within2 T.across],'style_block','plotall',2);
-        set(gca,'XTickLabel',{'SC1','SC2','across'});
-        set(gcf,'PaperPosition',[2 2 4 3]);
-        wysiwyg;
+        myboxplot([],[T.within1 T.within2 T.across],'style_twoblock','plotall',1);
         ttest(sqrt(T.within1.*T.within2),T.across,2,'paired');
         
     case 'CONVERT:mni2suit'    % converts from mni image to SUIT (there's also a cifti2nii if image is coming from HCP)
@@ -1147,6 +1151,54 @@ switch what
         % center the data (remove overall mean)
         X_C=bsxfun(@minus,UFullAvrgAll,mean(UFullAvrgAll));
         varargout={X_C,volIndx,V,sn};
+    case 'EVAL:visualise_data' % this just visualises the volume (averaged betas for unique taskConds) for each dataset
+        sn=varargin{1}; % take example subject
+        study=varargin{2}; % take example study
+        mapType=varargin{3}; % take example mapType
+        
+        % load map
+        inDir=fullfile(studyDir{2},encodeDir,'glm4');
+        mapName=fullfile(inDir,subj_name{sn},sprintf('map_%s.nii',mapType));
+        
+        % load in func data to evaluate
+        load(fullfile(studyDir{study},'encoding','glm4','cereb_avrgDataStruct.mat'));
+        
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        D1=getrow(D,D.StudyNum==study);
+        
+        idx=D1.condNum(D1.overlap==0); % get index for unique tasks
+        
+        % Now get the parcellation sampled into the same space
+        [i,j,k]=ind2sub(V.dim,volIndx);
+        [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
+        VA= spm_vol(mapName);
+        [i1,j1,k1]=spmj_affine_transform(x,y,z,inv(VA.mat));
+        Parcel = spm_sample_vol(VA,i1,j1,k1,0);
+        voxIn = Parcel>0;
+        X=spm_read_vols(VA);
+        voxNum = find(X>0);
+        clear i j k x y z i1 j1 k1; % Free memory
+        
+        for s=sn,
+            for c=1:length(idx),
+                i1(c) = find(T.SN==s & T.sess==1 & T.cond==idx(c));
+                i2(c) = find(T.SN==s & T.sess==2 & T.cond==idx(c));
+            end
+            D=(T.data(i1,voxIn)+T.data(i2,voxIn))/2;
+        end
+        % average across all unique taskConds
+        Vavrg=nanmean(D,1);
+        
+        % make volume
+        Yy=zeros(1,VA.dim(1)*VA.dim(2)*VA.dim(3));
+        Yy(1,voxNum)=Vavrg;
+        Yy=reshape(Yy,[VA.dim(1),VA.dim(2),VA.dim(3)]);
+        Yy(Yy==0)=NaN;
+        
+        % write out volume
+        VA.fname=fullfile(inDir,subj_name{sn},sprintf('uniqueTasks_SC%d.nii',study));
+        VA.private.dat.fname=VA.fname;
+        spm_write_vol(VA,Yy);
     case 'EVAL:crossval'
         sn=varargin{1}; % 'group' or <subjNum>
         mapType=varargin{2}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks', 'Cole_10Networks','SC<studyNum>_<num>cluster'
@@ -1197,7 +1249,7 @@ switch what
                 i1(c) = find(T.SN==s & T.sess==1 & T.cond==idx(c));
                 i2(c) = find(T.SN==s & T.sess==2 & T.cond==idx(c));
             end
-            D=(T.data(i1,voxIn)+T.data(i2,voxIn))/2; % why divide by 2 ?
+            D=(T.data(i1,voxIn)+T.data(i2,voxIn))/2;
             
             fprintf('%d cross\n',s);
             R.SN = ones(length(R.N),1)*s;
@@ -1429,11 +1481,11 @@ switch what
         % do F test first - are there any differences across maps ?
         
         % do individual t-tests
-        idx=combnk([1:length(mapType)],2)';
-        for t=1:length(idx),
-            fprintf('%s:%s \n',mapType{idx(1,t)},mapType{idx(2,t)});
-            ttest(y(idx(1,t),:),y(idx(2,t),:),2,'independent')
-        end
+        %         idx=combnk([1:length(mapType)],2)';
+        %         for t=1:length(idx),
+        %             fprintf('%s:%s \n',mapType{idx(1,t)},mapType{idx(2,t)});
+        %             ttest(y(idx(1,t),:),y(idx(2,t),:),2,'independent')
+        %         end
     case 'EVAL:PLOT:Parcels'
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
         data=varargin{2}; % evaluating data from study [1] or [2]
@@ -1775,6 +1827,9 @@ switch what
         load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'SNN.mat'));
         W=pivottablerow(S.condNumUni,bestF,'mean(x,1)'); % we only want unique taskConds
         
+        % get new condNames (unique only)
+        condNames=[S.condNames(S.StudyNum==1);S.condNames(S.StudyNum==2 & S.overlap==0)];
+        
         % Make the feature matrix
         D.LeftHand    = D.leftHandPresses ./D.duration;
         D.RightHand   = D.rightHandPresses ./D.duration;
@@ -1822,95 +1877,117 @@ switch what
             end
         end;
         
-        varargout={B,F,W};
+        varargout={B,F,W,C,condNames,FeatureNames};
         
-%                 % Make word lists for word map
-%                 figure(2);
-%                 DD = U;WORD=FeatureNames;
-%                 DD(DD<0)=0;
-%                 DD=DD./max(DD(:));
-%                 for j=1:numClusters,
-%                     subplot(3,4,j);
-%                     set(gca,'XLim',[0 2.5],'YLim',[-0.2 1.2]);
-%                     title(sprintf('Cluster%d',j))
-%                     for i=1:numFeat
-%                         if (DD(i,j)>0)
-%                             siz=ceil(DD(i,j)*20);
-%                             text(unifrnd(0,1,1),unifrnd(0,1,1),WORD{i},'FontSize',siz);
-%                         end;
-%                     end;
-%                 end;
-%                 set(gcf,'PaperPosition',[1 1 60 30]);
-%                 wysiwyg;
-    case 'ENCODE:make_featureMap'
+        %                 % Make word lists for word map
+        %                 figure(2);
+        %                 DD = U;WORD=FeatureNames;
+        %                 DD(DD<0)=0;
+        %                 DD=DD./max(DD(:));
+        %                 for j=1:numClusters,
+        %                     subplot(3,4,j);
+        %                     set(gca,'XLim',[0 2.5],'YLim',[-0.2 1.2]);
+        %                     title(sprintf('Cluster%d',j))
+        %                     for i=1:numFeat
+        %                         if (DD(i,j)>0)
+        %                             siz=ceil(DD(i,j)*20);
+        %                             text(unifrnd(0,1,1),unifrnd(0,1,1),WORD{i},'FontSize',siz);
+        %                         end;
+        %                     end;
+        %                 end;
+        %                 set(gcf,'PaperPosition',[1 1 60 30]);
+        %                 wysiwyg;
+    case 'ENCODE:project_featSpace'
         mapType=varargin{1};
+        toPlot=varargin{2}; % 'winner' or 'all' or 'featMatrix'
         
         % get features
-        B=sc1_sc2_functionalAtlas('ENCODE:get_features',mapType);
+        [B,F,~,C,condNames,FeatureNames]=sc1_sc2_functionalAtlas('ENCODE:get_features',mapType);
         
-        % get cluster colours
-        cmap=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'colourMap.txt'));
-        cmap=cmap/255;
-        
-        % figure out where to position features
-        for i=1:size(B.featNames,1),
-            subplot(3,4,i);
-            set(gca,'XLim',[0 2.5],'YLim',[-0.2 1.2]);
-            text(0,1.2,sprintf('cluster%d',i),'FontSize',20,'Color',cmap(i,2:4));
-            for j=1:size(B.featNames,2),
-                siz=ceil(B.featCorrs(i,j)*20);
-                text(unifrnd(0,1,1),unifrnd(0,1,1),B.featNames{i,j},'FontSize',siz,'Color',cmap(i,2:4));
-            end
+        switch toPlot,
+            case 'all'
+                imagesc_rectangle(C);
+                caxis([0 1]);
+                t=set(gca,'Ytick',[1:length(FeatureNames)]','YTickLabel',FeatureNames');
+                t.Color='white';
+                colorbar
+            case 'winner'
+                % get cluster colours
+                cmap=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'colourMap.txt'));
+                cmap=cmap/255;
+                
+                % figure out where to position features
+                for i=1:size(B.featNames,1),
+                    subplot(3,4,i);
+                    set(gca,'XLim',[0 2.5],'YLim',[-0.2 1.2]);
+                    text(0,1.2,sprintf('Network %d',i),'FontSize',20,'Color',cmap(i,2:4));
+                    for j=1:size(B.featNames,2),
+                        siz=ceil(B.featCorrs(i,j)*20);
+                        text(unifrnd(0,1,1),unifrnd(0,1,1),B.featNames{i,j},'FontSize',siz,'Color',cmap(i,2:4));
+                    end
+                end
+            case 'featMatrix'
+                imagesc_rectangle(F');
+                caxis([0 1]);
+                t=set(gca,'Ytick',[1:length(FeatureNames)]','YTickLabel',FeatureNames',...
+                    'Xtick',[1:length(condNames)]');
+                t.Color='white';
         end
     case 'ENCODE:project_taskSpace'
         mapType=varargin{1};
-        toPlot=varargin{2}; % 1 is [4,10] - left & right hand tasks etc          
-
+        toPlot=varargin{2}; % 1 is [4,10] - left & right hand tasks etc
+        
         vararginoptions({varargin{3:end}},{'CAT'});
         
         % get features
-        [B,F,W]=sc1_sc2_functionalAtlas('ENCODE:get_features',mapType);
-
+        [B,F,W,~,condNames]=sc1_sc2_functionalAtlas('ENCODE:get_features',mapType);
+        
         D=dload(fullfile(baseDir,'motorFeats.txt')); % Read feature table
         S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt')); % List of task conditions
-
+        
         % project back to task-space
         load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'SNN.mat'));
-%         W=bestF; 
+        %         W=bestF;
         L=W'*W;
         I=diag(diag(sqrt(L))); % diag not sum
         X=W/I;
         
-        % load in colourMap
-        cmap=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'colourMap.txt')); 
-        cmap=cmap(:,2:4)/255; 
-        
-        % feature loadings on network
-        net1=B.featIdx(toPlot(1),1); 
-        net2=B.featIdx(toPlot(2),1); 
-
-        % assign tasks to features (to colour-code)
-        for i=1:size(X,1),
-            if F(i,net1)>0 & F(i,net2)==0, % assign to network1
-                colourIdx{i,:}=cmap(toPlot(1),:);
-            elseif F(i,net2)>0 & F(i,net1)==0, % assign to network2
-                colourIdx{i,:}=cmap(toPlot(2),:);
-            elseif F(i,net1)>0 & F(i,net2)>0,
-                colourIdx{i,:}=[0 0 0]; % tasks that load onto both features
-            elseif F(i,net1)==0 & F(i,net2)==0,
-                colourIdx{i,:}=[.7 .7 .7]; % tasks that don't load onto features - grey out
-            else
-                colourIdx{i,:}=[.7 .7 .7];
+        if strcmp(toPlot,'all'),
+            imagesc_rectangle(X);
+            caxis([0 1]);
+            t=set(gca,'Ytick',[1:length(condNames)]','YTickLabel',condNames');
+            t.Color='white';
+            colorbar
+        else
+            % load in colourMap
+            cmap=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'colourMap.txt'));
+            cmap=cmap(:,2:4)/255;
+            
+            % feature loadings on network
+            net1=B.featIdx(toPlot(1),1);
+            net2=B.featIdx(toPlot(2),1);
+            
+            % assign tasks to features (to colour-code)
+            for i=1:size(X,1),
+                if F(i,net1)>0 & F(i,net2)==0, % assign to network1
+                    colourIdx{i,:}=cmap(toPlot(1),:);
+                elseif F(i,net2)>0 & F(i,net1)==0, % assign to network2
+                    colourIdx{i,:}=cmap(toPlot(2),:);
+                elseif F(i,net1)>0 & F(i,net2)>0,
+                    colourIdx{i,:}=[0 0 0]; % tasks that load onto both features
+                elseif F(i,net1)==0 & F(i,net2)==0,
+                    colourIdx{i,:}=[.7 .7 .7]; % tasks that don't load onto features - grey out
+                else
+                    colourIdx{i,:}=[.7 .7 .7];
+                end
             end
+            CAT.markercolor=colourIdx;
+            CAT.markerfill=colourIdx;
+            CAT.labelcolor=colourIdx;
+            
+            scatterplot(X(:,toPlot(1)),X(:,toPlot(2)),'label',condNames,'regression','linear','intercept',0,'draworig','CAT',CAT);
+            xlabel(sprintf('Network%d',toPlot(1)));ylabel(sprintf('Network%d',toPlot(2)));
         end
-        CAT.markersize=8;
-        CAT.labelsize=10;
-        CAT.markercolour=colourIdx;
-        CAT.markerfill=colourIdx;
-        CAT.labelcolor=colourIdx;
-        
-        scatterplot(X(:,toPlot(1)),X(:,toPlot(2)),'label',S.condNames,'regression','linear','intercept',0,'draworig','CAT',CAT);
-        xlabel(sprintf('Network%d',toPlot(1)));ylabel(sprintf('Network%d',toPlot(2)));
         
     case 'AXES:eigenValues'
         % Aesthetics
@@ -1926,7 +2003,27 @@ switch what
         set(gca,'FontSize',14);
         ylabel('Eigenvalues')
         xlabel('# of dimensions')
+    case 'AXES:reliability'
+        toPlot=varargin{1}; % 'D' (for distance) or 'A' (for activity)
+        toPlotName=varargin{2}; % 'distance reliability' or 'activity reliability'
+        
+        sc1_sc2_functionalAtlas(sprintf('PLOT:reliability%s',toPlot))
+        
+        % Labelling
+        set(gca,'FontSize',18);
+        set(gca,'XTickLabel',{'SC1','SC2','across'})
+        ylabel('Activity Correlation (R)');
+        title(toPlotName)
+        set(gcf,'units','points','position',[5,5,1000,1000])
+    case 'AXES:RDM'
+        type=varargin{1}; % 'all' or 'none' - removeMotor
+        
+        % aesthetics
+        sc1_sc2_functionalAtlas('REPRESENTATION:RDM',type)
+        set(gcf,'units','points','position',[5,5,1000,1000])
     case 'AXES:MDS' % plots MDS plot
+        type=varargin{1}; % 'all' or 'none' - removeMotor
+        
         % aesthetics
         colour={[1 0 0],[0 1 0],[0 0 1],[0.3 0.3 0.3],[1 0 1],[1 1 0],[0 1 1],...
             [0.5 0 0.5],[0.8 0.8 0.8],[.07 .48 .84],[.99 .76 .21],[.11 .7 .68],...
@@ -1934,9 +2031,9 @@ switch what
             [0 .9 .2],[.1 .3 0],[.2 .4 0],[.63 0 .25],[0 .43 .21],[.4 0 .8]};
         CAT.markersize=10;
         CAT.markertype='o';
-        CAT.labelsize=12;
+        CAT.labelsize=14;
         
-        sc1_sc2_functionalAtlas('REPRESENTATION:MDS',CAT,colour)
+        sc1_sc2_functionalAtlas('REPRESENTATION:MDS',type,'CAT',CAT,'colour',colour)
         set(gcf,'units','points','position',[5,5,1000,1000])
         axis equal;
         set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
@@ -2136,18 +2233,18 @@ switch what
         CAT.markersize=8;
         CAT.markertype='^';
         CAT.linewidth={2 1};
-        CAT.errorcolor={'m','m'};
-        CAT.linecolor={'m','m'};
-        CAT.markercolor={'m','m'};
-        CAT.markerfill={'m','m'};
+        CAT.errorcolor={'r','r'};
+        CAT.linecolor={'r','r'};
+        CAT.markercolor={'r','r'};
+        CAT.markerfill={'r','r'};
         CAT.linestyle={'-','--'};
         
         sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',{'SC12_10cluster','SC2_10cluster'},[4 4],'group',1,'unique','CAT',CAT); % always take crossval + unique
         hold on
-        CAT.errorcolor={'b','b'};
-        CAT.linecolor={'b','b'};
-        CAT.markercolor={'b','b'};
-        CAT.markerfill={'b','b'};
+        CAT.errorcolor={'k','k'};
+        CAT.linecolor={'k','k'};
+        CAT.markercolor={'k','k'};
+        CAT.markerfill={'k','k'};
         CAT.linestyle={'-','--'};
         CAT.linewidth={2 1};
         sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',{'SC12_10cluster','SC2_10cluster'},[4 4],'indiv',1,'unique','CAT',CAT,'sn',returnSubjs);
@@ -2157,31 +2254,39 @@ switch what
         xlabel('Spatial Bins');
         ylabel('Difference');
         set(gcf,'units','points','position',[5,5,1000,1000])
-        legend('group','individual','Location','NorthWest')
+        %         legend('group','individual','Location','NorthWest')
     case 'AXES:boundary_strength' % makes separate graphs for 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_10cluster'
         toPlot=varargin{1}; % 'lob10','Buckner_7Networks' etc
         toPlotName=varargin{2}; % 'Lobular', 'Buckner7' etc
         
         sc1_sc2_functionalAtlas('STRENGTH:visualise_bound',toPlot)
-%         title(toPlotName);
+        %         title(toPlotName);
         set(gca,'FontSize',18);
         set(gca,'Xticklabel',[],'Yticklabel',[])
         axis off
         set(gcf,'units','points','position',[5,5,1000,1000])
-    case 'AXES:winnerFeats'  % graph the "winner" features for each cluster
-        sc1_sc2_functionalAtlas('ENCODE:make_featureMap','SC12_10cluster')
+    case 'AXES:featSpace'  % graph the feature loadings for each network
+        toPlot=varargin{1}; % 'winner' or 'all'
         
+        sc1_sc2_functionalAtlas('ENCODE:project_featSpace','SC12_10cluster',toPlot)
+        
+        set(gca,'FontSize',9);
         set(gcf,'units','points','position',[5,5,1000,1000])
-    case 'AXES:taskSpace'
-        toPlot=varargin{1}; 
+    case 'AXES:taskSpace'  % graph the task loadings for each network
+        toPlot=varargin{1}; % either [4,10] or 'all' (if you want all taskLoadings
         
         % Aesthetics
-        CAT.markersize=8;
-        CAT.labelsize=10;
+        CAT.markersize=12;
+        CAT.labelsize=18;
         sc1_sc2_functionalAtlas('ENCODE:project_taskSpace','SC12_10cluster',toPlot,'CAT',CAT)
         
         set(gcf,'units','points','position',[5,5,1000,1000])
-        set(gca,'YLim',[-.25 0.45],'XLim',[-.25 .45],'FontSize',18);
+        set(gca,'FontSize',9);
+    case 'AXES:featMatrix' % graph the feature matrix
+        sc1_sc2_functionalAtlas('ENCODE:project_featSpace','SC12_10cluster','featMatrix')
+        
+        set(gcf,'units','points','position',[5,5,1000,1000])
+        set(gca,'FontSize',9);
     case 'AXES:varianceFreq'
         % Aesthetics
         CAT.markersize=8;
@@ -2212,7 +2317,7 @@ switch what
         
     case 'FIGURE1' % Motor Feature Model
     case 'FIGURE2' % Representational Structure
-        sc1_sc2_functionalAtlas('AXES:MDS')
+        sc1_sc2_functionalAtlas('AXES:MDS','all')
     case 'FIGURE3' % Lobular versus Functional
         subplot(2,2,1)
         sc1_sc2_functionalAtlas('AXES:group_curves','lob10','Lobular Parcellation')
@@ -2222,9 +2327,6 @@ switch what
         sc1_sc2_functionalAtlas('AXES:boundary_strength','lob10','Lobular Parcellation')
         subplot(2,2,4)
         sc1_sc2_functionalAtlas('AXES:boundary_strength','SC12_10cluster','Multi-Task Parcellation')
-    case 'FIGURE4' % Map Similarity
-        sc1_sc2_functionalAtlas('AXES:map_similarity',{'lob10','SC12_10cluster','Buckner_7Networks','Buckner_17Networks','Cole_10Networks'},...
-            {'Lobular','Multi-Task','Buckner7','Buckner17','Cole10'});
     case 'FIGURE5' % Resting State Parcellations
         subplot(2,3,1)
         sc1_sc2_functionalAtlas('AXES:group_curves','Buckner_7Networks','Buckner7')
@@ -2245,26 +2347,19 @@ switch what
     case 'FIGURE7' % Multiple Multi-Task Parcellations
         subplot(2,2,[3 4])
         sc1_sc2_functionalAtlas('AXES:diff_SNNMaps',{'SC12_7cluster','SC12_10cluster','SC12_17cluster','lob10'},{'Multi-Task:7','Multi-Task:10','Multi-Task:17','Lobular'},repmat([4],4,1))
-        subplot(2,2,2)
-        sc1_sc2_functionalAtlas('AXES:boundary_strength','SC12_17cluster','Multi-Task17')
-        subplot(2,2,1)
-        sc1_sc2_functionalAtlas('AXES:boundary_strength','SC12_7cluster','Multi-Task7')
+        %         subplot(2,2,2)
+        %         sc1_sc2_functionalAtlas('AXES:boundary_strength','SC12_17cluster','Multi-Task17')
+        %         subplot(2,2,1)
+        %         sc1_sc2_functionalAtlas('AXES:boundary_strength','SC12_7cluster','Multi-Task7')
     case 'FIGURE8a'% Multi-Task Map
         sc1_sc2_functionalAtlas('AXES:map','SC12_10cluster','Multi-Task')
-    case 'FIGURE8b'
+    case 'FIGURE8b'% Graph the "winner" features for each cluster
+        sc1_sc2_functionalAtlas('AXES:featSpace','winner')
     case 'FIGURE8c'% Assigning Semantic Labels
-        subplot(1,3,1)
+        figure(1)
         sc1_sc2_functionalAtlas('AXES:taskSpace',[4,10])
-        subplot(1,3,2)
+        figure(2)
         sc1_sc2_functionalAtlas('AXES:taskSpace',[3,6])
-        subplot(1,3,3)
-        sc1_sc2_functionalAtlas('AXES:taskSpace',[9,1])
-%         subplot(1,6,3)
-%         sc1_sc2_functionalAtlas('AXES:taskSpace',[10,3])
-%         subplot(1,6,4)
-%         sc1_sc2_functionalAtlas('AXES:taskSpace',[6,10]) % [3,5]
-%         subplot(1,6,5)
-%         sc1_sc2_functionalAtlas('AXES:taskSpace',[10,5])
     case 'FIGURE9' % Group Versus Individual
         %         subplot(2,4,1)
         %         sc1_sc2_functionalAtlas('AXES:MT_indiv_curves',2,'S02')
@@ -2276,14 +2371,28 @@ switch what
         %         sc1_sc2_functionalAtlas('AXES:map','SC12_10cluster','S02','sn',2)
         %         subplot(2,4,4)
         %         sc1_sc2_functionalAtlas('AXES:map','SC12_10cluster','S04','sn',4)
-        
-        subplot(2,2,1)
-        sc1_sc2_functionalAtlas('AXES:varianceFreq')
-        subplot(2,2,2)
+        subplot(2,2,[1,2])
         sc1_sc2_functionalAtlas('AXES:interSubjCorr')
         subplot(2,2,[3,4])
         sc1_sc2_functionalAtlas('AXES:MT_group_indiv')
         
+    case 'SUPP1'   % Map Similarity
+        sc1_sc2_functionalAtlas('AXES:map_similarity',{'lob10','SC12_10cluster','Buckner_7Networks','Buckner_17Networks','Cole_10Networks'},...
+            {'Lobular','Multi-Task','Buckner7','Buckner17','Cole10'});
+    case 'SUPP2'   % RDM
+        sc1_sc2_functionalAtlas('AXES:RDM','all')
+    case 'SUPP3'   % Reliability of activity
+        subplot(2,1,1)
+        sc1_sc2_functionalAtlas('AXES:reliability','A','Activity Reliability')
+        subplot(2,1,2)
+        sc1_sc2_functionalAtlas('AXES:reliability','D','Distance Reliability')
+    case 'SUPP4'   % Feature & Task Loading Matrices
+        subplot(2,2,1)
+        sc1_sc2_functionalAtlas('AXES:featSpace','all')
+        subplot(2,2,2)
+        sc1_sc2_functionalAtlas('AXES:taskSpace','all')
+        subplot(2,2,[3,4])
+        sc1_sc2_functionalAtlas('AXES:featMatrix')
 end
 % Local functions
 function dircheck(dir)
