@@ -2,7 +2,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-%baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
@@ -2166,15 +2166,12 @@ switch what
         evalNums=varargin{3}; % [4 4 4 4 4]
         
         % aesthetics
-        CAT.markersize=8;
-        CAT.markertype='^';
-        CAT.linewidth=4;
-        CAT.linestyle={'-','-','-','-','--'};
-        CAT.errorcolor={'m','g','y','b','k'};
-        CAT.linecolor={'m','g','y','b','k'};
-        CAT.markercolor={'m','g','y','b','k'};
-        CAT.markerfill={'m','g','y','b','k'};
-        CAT.linewidth={2, 2, 2, 2, 1};
+        CAT.markertype='none';
+        CAT.errorwidth=1.5; 
+        CAT.linestyle={'-','-','-','-','-'};
+        CAT.errorcolor={'k','g','b','r','r'};
+        CAT.linecolor={'k','g','b','r','r'};
+        CAT.linewidth={3, 3, 3, 3, 3};
         
         sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNums,'group',1,'unique','CAT',CAT); % always take crossval + unique
         
