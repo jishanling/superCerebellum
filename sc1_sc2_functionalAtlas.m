@@ -178,8 +178,7 @@ switch what
         switch sharedTasks,
             case 'all'
                 % do nothing
-            case 'average'
-                
+            case 'average'     
         end
         
         % save out metric
