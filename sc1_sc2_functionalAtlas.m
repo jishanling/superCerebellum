@@ -2,7 +2,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
@@ -178,7 +178,7 @@ switch what
         switch sharedTasks,
             case 'all'
                 % do nothing
-            case 'average'     
+            case 'average'
         end
         
         % save out metric
@@ -472,18 +472,10 @@ switch what
         
         % load in spatialCorrFreq struct
         T=load(fullfile(studyDir{2},'encoding','glm4','cereb_spatialCorr_freq.mat'));
-        xlabels={'overall','0-0.5','0.5-1','1-1.5','1.5-2','>2'};
         
         T=tapply(T,{'subj','freq'},{'withinSubj'},{'betweenSubj'},{'totSS'},'subset',ismember(T.subj,returnSubjs));
         T.freqK = T.freq>0;
-        lineplot([T.freqK T.freq],[T.withinSubj T.betweenSubj],'CAT',CAT);
-        ylabel('Correlations');
-        xlabel('Cycles/cm');
-        drawline(0,'dir','horz');
-        set(gca,'XTickLabel',xlabels);
-        title('Within and Between-subject correlation');
-        set(gcf,'PaperPosition',[2 2 4.5 5.5]);
-        wysiwyg;
+        lineplot([T.freqK T.freq],[T.withinSubj T.betweenSubj],'CAT',CAT,'leg','auto');
         
     case 'REPRESENTATION:get_distances'
         type=varargin{1}; % 'cerebellum'
@@ -1435,7 +1427,7 @@ switch what
             x2-(1.96*SEM2),x2+(1.96*SEM2));
     case 'EVAL:PLOT:DIFF'
         mapType=varargin{1}; % {'lob10','bucknerRest','atlasFinal9'}
-        data=varargin{2}; % evaluating data from study [1] or [2] or [3]?
+        data=varargin{2}; % evaluating data from study [1] or [2] or [4]?
         type=varargin{3}; % 'group' or 'indiv'
         crossval=varargin{4}; % [0]-no crossval; [1]-crossval
         condType=varargin{5}; % evaluating on 'unique' or 'all' taskConds ??
@@ -1528,7 +1520,7 @@ switch what
         M=caret_suit_map2surf(Vv,'space','SUIT','stats','nanmean','column_names',columnName);
         
         caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4',sprintf('diff_%s.metric',mapType)),M);
-    case 'EVAL:visualiseBounds' % Generates metric file and border file for the pacellation
+    case 'EVAL:visualiseBounds' % Generates metric file and border file for the parcellation
         mapType = varargin{1}; % 'lob10','Buckner_7Networks','SC12_10cluster' etc
         
         EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
@@ -1833,6 +1825,11 @@ switch what
         D.LeftHand    = D.leftHandPresses ./D.duration;
         D.RightHand   = D.rightHandPresses ./D.duration;
         D.Saccade    = D.saccades./D.duration;
+        
+        % remove some features
+        D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades','Attention',...
+            'AttentionCapacity','AttentionalFocus','TaskDifficulty'});
+        
         f=fieldnames(D);
         FeatureNames = f(5:end);
         F=[];
@@ -1877,47 +1874,47 @@ switch what
         end;
         
         varargout={B,F,W,C,condNames,FeatureNames};
-        
-        %                 % Make word lists for word map
-        %                 figure(2);
-        %                 DD = U;WORD=FeatureNames;
-        %                 DD(DD<0)=0;
-        %                 DD=DD./max(DD(:));
-        %                 for j=1:numClusters,
-        %                     subplot(3,4,j);
-        %                     set(gca,'XLim',[0 2.5],'YLim',[-0.2 1.2]);
-        %                     title(sprintf('Cluster%d',j))
-        %                     for i=1:numFeat
-        %                         if (DD(i,j)>0)
-        %                             siz=ceil(DD(i,j)*20);
-        %                             text(unifrnd(0,1,1),unifrnd(0,1,1),WORD{i},'FontSize',siz);
-        %                         end;
-        %                     end;
-        %                 end;
-        %                 set(gcf,'PaperPosition',[1 1 60 30]);
-        %                 wysiwyg;
     case 'ENCODE:project_featSpace'
         mapType=varargin{1};
         toPlot=varargin{2}; % 'winner' or 'all' or 'featMatrix'
         
+        sizeWeight=30; 
+        
         % get features
         [B,F,~,C,condNames,FeatureNames]=sc1_sc2_functionalAtlas('ENCODE:get_features',mapType);
         
+        % get cluster colours
+        cmap=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'colourMap.txt'));
+        cmap=cmap/255;
+        
         switch toPlot,
-            case 'all'
-                imagesc_rectangle(C);
-                caxis([0 1]);
-                t=set(gca,'Ytick',[1:length(FeatureNames)]','YTickLabel',FeatureNames');
-                t.Color='white';
-                colorbar
-            case 'winner'
-                % get cluster colours
-                cmap=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'colourMap.txt'));
-                cmap=cmap/255;
-                
+            case 'featList_all'
+                % Make word lists for word map
+                DD = C;WORD=FeatureNames;
+                DD(DD<0)=0;
+                DD=DD./max(DD(:));
+                numClusters=size(C,2);
+                numFeat=size(C,1);
+                for j=1:numClusters,
+                    subplot(2,5,j);
+                    title(sprintf('Network %d',j),'Color',cmap(j,2:4),'FontSize',18)
+                    set(gca,'Xticklabel',[],'Yticklabel',[])
+                    for i=1:numFeat
+                        if (DD(i,j)>0)
+                            siz=ceil(DD(i,j)*sizeWeight);
+                            text(unifrnd(0,1,1),unifrnd(0,1,1),WORD{i},'FontSize',siz,'Color',cmap(j,2:4));
+                        end;
+                    end;
+                end;
+                %                 imagesc_rectangle(C);
+                %                 caxis([0 1]);
+                %                 t=set(gca,'Ytick',[1:length(FeatureNames)]','YTickLabel',FeatureNames');
+                %                 t.Color='white';
+                %                 colorbar
+            case 'featList_winner'
                 % figure out where to position features
                 for i=1:size(B.featNames,1),
-                    subplot(3,4,i);
+                    subplot(2,5,i);
                     set(gca,'XLim',[0 2.5],'YLim',[-0.2 1.2]);
                     text(0,1.2,sprintf('Network %d',i),'FontSize',20,'Color',cmap(i,2:4));
                     for j=1:size(B.featNames,2),
@@ -1934,15 +1931,12 @@ switch what
         end
     case 'ENCODE:project_taskSpace'
         mapType=varargin{1};
-        toPlot=varargin{2}; % 1 is [4,10] - left & right hand tasks etc
+        toPlot=varargin{2}; % 'taskList_all' or 'taskMatrix'
         
-        vararginoptions({varargin{3:end}},{'CAT'});
+        sizeWeight=35; 
         
         % get features
-        [B,F,W,~,condNames]=sc1_sc2_functionalAtlas('ENCODE:get_features',mapType);
-        
-        D=dload(fullfile(baseDir,'motorFeats.txt')); % Read feature table
-        S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt')); % List of task conditions
+        [B,~,W,~,condNames]=sc1_sc2_functionalAtlas('ENCODE:get_features',mapType);
         
         % project back to task-space
         load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'SNN.mat'));
@@ -1951,42 +1945,113 @@ switch what
         I=diag(diag(sqrt(L))); % diag not sum
         X=W/I;
         
-        if strcmp(toPlot,'all'),
-            imagesc_rectangle(X);
-            caxis([0 1]);
-            t=set(gca,'Ytick',[1:length(condNames)]','YTickLabel',condNames');
-            t.Color='white';
-            colorbar
-        else
-            % load in colourMap
-            cmap=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'colourMap.txt'));
-            cmap=cmap(:,2:4)/255;
-            
-            % feature loadings on network
-            net1=B.featIdx(toPlot(1),1);
-            net2=B.featIdx(toPlot(2),1);
-            
-            % assign tasks to features (to colour-code)
-            for i=1:size(X,1),
-                if F(i,net1)>0 & F(i,net2)==0, % assign to network1
-                    colourIdx{i,:}=cmap(toPlot(1),:);
-                elseif F(i,net2)>0 & F(i,net1)==0, % assign to network2
-                    colourIdx{i,:}=cmap(toPlot(2),:);
-                elseif F(i,net1)>0 & F(i,net2)>0,
-                    colourIdx{i,:}=[0 0 0]; % tasks that load onto both features
-                elseif F(i,net1)==0 & F(i,net2)==0,
-                    colourIdx{i,:}=[.7 .7 .7]; % tasks that don't load onto features - grey out
-                else
-                    colourIdx{i,:}=[.7 .7 .7];
-                end
-            end
-            CAT.markercolor=colourIdx;
-            CAT.markerfill=colourIdx;
-            CAT.labelcolor=colourIdx;
-            
-            scatterplot(X(:,toPlot(1)),X(:,toPlot(2)),'label',condNames,'regression','linear','intercept',0,'draworig','CAT',CAT);
-            xlabel(sprintf('Network%d',toPlot(1)));ylabel(sprintf('Network%d',toPlot(2)));
+        % get cluster colours
+        cmap=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'colourMap.txt'));
+        cmap=cmap/255;
+        
+        switch toPlot,
+            case 'taskList_all'
+                % Make word lists for word map
+                DD = W;WORD=condNames;
+                DD(DD<0)=0;
+                DD=DD./max(DD(:));
+                numClusters=size(DD,2);
+                numFeat=size(DD,1);
+                for j=1:numClusters,
+                    subplot(2,5,j);
+                    set(gca,'Xticklabel',[],'Yticklabel',[])
+                    title(sprintf('Network %d',j),'Color',cmap(j,2:4))
+                    set(gca,'FontSize',18);
+                    for i=1:numFeat
+                        if (DD(i,j)>0)
+                            siz=ceil(DD(i,j)*sizeWeight);
+                            text(unifrnd(0,1,1),unifrnd(0,1,1),WORD{i},'FontSize',siz,'Color',cmap(j,2:4));
+                        end;
+                    end;
+                end;
+            case 'taskMatrix'
+                imagesc_rectangle(X);
+                caxis([0 1]);
+                t=set(gca,'Ytick',[1:length(condNames)]','YTickLabel',condNames');
+                t.Color='white';
+                colorbar
         end
+    case 'ENCODE:scatterplot'
+        mapType=varargin{1};
+        type=varargin{2};
+        toPlot=varargin{3}; % 1 is [4,10] - left & right hand tasks etc
+        
+        CAT.markersize=12;
+        CAT.labelsize=18;
+        sizeWeight=50; 
+%         vararginoptions({varargin{3:end}},{'CAT'});
+        
+        % get features
+        [B,F,W,C,condNames,FeatureNames]=sc1_sc2_functionalAtlas('ENCODE:get_features',mapType);
+        
+        % project back to task-space
+        load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'SNN.mat'));
+        %         W=bestF;
+        L=W'*W;
+        I=diag(diag(sqrt(L))); % diag not sum
+        X=W/I;
+        
+        % load in colourMap
+        cmap=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'colourMap.txt'));
+        cmap=cmap(:,2:4)/255;
+        
+        switch type,
+            case 'features'
+                net1=C(:,toPlot(1));
+                net2=C(:,toPlot(2));
+                
+                for i=1:size(C,1),
+                    if net1(i)>0 & net2(i)<0,
+                        colourIdx{i,:}=cmap(toPlot(1),:);
+                        siz{i,1}=ceil(net1(i)*sizeWeight);
+                    elseif net2(i)>0 & net1(i)<0,
+                        colourIdx{i,:}=cmap(toPlot(2),:);
+                        siz{i,1}=ceil(net2(i)*sizeWeight);
+                    elseif net1(i)>0 & net2(i)>0,
+                        colourIdx{i,:}=[0 0 0];
+                        siz{i,1}=ceil((net1(i)+net2(i))/2*sizeWeight);
+                    elseif net1(i)<0 & net2(i)<0,
+                        colourIdx{i,:}=[.7 .7 .7];
+                        siz{i,1}=ceil((abs(net1(i)+net2(i)/2))*sizeWeight);
+                    else
+                        colourIdx{i,:}=[.7 .7 .7];
+                        siz{i,1}=ceil((abs(net1(i)+net2(i)/2))*sizeWeight);
+                    end
+                end
+                XY=C;
+                names=FeatureNames;
+            case 'tasks'
+                net1=B.featIdx(toPlot(1),1);
+                net2=B.featIdx(toPlot(2),1);
+                % assign tasks to features (to colour-code)
+                for i=1:size(X,1),
+                    if F(i,net1)>0 & F(i,net2)==0, % assign to network1
+                        colourIdx{i,:}=cmap(toPlot(1),:);
+                    elseif F(i,net2)>0 & F(i,net1)==0, % assign to network2
+                        colourIdx{i,:}=cmap(toPlot(2),:);
+                    elseif F(i,net1)>0 & F(i,net2)>0,
+                        colourIdx{i,:}=[0 0 0]; % tasks that load onto both features
+                    elseif F(i,net1)==0 & F(i,net2)==0,
+                        colourIdx{i,:}=[.7 .7 .7]; % tasks that don't load onto features - grey out
+                    else
+                        colourIdx{i,:}=[.7 .7 .7];
+                    end
+                end
+                XY=X;
+                names=condNames;
+        end
+        CAT.markercolor=colourIdx;
+        CAT.markerfill=colourIdx;
+        CAT.labelcolor=colourIdx;
+        CAT.labelsize=siz; 
+        
+        scatterplot(XY(:,toPlot(1)),XY(:,toPlot(2)),'label',names,'intercept',0,'draworig','CAT',CAT);
+        xlabel(sprintf('Network%d',toPlot(1)));ylabel(sprintf('Network%d',toPlot(2)));
         
     case 'AXES:eigenValues'
         % Aesthetics
@@ -2115,49 +2180,48 @@ switch what
         plotName=varargin{2}; % 'Multi-Task:Upper'
         
         % Aesthetics
-        CAT.markersize=8;
-        CAT.markertype='^';
-        CAT.linewidth=4;
+        CAT.markertype='none';
+        CAT.errorwidth=1.5;
         CAT.linecolor={'r','k'};
-        CAT.markercolor={'r','k'};
-        CAT.markerfill={'r','k'};
         CAT.errorcolor={'r','k'};
+        CAT.linewidth={4, 4};
+        CAT.linestyle={'-','-'};
         
         sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',toPlot,4,'group',1,'unique','CAT',CAT);
         
         % Labelling
-        set(gca,'YLim',[0 0.6],'XLim',[0 8],'FontSize',18,'xtick',[0 8],'XTickLabel',{'0','35'});
+        set(gca,'YLim',[0 0.6],'XLim',[1 7],'FontSize',24,'xtick',[1 7],'XTickLabel',{'4','32'});
         xlabel('Spatial Distances (mm)');
         ylabel('Activity Correlation (R)');
-        title(plotName);
+        %         title(plotName);
         set(gcf,'units','points','position',[5,5,1000,1000])
         %         legend({'within parcels', 'between parcels'},'Location','SouthWest')
     case 'AXES:MT_UpperLower' % makes graph for upper and lower bounds of multi-task plot
         toPlot={'SC12_10cluster','SC2_10cluster'};
         toPlotName='Multi-Task Parcellation';
         
-        % aesthetics
-        CAT.markersize=8;
-        CAT.markertype='^';
-        CAT.linewidth=4;
+        % Aesthetics
+        CAT.markertype='none';
+        CAT.errorwidth=1.5;
         CAT.linecolor={'r','k'};
-        CAT.markercolor={'r','k'};
-        CAT.markerfill={'r','k'};
         CAT.errorcolor={'r','k'};
+        CAT.linewidth={3, 3};
+        CAT.linestyle={'-','-'};
         
         % plot upper and lower within and between curves
         sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',toPlot{1},4,'group',1,'unique','CAT',CAT);
         hold on
         CAT.linestyle='--';
-        CAT.linewidth={2,2};
+        CAT.linewidth=1.5;
         sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',toPlot{2},4,'group',1,'unique','CAT',CAT);
         hold off
         
         % Labelling
-        set(gca,'YLim',[0 0.6],'XLim',[0 8],'FontSize',18,'xtick',[0 8],'XTickLabel',{'0','35'});
+        set(gca,'YLim',[0 0.6],'XLim',[1 7],'FontSize',24,'xtick',[1 7],'XTickLabel',{'4','32'});
+        %         set(gca,'YLim',[0 0.6],'XLim',[4 32],'FontSize',18,'xtick',[4 32],'XTickLabel',{'4','32'});
         xlabel('Spatial Distances (mm)');
         ylabel('Activity Correlation (R)');
-        title(toPlotName)
+        %         title(toPlotName)
         set(gcf,'units','points','position',[5,5,1000,1000])
         %         legend('within parcels', 'between parcels','Location','SouthWest')
     case 'AXES:diff_allMaps'  % make summary graph for diff curves for all maps
@@ -2167,7 +2231,7 @@ switch what
         
         % aesthetics
         CAT.markertype='none';
-        CAT.errorwidth=1.5; 
+        CAT.errorwidth=1.5;
         CAT.linestyle={'-','-','-','-','-'};
         CAT.errorcolor={'k','g','b','r','r'};
         CAT.linecolor={'k','g','b','r','r'};
@@ -2176,7 +2240,7 @@ switch what
         sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNums,'group',1,'unique','CAT',CAT); % always take crossval + unique
         
         % Labelling
-        set(gca,'YLim',[0 0.18],'XLim',[0 8],'FontSize',18,'xtick',[0 8],'XTickLabel',{'0','35'});
+        set(gca,'YLim',[0 0.6],'XLim',[1 7],'FontSize',18,'xtick',[1 7],'XTickLabel',{'4','32'});
         xlabel('Spatial Distances (mm)');
         ylabel('Difference');
         set(gcf,'units','points','position',[5,5,1000,1000])
@@ -2187,15 +2251,12 @@ switch what
         evalNums=varargin{3}; % repmat([4],length(plotName),1)
         
         % aesthetics
-        CAT.markersize=8;
-        CAT.markertype={'^','v','s'};
-        CAT.linewidth=4;
-        CAT.errorcolor={'g','y','c','m'};
-        CAT.linecolor={'k','k','k','m'};
-        CAT.markercolor={'g','y','c','m'};
-        CAT.markerfill={'g','y','c','m'};
+        CAT.markertype='none';
+        CAT.linewidth=3;
+        CAT.errorcolor={'y','r','b','k'};
+        CAT.linecolor={'y','r','b','k'};
         CAT.linestyle={'-','-','-','-'};
-        CAT.linewidth={4, 4, 4, 2};
+        CAT.linewidth={3, 3, 3, 3};
         
         sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNums,'group',1,'unique','CAT',CAT); % always take crossval + unique
         
@@ -2207,13 +2268,13 @@ switch what
         legend(plotName,'Location','NorthWest')
     case 'AXES:MT_indiv_curves' % make average curve graph for individual subjects (or average of individual subjects)
         
-        % aesthetics
-        CAT.markersize=8;
-        CAT.markertype='^';
-        CAT.linewidth=4;
+        % Aesthetics
+        CAT.markertype='none';
+        CAT.errorwidth=1.5;
         CAT.linecolor={'r','k'};
-        CAT.markercolor={'r','k'};
-        CAT.markerfill={'r','k'};
+        CAT.errorcolor={'r','k'};
+        CAT.linewidth={3, 3};
+        CAT.linestyle={'-','-'};
         
         sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES','SC12_10cluster',4,'indiv',1,'unique','CAT',CAT,'sn',returnSubjs); % always take crossval + unique
         
@@ -2226,31 +2287,27 @@ switch what
         legend('within parcels', 'between parcels','Location','SouthEast')
     case 'AXES:MT_group_indiv' % group versus indiv for multi-task map
         % aesthetics
-        CAT.markersize=8;
-        CAT.markertype='^';
-        CAT.linewidth={2 1};
+        CAT.markertype='none';
+        CAT.linewidth={3 1.5};
         CAT.errorcolor={'r','r'};
         CAT.linecolor={'r','r'};
-        CAT.markercolor={'r','r'};
-        CAT.markerfill={'r','r'};
         CAT.linestyle={'-','--'};
         
         sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',{'SC12_10cluster','SC2_10cluster'},[4 4],'group',1,'unique','CAT',CAT); % always take crossval + unique
         hold on
         CAT.errorcolor={'k','k'};
         CAT.linecolor={'k','k'};
-        CAT.markercolor={'k','k'};
-        CAT.markerfill={'k','k'};
         CAT.linestyle={'-','--'};
-        CAT.linewidth={2 1};
+        CAT.linewidth={3 1.5};
         sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',{'SC12_10cluster','SC2_10cluster'},[4 4],'indiv',1,'unique','CAT',CAT,'sn',returnSubjs);
         
         % Labelling
-        set(gca,'FontSize',18);
-        xlabel('Spatial Bins');
-        ylabel('Difference');
+        set(gca,'FontSize',24);
+        set(gca,'YLim',[0 0.28],'XLim',[1 7],'FontSize',24,'xtick',[1 7],'XTickLabel',{'4','32'});
+        xlabel('Spatial Distances (mm)');
+        ylabel('Difference')
         set(gcf,'units','points','position',[5,5,1000,1000])
-        %         legend('group','individual','Location','NorthWest')
+        legend('group','individual','Location','NorthWest')
     case 'AXES:boundary_strength' % makes separate graphs for 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_10cluster'
         toPlot=varargin{1}; % 'lob10','Buckner_7Networks' etc
         toPlotName=varargin{2}; % 'Lobular', 'Buckner7' etc
@@ -2262,27 +2319,30 @@ switch what
         axis off
         set(gcf,'units','points','position',[5,5,1000,1000])
     case 'AXES:featSpace'  % graph the feature loadings for each network
-        toPlot=varargin{1}; % 'winner' or 'all'
+        toPlot=varargin{1}; % 'featList_all','featList_winner' or 'featMatrix'
         
         sc1_sc2_functionalAtlas('ENCODE:project_featSpace','SC12_10cluster',toPlot)
         
-        set(gca,'FontSize',9);
+        %         set(gca,'YLim',[0 0.6],'XLim',[1 7],'FontSize',24,'xtick',[1 7],'XTickLabel',{'4','32'});
         set(gcf,'units','points','position',[5,5,1000,1000])
     case 'AXES:taskSpace'  % graph the task loadings for each network
-        toPlot=varargin{1}; % either [4,10] or 'all' (if you want all taskLoadings
+        toPlot=varargin{1}; % 'taskList_all','taskList_winner','taskMatrix'
+
+        sc1_sc2_functionalAtlas('ENCODE:project_taskSpace','SC12_10cluster',toPlot)
+        
+        set(gcf,'units','points','position',[5,10,1000,1000]) 
+    case 'AXES:scatterplot' % graph the scatterplot - two networks (one for motor; one for cognitive)
+        toPlot=varargin{1}; % [4,10], [7,9]
+        type=varargin{2}; % 'tasks' or 'features'
         
         % Aesthetics
         CAT.markersize=12;
         CAT.labelsize=18;
-        sc1_sc2_functionalAtlas('ENCODE:project_taskSpace','SC12_10cluster',toPlot,'CAT',CAT)
+        sc1_sc2_functionalAtlas('ENCODE:scatterplot','SC12_10cluster',type,toPlot,'CAT',CAT)
         
         set(gcf,'units','points','position',[5,5,1000,1000])
         set(gca,'FontSize',9);
-    case 'AXES:featMatrix' % graph the feature matrix
-        sc1_sc2_functionalAtlas('ENCODE:project_featSpace','SC12_10cluster','featMatrix')
-        
-        set(gcf,'units','points','position',[5,5,1000,1000])
-        set(gca,'FontSize',9);
+        axis equal
     case 'AXES:varianceFreq'
         % Aesthetics
         CAT.markersize=8;
@@ -2298,18 +2358,23 @@ switch what
         set(gcf,'units','points','position',[5,5,1000,1000])
     case 'AXES:interSubjCorr'
         % Aesthetics
-        CAT.markersize=8;
-        CAT.markertype='^';
-        CAT.linewidth=4;
+        CAT.markertype='none';
+        CAT.linewidth=3;
         CAT.linecolor={'r','k'};
         CAT.markercolor={'r','k'};
         CAT.markerfill={'r','k'};
         CAT.errorcolor={'r','k'};
         
         sc1_sc2_functionalAtlas('PLOT:interSubjCorr',CAT)
-        set(gca,'FontSize',18);
+        set(gca,'FontSize',24);
         set(gcf,'units','points','position',[5,5,1000,1000])
-        legend({'within','between'},'Location','SouthWest')
+        xlabels={'overall','0-0.5','0.5-1','1-1.5','1.5-2','>2'};
+        ylabel('Activity Correlation (R)');
+        xlabel('Cycles/cm');
+        drawline(0,'dir','horz');
+        set(gca,'XTickLabel',xlabels);
+        set(gcf,'PaperPosition',[2 2 4.5 5.5]);
+        %         title('Within and Between-subject correlation');
         
     case 'FIGURE1' % Motor Feature Model
     case 'FIGURE2' % Representational Structure
@@ -2343,19 +2408,20 @@ switch what
     case 'FIGURE7' % Multiple Multi-Task Parcellations
         subplot(2,2,[3 4])
         sc1_sc2_functionalAtlas('AXES:diff_SNNMaps',{'SC12_7cluster','SC12_10cluster','SC12_17cluster','lob10'},{'Multi-Task:7','Multi-Task:10','Multi-Task:17','Lobular'},repmat([4],4,1))
-        %         subplot(2,2,2)
-        %         sc1_sc2_functionalAtlas('AXES:boundary_strength','SC12_17cluster','Multi-Task17')
-        %         subplot(2,2,1)
-        %         sc1_sc2_functionalAtlas('AXES:boundary_strength','SC12_7cluster','Multi-Task7')
+        subplot(2,2,2)
+        sc1_sc2_functionalAtlas('AXES:boundary_strength','SC12_17cluster','Multi-Task17')
+        subplot(2,2,1)
+        sc1_sc2_functionalAtlas('AXES:boundary_strength','SC12_7cluster','Multi-Task7')
     case 'FIGURE8a'% Multi-Task Map
         sc1_sc2_functionalAtlas('AXES:map','SC12_10cluster','Multi-Task')
     case 'FIGURE8b'% Graph the "winner" features for each cluster
         sc1_sc2_functionalAtlas('AXES:featSpace','winner')
     case 'FIGURE8c'% Assigning Semantic Labels
-        figure(1)
-        sc1_sc2_functionalAtlas('AXES:taskSpace',[4,10])
-        figure(2)
-        sc1_sc2_functionalAtlas('AXES:taskSpace',[3,6])
+        %         figure(1)
+        %         sc1_sc2_functionalAtlas('AXES:taskSpace',[4,10])
+        %         figure(2)
+        %         sc1_sc2_functionalAtlas('AXES:taskSpace',[3,6])
+        sc1_sc2_functionalAtlas('AXES:scatterplot',[1,6],'features')
     case 'FIGURE9' % Group Versus Individual
         %         subplot(2,4,1)
         %         sc1_sc2_functionalAtlas('AXES:MT_indiv_curves',2,'S02')
@@ -2383,12 +2449,10 @@ switch what
         subplot(2,1,2)
         sc1_sc2_functionalAtlas('AXES:reliability','D','Distance Reliability')
     case 'SUPP4'   % Feature & Task Loading Matrices
-        subplot(2,2,1)
-        sc1_sc2_functionalAtlas('AXES:featSpace','all')
-        subplot(2,2,2)
-        sc1_sc2_functionalAtlas('AXES:taskSpace','all')
-        subplot(2,2,[3,4])
-        sc1_sc2_functionalAtlas('AXES:featMatrix')
+        sc1_sc2_functionalAtlas('AXES:taskSpace','taskList_all')
+    case 'SUPP5'   % Feature & Task Loading Matrices
+        sc1_sc2_functionalAtlas('AXES:featSpace','featList_all')
+        
 end
 % Local functions
 function dircheck(dir)
