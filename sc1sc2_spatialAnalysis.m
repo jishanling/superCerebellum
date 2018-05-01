@@ -559,7 +559,30 @@ switch(what)
             fprintf('uncrossval eval done for subj %d \n',sn(s));
         end;
         save(outDir,'-struct','RR');
+<<<<<<< HEAD
         
+=======
+    case 'EVALBOUND:Figure'
+          set(gcf,'position',[10 10 1600 800]); 
+        
+        subplot(2,3,1); 
+        sc1_sc2_functionalAtlas('STRENGTH:visualise_bound','lob10','lob10'); 
+        set(gca,'XLim',[-100 100],'YLim',[-100 100],'Color',[0 0 0],'Visible','on','Xticklabel',[],'Yticklabel',[],'Box','off');
+        axis equal;
+        subplot(2,3,2); 
+        sc1_sc2_functionalAtlas('STRENGTH:visualise_bound','Buckner_17Networks','Buckner17'); 
+        set(gca,'XLim',[-100 100],'YLim',[-100 100],'Color',[0 0 0],'Visible','on','Xticklabel',[],'Yticklabel',[],'Box','off');
+        axis equal;
+        subplot(2,3,3); 
+        sc1_sc2_functionalAtlas('STRENGTH:visualise_bound','Buckner_7Networks','Buckner7'); 
+        set(gca,'XLim',[-100 100],'YLim',[-100 100],'Color',[0 0 0],'Visible','on','Xticklabel',[],'Yticklabel',[],'Box','off');
+        axis equal;
+        subplot(2,3,4); 
+        sc1_sc2_functionalAtlas('STRENGTH:visualise_bound','SC12_10cluster','SC12_10cluster'); 
+        set(gca,'XLim',[-100 100],'YLim',[-100 100],'Color',[0 0 0],'Visible','on','Xticklabel',[],'Yticklabel',[],'Box','off');
+        axis equal;
+
+>>>>>>> 3d868570aa23d0c630515bd26232c0e3c0c3fd7f
 end;
 
 % InterSubj Corr
