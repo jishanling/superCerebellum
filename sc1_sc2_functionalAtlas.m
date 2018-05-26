@@ -2,7 +2,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
@@ -50,7 +50,7 @@ switch what
                 fprintf('subj%d averaged sessions for study%d \n',returnSubjs(s),study)
             end
             % zero to NaN
-%             avrgData(avrgData==0)=NaN;
+            %             avrgData(avrgData==0)=NaN;
             
             % subtract condition avrg baseline (across 61-1 conditions)
             all=[1:size(avrgData,1)];
@@ -146,7 +146,7 @@ switch what
         Yy=zeros(numConds+numFeat,subjs,V.dim(1)*V.dim(2)*V.dim(3));
         C{1}.dim=V.dim;
         C{1}.mat=V.mat;
-
+        
         % do ridge regression
         for s=1:subjs,
             X1=bsxfun(@minus,X,mean(X));
@@ -176,47 +176,47 @@ switch what
             case 'allConds'
                 outName='unCorr_allTaskConds'; % all 61 task conds
             case 'averageConds'
-                condNumUni=[F.condNumUni;62;63;64]; 
-                X1=indicatorMatrix('identity_p',condNumUni); 
+                condNumUni=[F.condNumUni;62;63;64];
+                X1=indicatorMatrix('identity_p',condNumUni);
                 uniqueTasks=S.data*X1;
                 % get new condNames (unique only)
                 condNames=[F.condNames(F.StudyNum==1);F.condNames(F.StudyNum==2 & F.overlap==0)];
-                condNames{length(condNames)+1}='lHand'; 
+                condNames{length(condNames)+1}='lHand';
                 condNames{length(condNames)+1}='rHand';
                 condNames{length(condNames)+1}='saccades';
-                S.data=uniqueTasks; 
-                S.column_name=condNames'; 
-                S.num_cols=size(S.column_name,2); 
-                S.column_color_mapping=S.column_color_mapping(1:S.num_cols,:); 
+                S.data=uniqueTasks;
+                S.column_name=condNames';
+                S.num_cols=size(S.column_name,2);
+                S.column_color_mapping=S.column_color_mapping(1:S.num_cols,:);
                 outName='unCorr_avrgTaskConds'; % average of certain tasks
             case 'averageTasks'
-                taskNumUni=[F.taskNumUni;27;28;29]; 
-                X1=indicatorMatrix('identity_p',taskNumUni); 
+                taskNumUni=[F.taskNumUni;27;28;29];
+                X1=indicatorMatrix('identity_p',taskNumUni);
                 uniqueTasks=S.data*X1;
                 % get new taskNames
                 taskNames={'GoNoGo','ToM','actionObservation','affective','arithmetic','checkerBoard',...
                     'emotional','intervalTiming','motorImagery','motorSequence','nBack','nBackPic','spatialNavigation',...
                     'stroop','verbGeneration','visualSearch','rest','CPRO','prediction','spatialMap','natureMovie','romanceMovie',...
-                    'landscapeMovie','mentalRotation','emotionProcess','respAlt','lHand','rHand','saccades'}; 
-                S.data=uniqueTasks; 
-                S.column_name=taskNames; 
-                S.num_cols=size(S.column_name,2); 
-                S.column_color_mapping=S.column_color_mapping(1:S.num_cols,:); 
+                    'landscapeMovie','mentalRotation','emotionProcess','respAlt','lHand','rHand','saccades'};
+                S.data=uniqueTasks;
+                S.column_name=taskNames;
+                S.num_cols=size(S.column_name,2);
+                S.column_color_mapping=S.column_color_mapping(1:S.num_cols,:);
                 outName='unCorr_avrgTasks'; % average of certain tasks
             case 'averageMDS'
                 F=dload(fullfile(baseDir,'sc1_sc2_taskConds_MDS.txt'));
-
-                taskNumUni=[F.MDSNumUni;22;23;24]; 
-                X1=indicatorMatrix('identity_p',taskNumUni); 
+                
+                taskNumUni=[F.MDSNumUni;22;23;24];
+                X1=indicatorMatrix('identity_p',taskNumUni);
                 uniqueTasks=S.data*X1;
                 % get new taskNames
                 MDSNames={'Rules','Go','ToM','VideoActions','Movies','Pictures','Math','Stroop','FingerSimple',...
                     'Mentalising','FingerSeq','WorkingMemory','VerbGen','WordRead','VisualSearch','Prediction',...
-                    'RespAlt','SpatialMap','romanceMovie','MentalRotation','BodyMotion','lHand','rHand','saccades'}; 
-                S.data=uniqueTasks; 
-                S.column_name=MDSNames; 
-                S.num_cols=size(S.column_name,2); 
-                S.column_color_mapping=S.column_color_mapping(1:S.num_cols,:); 
+                    'RespAlt','SpatialMap','romanceMovie','MentalRotation','BodyMotion','lHand','rHand','saccades'};
+                S.data=uniqueTasks;
+                S.column_name=MDSNames;
+                S.num_cols=size(S.column_name,2);
+                S.column_color_mapping=S.column_color_mapping(1:S.num_cols,:);
                 outName='unCorr_MDSClusters'; % average of certain tasks
         end
         
@@ -518,7 +518,6 @@ switch what
         
     case 'REPRESENTATION:get_distances'
         type=varargin{1}; % 'cerebellum'
-        removeMotor=varargin{2}; % 'hands','saccades','all','none'
         
         load(fullfile(studyDir{2},regDir,'glm4',sprintf('G_hat_sc1_sc2_%s.mat',type)))
         subjs=size(G_hat,3);
@@ -539,20 +538,9 @@ switch what
         end
         % load feature matrix
         F=dload(fullfile(baseDir,'motorFeats.txt')); % load in motor features
+        X   = [F.lHand./F.duration F.rHand./F.duration F.saccades./F.duration];
+        X   = [X eye(numDist)];
         
-        switch removeMotor,
-            case 'hands'
-                X   = [F.lHand./F.duration F.rHand./F.duration];
-                X   = [X eye(numDist)];
-            case 'saccades'
-                X   = [F.saccades./F.duration];
-                X   = [X eye(numDist)];
-            case 'all'
-                X   = [F.lHand./F.duration F.rHand./F.duration F.saccades./F.duration];
-                X   = [X eye(numDist)];
-            case 'none'
-                X   = [eye(numDist)];
-        end
         X   = bsxfun(@minus,X,mean(X));
         X   = bsxfun(@rdivide,X,sqrt(sum(X.^2)));  % Normalize to unit length vectors
         
@@ -591,39 +579,124 @@ switch what
         
         save(fullfile(studyDir{2},regDir,'glm4',sprintf('distanceReliability_%s.mat'),type),'T','dist')
     case 'REPRESENTATION:eigDecomp'
-        CAT=varargin{1};
+        type={'cerebellum','162_tessellation_hem'};
         % load in condName info
+        SS=[];
         T=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
-        load(fullfile(studyDir{2},regDir,'glm4',sprintf('G_hat_sc1_sc2_%s.mat','cerebellum')))
-        
-        %                 R=[];
-        %                 for s=1:2,
-        %                     SC=getrow(T,T.StudyNum==s);
-        %                     idx=SC.condNum;
-        %                     numDist=length(idx);
-        %                     avrgG_hat=nanmean(G_hat(idx,idx),3);
-        %                     H=eye(numDist)-ones(numDist)/length(numDist);
-        %                     avrgG_hat=(H*avrgG_hat*H);  % center G matrix
-        %
-        %                     [V,L]   = eig(avrgG_hat);
-        %                     [l,i]   = sort(diag(L),1,'descend');
-        %                     S.study=repmat(s,length(i),1);
-        %                     S.eig=real(l);
-        %                     R=addstruct(R,S);
-        %                 end
-        %                   lineplot([1:size(R.study,1)]',R.eig,'split',R.study,'CAT',CAT);
         idx=T.condNum;
         numDist=length(idx);
-        avrgG_hat=nanmean(G_hat(idx,idx),3);
         H=eye(numDist)-ones(numDist)/length(numDist);
-        avrgG_hat=(H*avrgG_hat*H);  % center G matrix
         
-        [V,L]   = eig(avrgG_hat);
-        [l,i]   = sort(diag(L),1,'descend');
-        S.eig=real(l);
-        S.idx=i;
+        for t=1:length(type)
+            load(fullfile(studyDir{2},regDir,'glm4',sprintf('G_hat_sc1_sc2_%s.mat',type{t})))
+            
+            % Get the eigenvalues for each subject seperately to determine
+            % confidence intervals
+            for s=1:size(G_hat,3)
+                Gcentr=(H*G_hat(:,:,s)*H);  % center G matrix
+                [V,L]   = eig(Gcentr);
+                [l,i]   = sort(diag(L),1,'descend');
+                S.ROI(s,1)=t;
+                S.subj(s,1)=s;
+                S.eig(s,:)=real(l(1:end-1));
+            end;
+            SS=addstruct(SS,S);
+        end;
+        SS.eigN=SS.eig;
+        % SS.eigN(SS.eigN<0)=0;
+        SS.eigN=bsxfun(@rdivide,SS.eigN,sum(SS.eigN,2));
+        % Normalize eigenvalues
+        traceplot([1:numDist-1],SS.eigN,'errorfcn','stderr','split',SS.ROI);
+        drawline(0,'dir','horz');
+        varargout={SS};
+    case 'REPRESENTATION:dimensionality'
+        type={'162_tessellation_hem','cerebellum_grey','162_tessellation_hem'};
+        % load in condName info
+        S=[];
+        compareTessel = [1 13 15 16 17 18 20 43:52]; 
+        compareTessel = [compareTessel;compareTessel+158]; 
         
-        lineplot(S.idx,S.eig,'CAT',CAT)
+        % Prepare overall condition structure
+        T=dload(fullfile(baseDir,'sc1_sc2_taskConds_GLM.txt'));
+        T=rmfield(T,{'taskNames','condNames','trialType','duration'}); 
+        F=[];
+        for e=1:2
+            for b=1:16
+                A=getrow(T,T.StudyNum==e);
+                A.run = ones(length(A.StudyNum),1)*b;
+                F=addstruct(F,A);
+            end;
+            A.StudyNum=ones(16,1)*e;
+            A.taskNum=ones(16,1)*17;
+            A.taskNumUni=ones(16,1)*17;
+            A.condNum=ones(16,1)*29+(e-1)*3;
+            A.condNumUni=ones(16,1)*29;
+            A.overlap=ones(16,1);
+            A.run =[1:16]';
+            F=addstruct(F,A);
+        end;
+        Fr = getrow(F,F.condNumUni>0); % Remove instruction 
+        
+        for s=returnSubjs
+            for t=1:length(type)
+                fprintf('Subj %d\n',s); 
+                Beta=[]; 
+                for e=1:2
+                    load(fullfile(studyDir{e},'RegionOfInterest','glm4',subj_name{s},sprintf('betas_%s.mat',type{t})));
+                    beta=[];
+                    switch (t)
+                        case 1 
+                            for b=[1:148 150:306 308:316] % Exclude medial all 
+                                beta=[beta B{b}.betasUW];
+                            end;
+                        case 2
+                            beta=[beta B{1}.betasUW];
+                        case 3
+                            i=1; 
+                            while size(beta,2)<D.numVox
+                                beta=[beta B{compareTessel(i)}.betasUW];
+                                i=i+1; 
+                            end; 
+                    end;
+                Beta=[Beta;beta];
+                end;
+                % Now prep the data by subtracting out mean and removing
+                % instruction 
+                Beta=Beta(F.condNumUni>0,:); 
+                Beta(Fr.condNumUni==29,:)=0; 
+                for e=1:2 
+                    Beta(Fr.StudyNum==e,:)=bsxfun(@minus,Beta(Fr.StudyNum==e,:),...
+                        mean(Beta(Fr.StudyNum==e & Fr.overlap==1,:))); 
+                end; 
+                Z=indicatorMatrix('identity',Fr.condNumUni); 
+                H=eye(47)-ones(47)/47; 
+                [D.corr,D.dCorr]=crossval_estDimCorr(Beta,Z,H,Fr.run);
+                [D.eig]=crossval_estEig(Beta,Z,H,Fr.run);
+                [D.eig2]=crossval_estEig2(Beta,Z,H,Fr.run);
+                D.subj = s; 
+                D.ROI = t; 
+                D.numVox = size(Beta,2);
+                S=addstruct(S,D); 
+            end;
+        end;
+        save(fullfile(studyDir{2},'encoding','glm4','dimensionality_sc1sc2.mat'),'-struct','S'); 
+        varargout={S}; 
+    case 'REPRESENTATION:plotDimensionality'
+        T=load(fullfile(studyDir{2},'encoding','glm4','dimensionality_sc1sc2.mat'));
+        [T.maxCorr,T.maxDim]=max(T.corr,[],2);
+        T.sCorr=bsxfun(@rdivide,T.corr,T.maxCorr);
+        m=pivottable(T.ROI,[],T.maxDim,'mean');
+        s=pivottable(T.ROI,[],T.maxDim,'stderr');
+        traceplot([1:41],T.sCorr(:,1:41),'split',T.ROI,'errorfcn','stderr')
+        %set(gca,'YLim',[0.7 1]); 
+        drawline([m(1) m(1)+1.96*s(1) m(1)-1.96*s(1)],'color','b'); 
+        drawline([m(2) m(2)+1.96*s(2) m(2)-1.96*s(2)],'color','r'); 
+        drawline([m(3) m(3)+1.96*s(3) m(3)-1.96*s(3)],'color','g'); 
+        m 
+        s
+        set(gcf,'PaperPosition',[2 2 4 3]); 
+        wysiwyg; 
+        varargout={T}; 
     case 'REPRESENTATION:RDM'
         type=varargin{1}; % 'all' or 'none'
         
@@ -1512,7 +1585,7 @@ switch what
         W=getrow(P,P.bwParcel==0); % within
         B=getrow(P,P.bwParcel==1); % between
         W.diff=W.corr-B.corr;
-        W=rmfield(W,{'bwParcel','crossval','corr'}); 
+        W=rmfield(W,{'bwParcel','crossval','corr'});
         
         lineplot(W.dist,W.diff,'subset',W.dist<=35,'CAT',CAT,'leg','auto');
     case 'EVAL:STATS:DIFF'
@@ -1523,7 +1596,7 @@ switch what
         condType=varargin{5}; % evaluating on 'unique' or 'all' taskConds ??
         
         % do stats
-        P=[]; 
+        P=[];
         for m=1:length(mapType),
             switch type,
                 case 'group'
@@ -1547,7 +1620,7 @@ switch what
         B=getrow(P,P.bwParcel==1); % between
         W.diff=W.corr-B.corr;
         % do stats (integrate over spatial bins)
-        W=rmfield(W,{'bwParcel','crossval','corr'}); 
+        W=rmfield(W,{'bwParcel','crossval','corr'});
         C=getrow(W,W.dist<=35);
         S=tapply(C,{'m','SN','type'},{'diff'});
         
@@ -1954,7 +2027,7 @@ switch what
         mapType=varargin{1};
         toPlot=varargin{2}; % 'winner' or 'all' or 'featMatrix'
         
-        sizeWeight=30; 
+        sizeWeight=30;
         
         % get features
         [B,F,~,C,condNames,FeatureNames]=sc1_sc2_functionalAtlas('ENCODE:get_features',mapType);
@@ -2009,7 +2082,7 @@ switch what
         mapType=varargin{1};
         toPlot=varargin{2}; % 'taskList_all' or 'taskMatrix'
         
-        sizeWeight=35; 
+        sizeWeight=35;
         
         % get features
         [B,~,W,~,condNames]=sc1_sc2_functionalAtlas('ENCODE:get_features',mapType);
@@ -2059,8 +2132,8 @@ switch what
         
         CAT.markersize=12;
         CAT.labelsize=18;
-        sizeWeight=50; 
-%         vararginoptions({varargin{3:end}},{'CAT'});
+        sizeWeight=50;
+        %         vararginoptions({varargin{3:end}},{'CAT'});
         
         % get features
         [B,F,W,C,condNames,FeatureNames]=sc1_sc2_functionalAtlas('ENCODE:get_features',mapType);
@@ -2124,7 +2197,7 @@ switch what
         CAT.markercolor=colourIdx;
         CAT.markerfill=colourIdx;
         CAT.labelcolor=colourIdx;
-        CAT.labelsize=siz; 
+        CAT.labelsize=siz;
         
         scatterplot(XY(:,toPlot(1)),XY(:,toPlot(2)),'label',names,'intercept',0,'draworig','CAT',CAT);
         xlabel(sprintf('Network%d',toPlot(1)));ylabel(sprintf('Network%d',toPlot(2)));
@@ -2317,7 +2390,7 @@ switch what
         linecolor={'k','m','g','b','r','r'};
         
         for m=1:length(toPlot),
-            CAT.errorcolor=errorcolor{m}; 
+            CAT.errorcolor=errorcolor{m};
             CAT.linecolor=linecolor{m};
             sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot{m},evalNums(m),'group',1,'unique','CAT',CAT); % always take crossval + unique
             hold on
@@ -2329,7 +2402,7 @@ switch what
         xlabel('Spatial Distances (mm)');
         ylabel('Difference');
         set(gcf,'units','centimeters','position',[5,5,9,12])
-%         legend(plotName,'Location','NorthWest')
+        %         legend(plotName,'Location','NorthWest')
         
         % do stats
         sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',toPlot,evalNums,'group',1,'unique'); % always take crossval + unique
@@ -2382,10 +2455,10 @@ switch what
         set(gcf,'units','points','position',[5,5,1000,1000])
     case 'AXES:taskSpace'  % graph the task loadings for each network
         toPlot=varargin{1}; % 'taskList_all','taskList_winner','taskMatrix'
-
+        
         sc1_sc2_functionalAtlas('ENCODE:project_taskSpace','SC12_10cluster',toPlot)
         
-        set(gcf,'units','points','position',[5,10,1000,1000]) 
+        set(gcf,'units','points','position',[5,10,1000,1000])
     case 'AXES:scatterplot' % graph the scatterplot - two networks (one for motor; one for cognitive)
         toPlot=varargin{1}; % [4,10], [7,9]
         type=varargin{2}; % 'tasks' or 'features'
@@ -2414,7 +2487,7 @@ switch what
     case 'AXES:interSubjCorr'
         % Aesthetics
         CAT.markertype='^';
-        CAT.markersize=4; 
+        CAT.markersize=4;
         CAT.linewidth=2;
         CAT.linecolor={'r','k'};
         CAT.markercolor={'r','k'};
