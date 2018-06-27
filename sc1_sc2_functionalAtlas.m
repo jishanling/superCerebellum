@@ -1826,6 +1826,11 @@ switch what
         varargout={RR};
     case 'STRENGTH:visualise_bound'
         mapType = varargin{1};
+        bcolor ='k'; 
+        opacacy = 0.5;
+        bscale = 180;
+        bmax=20;
+        vararginoptions(varargin(2:end),{'bcolor','opacacy','bscale','bmax'});
         
         EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
         SurfDir = fullfile(studyDir{1},'surfaceCaret','suit_flat');
@@ -1885,15 +1890,16 @@ switch what
         else
             cmapF=colorcube(max(Parcel));
         end
+        cmapF = bsxfun(@plus,cmapF*opacacy,[1 1 1]*(1-opacacy));
         
         % Make the plot
         suit_plotflatmap(Mpa,'type','label','border',[],'cmap',cmapF);
         hold on;
-        LineWeight=EdgeWeight*200;
-        LineWeight(LineWeight>20)=20;
+        LineWeight=EdgeWeight*bscale;
+        LineWeight(LineWeight>bmax)=bmax;
         for  b=1:length(Border)
-            if (Border(b).numpoints>0 & EdgeWeight(b)>0),
-                p=plot(Border(b).data(:,1),Border(b).data(:,2),'k.');
+            if (Border(b).numpoints>0 & EdgeWeight(b)>0)
+                p=plot(Border(b).data(:,1),Border(b).data(:,2),[bcolor '.']);
                 set(p,'MarkerSize',LineWeight(b));
                 weights(b)=EdgeWeight(b);
             end;
