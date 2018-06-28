@@ -2819,8 +2819,8 @@ switch(what)
                 switch type,
                     case '162_tessellation_hem'
                         for t=regs(h,:),
-                            idx=R{t}.location; 
-                            data(:,t)=nanmean(Y.data(:,idx),2); 
+                            idx=R{t}.location;
+                            data(:,t)=nanmean(Y.data(:,idx),2);
                         end
                 end
             end
@@ -2930,8 +2930,7 @@ switch(what)
             end
             fprintf('IPM calculated for subj%d \n',sn(s));
             clear Y partVec condVec
-        end
-
+        end     
     case 'PREP:avrg_betas'                   % STEP 11.10
         sn=varargin{1};
         study=varargin{2}; % studyNum
@@ -3009,10 +3008,11 @@ switch(what)
     case 'CHECK:behavioural'                 % CHECK: Check behavioural performance
         % Get behavioural results
         % example: sc1_sc2_imana('CHECK:behavioural',2,1,'scanning','stroop')
-        sn=varargin{1};  % subjNum
-        study=varargin{2}; % studyNum
-        sess=varargin{3}; % 'behavioural' or 'scanning'
-        type=varargin{4}; % taskType
+        study=varargin{1}; % studyNum
+        sess=varargin{2}; % 'behavioural' or 'scanning'
+        type=varargin{3}; % taskType
+        
+        sn=returnSubjs; 
         
         switch type
             case 'stroop'
