@@ -4,8 +4,8 @@ function varargout=sc1sc2_connectivity(what,varargin)
 %==========================================================================
 % % (1) Directories
 % rootDir           = '/Users/jdiedrichsen/Data/super_cerebellum';
-% rootDir           = '/Volumes/MotorControl/data/super_cerebellum_new/';
-rootDir         = '/Users/chernandez/Cerebellum';
+rootDir           = '/Volumes/MotorControl/data/super_cerebellum_new/';
+% rootDir         = '/Users/chernandez/Cerebellum';
 sc1Dir          = [rootDir '/sc1'];
 sc2Dir          = [rootDir '/sc2'];
 behavDir        =['data'];

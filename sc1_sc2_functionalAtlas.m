@@ -28,6 +28,7 @@ switch what
     case 'BEHAVIOURAL:get_data'
         sess=varargin{1}; % 'behavioural' or 'scanning'
         type=varargin{2}; % plot 'subject' or 'run'
+<<<<<<< HEAD
         
         sn=returnSubjs;
         
@@ -54,6 +55,97 @@ switch what
                 T=addstruct(T,S);
             end
             fprintf('subj%d done \n',s)
+=======
+        
+        sn=returnSubjs;
+        
+        tasks={'stroop','nBack','visualSearch','GoNoGo','nBackPic','affective','emotional','ToM','arithmetic','intervalTiming',...
+            'CPRO','prediction','spatialMap','mentalRotation','emotionProcess','respAlt','visualSearch2','nBackPic2','ToM2'};
+        
+        study=[1;1;1;1;1;1;1;1;1;1;2;2;2;2;2;2;2;2;2];
+        
+        T=[];
+        for s=sn,
+            for t=1:length(tasks),
+                D = dload(fullfile(studyDir{study(t)},behavDir,subj_name{s},sprintf('sc%d_%s_%s.dat',study(t),subj_name{s},tasks{t})));
+                switch sess,
+                    case 'training'
+                        A = getrow(D,D.runNum>=1 & D.runNum<=51);
+                    case 'scanning'
+                        A = getrow(D,D.runNum>=funcRunNum(1) & D.runNum<=funcRunNum(2));
+                end
+                S.taskName=A.taskName;
+                S.numCorr=A.numCorr;
+                S.SN=repmat(s,length(A.taskName),1);
+                S.runNum=A.runNum;
+                S.respMade=A.respMade;
+                T=addstruct(T,S);
+            end
+            fprintf('subj%d done \n',s)
+        end
+        
+        % save out results
+        save(fullfile(studyDir{2},behavDir,sprintf('%sAccuracy-%s.mat',sess,type)),'T');
+    case 'PLOT:behavioural'
+        sess=varargin{1}; % 'behavioural' or 'scanning'
+        type=varargin{2}; % plot 'subject' or 'run'
+        
+        vararginoptions({varargin{3:end}},{'CAT'}); % option if doing individual map analysis
+        
+        % load in data
+        load(fullfile(studyDir{2},behavDir,sprintf('%sAccuracy-%s.mat',sess,type)),'T')
+        
+        switch type,
+            case 'subject'
+                lineplot([T.SN], T.numCorr,'subset', T.respMade>0,'CAT',CAT);
+                xlabel('Subject')
+                ylabel('Percent correct')
+            case 'run'
+                lineplot([T.runNum], T.numCorr,'subset', T.respMade>0,'CAT',CAT);
+                xlabel('Run')
+                ylabel('Percent correct')
+        end
+        
+    case 'ACTIVITY:get_data'   % get tasksConds (averaged across runs + sessions for each dataset)
+        subjs=length(returnSubjs);
+        
+        study=varargin{1}; % 1 or 2 or [1,2]
+        
+        F=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        
+        % load in allSubjs data struct from sc1 & sc2
+        H=[];
+        for ss=study,
+            load(fullfile(studyDir{ss},encodeDir,'glm4','cereb_avrgDataStruct.mat'));
+            T.studyNum=repmat(ss,size(T.SN,1),1);
+            H=addstruct(H,T);
+            clear T
+        end
+        
+        % get session average for each study separately
+        for s=1:subjs,
+            idx=1;
+            for ss=study,
+                numConds=length(unique(H.cond(H.studyNum==ss)));
+                for c=1:numConds, % get average across sessions
+                    indx = H.cond==c & H.studyNum==ss & H.SN==(returnSubjs(s));
+                    avrgData(idx,:)=nanmean(H.data(indx,:),1);
+                    idx=idx+1;
+                    clear indx
+                end
+                fprintf('subj%d averaged sessions for study%d \n',returnSubjs(s),ss)
+            end
+            
+            % subtract condition avrg baseline (average of all task
+            % conditions)
+            baseline=nanmean(avrgData,1);
+            baseline=zeros(size(baseline)); % temporary
+            data(:,:,s)=bsxfun(@minus,avrgData,baseline);
+            %             data(numConds,:,s)=baseline;
+            
+            clear avrgData
+            fprintf('subj%d new baseline \n',returnSubjs(s))
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
         end
         
         % save out results
@@ -146,11 +238,20 @@ switch what
         F=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         
         % load in activity patterns
+<<<<<<< HEAD
         [data,volIndx,V]=sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,study,'eval');
         
         % get feature model
         [X,featNames,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:make_model',study,'no'); % load in model
         
+=======
+%         [data,V,volIndx]=sc1_sc2_functionalAtlas('ACTIVITY:get_data',study);
+        [data,volIndx,V]=sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,study,'eval');
+        
+        % get feature model
+        [X,featNames,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:make_model',study,'no'); % load in model
+        
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
         % rest
         if length(study)>1,
             rest=[29,61];
@@ -174,7 +275,11 @@ switch what
         end;
         clear data
         
+<<<<<<< HEAD
         % subtract baseline
+=======
+        % subtract baseline 
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
         baseline=nanmean(B,1);
         B=bsxfun(@minus,B,baseline);
         
@@ -563,6 +668,7 @@ switch what
                 X   = [F.lHand./F.duration F.rHand./F.duration F.saccades./F.duration];
             case 'none'
                 X   = [];
+<<<<<<< HEAD
         end
         
         % get unique taskConds
@@ -570,6 +676,15 @@ switch what
             X   = pivottablerow(T.condNumUni,X,'mean(x,1)');
         end
         
+=======
+        end
+        
+        % get unique taskConds
+        if strcmp(taskType,'unique'),
+            X   = pivottablerow(T.condNumUni,X,'mean(x,1)');
+        end
+        
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
         X   = [X eye(numDist)];
         X   = bsxfun(@minus,X,mean(X));
         X   = bsxfun(@rdivide,X,sqrt(sum(X.^2)));  % Normalize to unit length vectors
@@ -1212,6 +1327,7 @@ switch what
         CAT.markerfill={'k'};
         lineplot(S.K,S.R2adj,'split',S.type,'CAT',CAT)
     case 'MAP:Group_Indiv' % put the individual maps into group space
+<<<<<<< HEAD
         mapType=varargin{1}; % 'SC12_10cluster', or 'SC1_10cluster', or 'SC2_10cluster'
         
         subjs=returnSubjs;
@@ -1238,6 +1354,31 @@ switch what
             end
             
             [~,groupFeat]=max(u,[],1);
+=======
+        subjs=returnSubjs;
+        
+        load(fullfile(studyDir{2},'encoding','glm4','groupEval_SC12_10cluster','SNN.mat'));
+        groupF=bestF;
+        
+        for s=1:length(subjs),
+            load(fullfile(studyDir{2},'encoding','glm4',subj_name{subjs(s)},'SNN_SC12_10cluster.mat'));
+            outName=fullfile(studyDir{2},'encoding','glm4',subj_name{subjs(s)},'map_SC12_10cluster_group.nii');
+            indivG=bestG';
+            
+            [N,P] = size(indivG);
+            for p=1:P
+                u(:,p) = lsqnonneg(groupF',indivG(:,p)); % weights are non-neg
+            end;
+            tmp=pinv(bestF)*u;
+            
+%             for i=1:10,
+%                 u(:,i)=lsqnonneg(groupF,bestF(:,i));
+%             end
+%             
+%             tmp=pinv(u)*indivG;
+            
+            [x,groupFeat]=max(tmp,[],1);
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
             
             % load in Vol info
             load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));
@@ -1320,7 +1461,11 @@ switch what
         % center the data (remove overall mean)
         X_C=bsxfun(@minus,UFullAvrgAll,mean(UFullAvrgAll));
         varargout={X_C,volIndx,V,sn};
+<<<<<<< HEAD
     case 'EVAL:crossval'  % always use this case to run the crossvalidated evaluation: give any map as input and evaluate on each study separately
+=======
+    case 'EVAL:crossval'
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
         sn=varargin{1}; % 'group' or <subjNum>
         mapType=varargin{2}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks', 'Cole_10Networks','SC<studyNum>_<num>cluster'
         data=varargin{3}; % evaluating data from study [1] or [2] ?
@@ -1386,10 +1531,17 @@ switch what
             RR = addstruct(RR,R);
         end;
         save(outName,'-struct','RR');
+<<<<<<< HEAD
     case 'EVAL:average' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
         mapType=varargin{1}; % ex. 'SC12_10cluster' or 'Buckner_7Networks' etc 
         level=varargin{2}; % 'group' or 'indiv' ?
         condType=varargin{3}; % evaluating on 'unique' or 'all' taskConds ?
+=======
+    case 'EVAL:averageK' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
+        mapType=varargin{1}; % ex. '6cluster' (for snn) or '90POV' (for ica)
+        condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
+        type=varargin{3}; % 'group' or 'indiv' ?
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
         
         studyType=[1,2]; % test on one dataset
         evalType=[2,1]; % evaluate on the other
@@ -1439,6 +1591,43 @@ switch what
         end
         
         save(outDir,'-struct','A');
+<<<<<<< HEAD
+=======
+    case 'EVAL:averageK_sess' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies and sess
+        mapType=varargin{1}; % ex. '6cluster' (for snn) or '90POV' (for ica)
+        condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
+        
+        studyType=[1,2]; % test on one dataset
+        evalType=[2,1]; % evaluate on the other
+        R=[];
+        
+        for i=1:2,
+            for j=1:2,
+                T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_SC%d_sess%d_%s',studyType(i),j,mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
+                T.studyNum=repmat([i],length(T.SN),1);
+                T.sessNum=repmat([j],length(T.SN),1);
+                R=addstruct(R,T);
+                fprintf('Build:SC%d_sess%d,Eval:SC%d \n',studyType(i),j,evalType(i))
+            end
+        end
+        outDir=fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_SC2_sess2_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
+        
+        R=rmfield(R,{'distmin','distmax','N'});
+        % get average of both structures here
+        A=tapply(R,{'bin','SN','bwParcel','crossval'},{'corr'});
+        
+        % distances are diff across evals so need to get dist per bin:
+        for b=1:length(unique(R.bin)),
+            dist=mode(round(R.dist(R.bin==b)));
+            idx=find(A.bin==b);
+            A.dist(idx,1)=dist;
+        end
+        
+        save(outDir,'-struct','A');
+    case 'EVAL:averageOther'
+        mapType=varargin{1}; % options are 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_<K>cluster' or 'SC12_<thresh>POV' etc'
+        condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
         
         % get average of resting state parcellations: once off
         
@@ -1606,9 +1795,15 @@ switch what
         
         % do F test (or t test if just two groups)
         if length(unique(S.m))>2,
+<<<<<<< HEAD
             %             F=ancova(S.diff,S.SN,S.m,'names',mapType);
             X=[S.diff(S.m==1),S.diff(S.m==2),S.diff(S.m==3)];
             [p table] = anova_rm(X); % repeated measures anova
+=======
+%             F=ancova(S.diff,S.SN,S.m,'names',mapType);
+              X=[S.diff(S.m==1),S.diff(S.m==2),S.diff(S.m==3)]; 
+              [p table] = anova_rm(X); % repeated measures anova
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
         else
             ttest(S.diff(S.m==1), S.diff(S.m==2),2,'paired');
             
@@ -1631,8 +1826,32 @@ switch what
             fprintf('Effect size between %s and %s is %2.2f when denom is std(Group1) \n',mapType{1},mapType{2},ES_group1);
             fprintf('Effect size between %s and %s is %2.2f when denom is std(Group2) \n',mapType{1},mapType{2},ES_group2);
             fprintf('Effect size between %s and %s is %2.2f when denom is pooled std  \n',mapType{1},mapType{2},ES_pooled);
+<<<<<<< HEAD
         end
         
+=======
+        end
+        
+    case 'temp:average_taskFree'
+        mapTypes={'Buckner_7Networks','Cole_10Networks','Buckner_17Networks'};
+        
+        
+        S=[];
+        for m=1:length(mapTypes),
+            
+            T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapTypes{m}),sprintf('spatialBoundfunc%d_%s.mat',4,'unique')));
+            T.map=repmat(m,length(T.SN),1);
+            S=addstruct(S,T);
+            clear T
+        end
+        
+        % get average struct
+        R=tapply(S,{'bin','SN','bwParcel','dist','crossval'},{'corr'});
+        
+        dircheck(fullfile(studyDir{2},'encoding','glm4','groupEval_averageRest'));
+        save(fullfile(studyDir{2},'encoding','glm4','groupEval_averageRest',sprintf('spatialBoundfunc%d_%s.mat',4,'unique')),'-struct','R');
+        
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
     case 'STRENGTH:get_bound'
         % This goes from a group parcellation map and generates a
         % structure of clusters and boundaries from the volume
@@ -1766,6 +1985,11 @@ switch what
         varargout={RR};
     case 'STRENGTH:visualise_bound'
         mapType = varargin{1};
+        bcolor ='k'; 
+        opacacy = 0.5;
+        bscale = 180;
+        bmax=20;
+        vararginoptions(varargin(2:end),{'bcolor','opacacy','bscale','bmax'});
         
         EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
         SurfDir = fullfile(studyDir{1},'surfaceCaret','suit_flat');
@@ -1825,15 +2049,21 @@ switch what
         else
             cmapF=colorcube(max(Parcel));
         end
+        cmapF = bsxfun(@plus,cmapF*opacacy,[1 1 1]*(1-opacacy));
         
         % Make the plot
         suit_plotflatmap(Mpa,'type','label','border',[],'cmap',cmapF);
         hold on;
-        LineWeight=EdgeWeight*200;
-        LineWeight(LineWeight>20)=20;
+        LineWeight=EdgeWeight*bscale;
+        LineWeight(LineWeight>bmax)=bmax;
         for  b=1:length(Border)
+<<<<<<< HEAD
             if (Border(b).numpoints>0 & EdgeWeight(b)>0),
                 p=plot(Border(b).data(:,1),Border(b).data(:,2),'k.');
+=======
+            if (Border(b).numpoints>0 & EdgeWeight(b)>0)
+                p=plot(Border(b).data(:,1),Border(b).data(:,2),[bcolor '.']);
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
                 set(p,'MarkerSize',LineWeight(b));
                 weights(b)=EdgeWeight(b);
             end;
@@ -1893,11 +2123,15 @@ switch what
             % U(:,p) =
             % cplexqp(XX+lambda(2)*eye(numFeat),ones(numFeat,1)*lambda(1)-XY(:,p),A,b);
             % % I don't have the IBM cplexqp routine
+<<<<<<< HEAD
             u(:,p) = lsqnonneg(X,Y(:,p));
+=======
+              C(:,p) = lsqnonneg(X,Y(:,p)); 
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
         end;
         
         % Get corr between feature weights
-        C=corr(F,W);
+%         C=corr(F,W);
         
         % Present the list of the highest three correlation for each
         % cluster
@@ -1912,7 +2146,11 @@ switch what
             end
         end;
         
+<<<<<<< HEAD
         varargout={B,F,W,u,condNames,FeatureNames,X,Y};
+=======
+        varargout={B,F,W,C,condNames,FeatureNames,X,Y};
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
     case 'ENCODE:project_featSpace'
         mapType=varargin{1};
         toPlot=varargin{2}; % 'winner' or 'all' or 'featMatrix'
@@ -2107,7 +2345,11 @@ switch what
         set(gca,'YLim',[.8 1],'ytick',[.8 .85 .9 .95 1],'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
         xlabel('Runs')
         ylabel('Accuracy (%)')
+<<<<<<< HEAD
         set(gcf,'units','centimeters','position',[5,5,6,6])
+=======
+        set(gcf,'units','centimeters','position',[5,5,9,12])
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
     case 'AXES:eigenValues'
         % Aesthetics
         CAT.markersize=8;
@@ -2336,6 +2578,10 @@ switch what
     case 'AXES:indiv_diff' % make summary graph for diff curves for indiv maps
         toPlot=varargin{1};% {'SC2_10cluster','SC2_10cluster'}
         evalNums=varargin{2}; % repmat([4],length(plotName),1)
+<<<<<<< HEAD
+=======
+        sn=varargin{3}; % [8, 15] subject number(s)
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
         
         % aesthetics
         CAT.errorwidth=.5;
@@ -2346,6 +2592,7 @@ switch what
         errorcolor={'g','b','r'};
         linecolor={'g','b','r'};
         
+<<<<<<< HEAD
         % individual
         for m=1:length(toPlot)-1,
             CAT.errorcolor=errorcolor{m};
@@ -2357,6 +2604,14 @@ switch what
         CAT.errorcolor=errorcolor{m+1};
         CAT.linecolor=linecolor{m+1};
         sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot{m+1},4,'group',1,'unique','CAT',CAT); % always take crossval + unique
+=======
+        for m=1:length(toPlot),
+            CAT.errorcolor=errorcolor{m};
+            CAT.linecolor=linecolor{m};
+            sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot{m},evalNums(m),'indiv',1,'unique','CAT',CAT,'sn',sn(m)); % always take crossval + unique
+            hold on
+        end
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
         hold off
         
         % Labelling
@@ -2380,17 +2635,27 @@ switch what
         linewidth={2, .5, 2, .5};
         linestyle={'-','--','-','--'};
         
+<<<<<<< HEAD
         % group
         for m=1:length(mapsGroup),
+=======
+        for m=1:length(maps),
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
             CAT.linewidth=linewidth{m};
             CAT.linestyle=linestyle{m};
             sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',mapsGroup{m},4,'group',1,'unique','CAT',CAT); % always take crossval + unique
             hold on
         end
+<<<<<<< HEAD
         % individual
         errorcolor={'k','k','g','g'};
         linecolor={'k','k','g','g'};
         for m=1:length(mapsIndiv),
+=======
+        CAT.errorcolor={'k'};
+        CAT.linecolor={'k'};
+        for m=1:length(maps),
+>>>>>>> 429fca47ee85d7c886c9ebdfaf72a8df83ed921e
             CAT.linewidth=linewidth{m};
             CAT.linestyle=linestyle{m};
             CAT.errorcolor=errorcolor{m};

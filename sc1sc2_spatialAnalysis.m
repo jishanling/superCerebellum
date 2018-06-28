@@ -282,6 +282,26 @@ switch(what)
         subplot(3,1,3)
         plot([1:10]',D.error);
         keyboard;
+    case 'SNN:map_weights'
+        % this function takes any labelled volume (already in SUIT space)
+        % and plots to the surface
+        inputMap=varargin{1}; % some options are 'Buckner_7Networks','SC1_9cluster','lob10', 'Cole_10Networks', 'SC2_90cluster' etc
+        
+        vararginoptions(varargin(2:end),{''});
+        inputDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',inputMap));
+        load(fullfile(inputDir,'SNN.mat'));
+        Vv{1}.dim=V.dim;
+        Vv{1}.mat=V.mat;        
+        Vv{1}.dat=zeros(V.dim);
+        G = bsxfun(@rdivide,bestG,sum(bestG,2));
+        numComp = size(bestG,2);
+        for i=1:numComp
+            subplot(3,ceil(numComp/3),i);
+            Vv{1}.dat(volIndx)=G(:,i);
+            M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
+            suit_plotflatmap(M.data,'type','func','border',[],'cscale',[0 0.4])
+        end;
+        
     case 'visualise_map' % Plot any data on the cerebellar flatmap
         data = varargin{1};     % Data to plot
         volIndx = varargin{2};  % Indices into the volume (mask)
@@ -447,7 +467,7 @@ switch(what)
     case 'EVALBOUND:visualize' % Generates metric file and border file for the pacellation
         mapType = varargin{1};
         EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
-        SurfDir = fullfile(studyDir{1},'surfaceCaret','suit_flat'); 
+        SurfDir = fullfile(studyDir{1},'surfaceCaret','suit_flat');
         load(fullfile(EvalDir,'boundaries.mat'));
         
         
@@ -559,32 +579,27 @@ switch(what)
             fprintf('uncrossval eval done for subj %d \n',sn(s));
         end;
         save(outDir,'-struct','RR');
-<<<<<<< HEAD
         
-=======
     case 'EVALBOUND:Figure'
-          set(gcf,'position',[10 10 1600 800]); 
+        set(gcf,'position',[10 10 1600 800]);
         
-        subplot(2,3,1); 
-        sc1_sc2_functionalAtlas('STRENGTH:visualise_bound','lob10','lob10'); 
+        subplot(2,3,1);
+        sc1_sc2_functionalAtlas('STRENGTH:visualise_bound','lob10');
         set(gca,'XLim',[-100 100],'YLim',[-100 100],'Color',[0 0 0],'Visible','on','Xticklabel',[],'Yticklabel',[],'Box','off');
         axis equal;
-        subplot(2,3,2); 
-        sc1_sc2_functionalAtlas('STRENGTH:visualise_bound','Buckner_17Networks','Buckner17'); 
+        subplot(2,3,2);
+        sc1_sc2_functionalAtlas('STRENGTH:visualise_bound','Buckner_17Networks');
         set(gca,'XLim',[-100 100],'YLim',[-100 100],'Color',[0 0 0],'Visible','on','Xticklabel',[],'Yticklabel',[],'Box','off');
         axis equal;
-        subplot(2,3,3); 
-        sc1_sc2_functionalAtlas('STRENGTH:visualise_bound','Buckner_7Networks','Buckner7'); 
+        subplot(2,3,3);
+        sc1_sc2_functionalAtlas('STRENGTH:visualise_bound','Buckner_7Networks');
         set(gca,'XLim',[-100 100],'YLim',[-100 100],'Color',[0 0 0],'Visible','on','Xticklabel',[],'Yticklabel',[],'Box','off');
         axis equal;
-        subplot(2,3,4); 
-        sc1_sc2_functionalAtlas('STRENGTH:visualise_bound','SC12_10cluster','SC12_10cluster'); 
+        subplot(2,3,4);
+        sc1_sc2_functionalAtlas('STRENGTH:visualise_bound','SC12_10cluster');
         set(gca,'XLim',[-100 100],'YLim',[-100 100],'Color',[0 0 0],'Visible','on','Xticklabel',[],'Yticklabel',[],'Box','off');
         axis equal;
-
->>>>>>> 3d868570aa23d0c630515bd26232c0e3c0c3fd7f
 end;
-
 % InterSubj Corr
 function C=intersubj_corr(Y)
 numSubj=size(Y,3);
