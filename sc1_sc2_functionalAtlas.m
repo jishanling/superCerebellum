@@ -25,6 +25,41 @@ returnSubjs=[2,3,4,6,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
 
 switch what
     
+    case 'PARTICIPANT:info'
+        % load in excel file with participant info
+        
+        D=dload(fullfile(baseDir,'sc1_sc2_taskDesign.txt')); 
+
+        % how many women/men ?
+        idx=D.include==1; 
+        fprintf('there are %d women and %d men \n',sum(char(D.Sex(idx))=='F'),sum(char(D.Sex(idx))=='M')); 
+        
+        % average age across men and women
+        numdays = datenum(D.BEHA1(idx),'dd-mm-yy') - datenum(D.DOB(idx),'dd-mm-yy');
+        ages=round(numdays/365); 
+        fprintf('the average age is %2.2f (sd=%2.2f) \n',mean(ages),std(ages))
+        
+        % average time between sessions
+        numdays = datenum(D.BEHB1(idx),'dd-mm-yy') - datenum(D.BEHA1(idx),'dd-mm-yy'); 
+        fprintf('the average amount of time between task sets is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays)); 
+        
+        % within each dataset - how long between scanning sessions
+        numdays = datenum(D.SCANA2(idx),'dd-mm-yy') - datenum(D.SCANA1(idx),'dd-mm-yy'); 
+        fprintf('the average amount of time between scanning sessions in setA is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays));
+        
+        numdays = datenum(D.SCANB2(idx),'dd-mm-yy') - datenum(D.SCANB1(idx),'dd-mm-yy'); 
+        fprintf('the average amount of time between scanning sessions in setA is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays));
+        
+        % within each dataset - how long between behavioural sessions
+        numdays1 = datenum(D.BEHA2(idx),'dd-mm-yy') - datenum(D.BEHA1(idx),'dd-mm-yy'); 
+        numdays2 = datenum(D.BEHA3(idx),'dd-mm-yy') - datenum(D.BEHA2(idx),'dd-mm-yy'); 
+       
+        fprintf('the average amount of time between behav sessions in setA is %2.2f days (sd=%2.2f) \n',mean(numdays1+numdays2/2),std(numdays1+numdays2/2));
+        
+        numdays1 = datenum(D.BEHB2(idx),'dd-mm-yy') - datenum(D.BEHB1(idx),'dd-mm-yy');
+        numdays2 = datenum(D.BEHB3(idx),'dd-mm-yy') - datenum(D.BEHB2(idx),'dd-mm-yy');
+        fprintf('the average amount of time between behav sessions in setA is %2.2f days (sd=%2.2f) \n',mean(numdays1+numdays2/2),std(numdays1+numdays2/2));
+        
     case 'BEHAVIOURAL:get_data'
         sess=varargin{1}; % 'behavioural' or 'scanning'
         type=varargin{2}; % plot 'subject' or 'run'
@@ -1218,6 +1253,8 @@ switch what
         lineplot(S.K,S.R2adj,'split',S.type,'CAT',CAT)
     case 'MAP:Group_Indiv' % put the individual maps into group space
         mapType=varargin{1}; % 'SC12_10cluster', or 'SC1_10cluster', or 'SC2_10cluster'
+        % example:
+        % sc1_sc2_functionalAtlas('MAP:Group_Indiv','SC12_10cluster') 
         
         subjs=returnSubjs;
         
@@ -1330,6 +1367,8 @@ switch what
         mapType=varargin{2}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks', 'Cole_10Networks','SC<studyNum>_<num>cluster'
         data=varargin{3}; % evaluating data from study [1] or [2] ?
         condType=varargin{4}; % 'unique' or 'all'. Are we evaluating on all taskConds or just those unique to either sc1 or sc2 ?
+        
+        % example: sc1_sc2_functionalAtlas('EVAL:crossval',2,'SC12_10cluster_group',1,'unique')
         
         % evaluating the group or the individual ?
         if strcmp(sn,'group'),
