@@ -25,7 +25,7 @@ returnSubjs=[2,3,4,6,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
 
 switch what
     
-    case 'PARTICIPANT:info'
+    case 'PARTICIPANT:info' 
         % load in excel file with participant info
         
         D=dload(fullfile(baseDir,'sc1_sc2_taskDesign.txt')); 
@@ -43,22 +43,25 @@ switch what
         numdays = datenum(D.BEHB1(idx),'dd-mm-yy') - datenum(D.BEHA1(idx),'dd-mm-yy'); 
         fprintf('the average amount of time between task sets is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays)); 
         
-        % within each dataset - how long between scanning sessions
+        % SCANNING
+        numdays = datenum(D.SCANA1(idx),'dd-mm-yy') - datenum(D.BEHA3(idx),'dd-mm-yy'); 
+        fprintf('the average amount of time from behav 3 to scan 1 in setA is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays));
+        
+        numdays = datenum(D.SCANB1(idx),'dd-mm-yy') - datenum(D.BEHB3(idx),'dd-mm-yy'); 
+        fprintf('the average amount of time from behav 3 to scan 1  in setB is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays));
+        
         numdays = datenum(D.SCANA2(idx),'dd-mm-yy') - datenum(D.SCANA1(idx),'dd-mm-yy'); 
-        fprintf('the average amount of time between scanning sessions in setA is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays));
+        fprintf('the average amount of time from scan 1 to scan 2 in setA is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays));
         
         numdays = datenum(D.SCANB2(idx),'dd-mm-yy') - datenum(D.SCANB1(idx),'dd-mm-yy'); 
-        fprintf('the average amount of time between scanning sessions in setA is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays));
+        fprintf('the average amount of time from scan 1 to scan 2 in setB is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays));
+
+        %  BEHAVIOUR
+        numdays = datenum(D.BEHA3(idx),'dd-mm-yy') - datenum(D.BEHA1(idx),'dd-mm-yy'); 
+        fprintf('the average amount of time across behav sessions in setA is %2.2f days (sd=%2.2f) \n',mean(numdays+1),std(numdays+1));
         
-        % within each dataset - how long between behavioural sessions
-        numdays1 = datenum(D.BEHA2(idx),'dd-mm-yy') - datenum(D.BEHA1(idx),'dd-mm-yy'); 
-        numdays2 = datenum(D.BEHA3(idx),'dd-mm-yy') - datenum(D.BEHA2(idx),'dd-mm-yy'); 
-       
-        fprintf('the average amount of time between behav sessions in setA is %2.2f days (sd=%2.2f) \n',mean(numdays1+numdays2/2),std(numdays1+numdays2/2));
-        
-        numdays1 = datenum(D.BEHB2(idx),'dd-mm-yy') - datenum(D.BEHB1(idx),'dd-mm-yy');
-        numdays2 = datenum(D.BEHB3(idx),'dd-mm-yy') - datenum(D.BEHB2(idx),'dd-mm-yy');
-        fprintf('the average amount of time between behav sessions in setA is %2.2f days (sd=%2.2f) \n',mean(numdays1+numdays2/2),std(numdays1+numdays2/2));
+        numdays = datenum(D.BEHB3(idx),'dd-mm-yy') - datenum(D.BEHB1(idx),'dd-mm-yy');
+        fprintf('the average amount of time across behav sessions in setB is %2.2f days (sd=%2.2f) \n',mean(numdays+1)+1,std(numdays+1));
         
     case 'BEHAVIOURAL:get_data'
         sess=varargin{1}; % 'behavioural' or 'scanning'
@@ -343,6 +346,13 @@ switch what
         myboxplot([],[A.within1 A.within2 A.across],'style_twoblock','plotall',1);
         drawline(0,'dir','horz');
         ttest(sqrt(A.within1.*A.within2),A.across,2,'paired');
+        
+        x1=nanmean(A.within1);x2=nanmean(A.within2);x3=nanmean(A.across); 
+        SEM1=std(A.within1)/sqrt(length(returnSubjs));SEM2=std(A.within2)/sqrt(length(returnSubjs));SEM3=std(A.across)/sqrt(length(returnSubjs));
+        fprintf('average corr for set A is %2.3f; CI:%2.3f-%2.3f \n average corr for set B is %2.3f; CI:%2.3f-%2.3f and average corr across sets A and B is %2.3f; CI:%2.3f-%2.3f \n',...
+            x1,x1-(1.96*SEM1),x1+(1.96*SEM1),x2,...
+            x2-(1.96*SEM2),x2+(1.96*SEM2),...
+            x3,x3-(1.96*SEM3),x3+(1.96*SEM3));
         
     case 'PREDICTIONS:taskModel'
         sn=varargin{1}; % returnSubjs
@@ -1810,6 +1820,7 @@ switch what
         varargout={RR};
     case 'STRENGTH:visualise_bound'
         mapType = varargin{1};
+        
         bcolor ='k';
         opacacy = 0.5;
         bscale = 180;
@@ -1885,18 +1896,16 @@ switch what
                 p=plot(Border(b).data(:,1),Border(b).data(:,2),'k.');
                 set(p,'MarkerSize',LineWeight(b));
                 weights(b)=EdgeWeight(b);
+                % plot DCBC of each functional boundary ?
+%                 p=text(double(Border(b).data(1,1)),double(Border(b).data(1,2)),sprintf('%2.3f',weights(b)));
+%                 set(p,'FontSize',20);
             end;
-            
-            % plot DCC of each functional boundary ?
-            for b=1:length(weights),
-                if (Border(b).numpoints>0 & EdgeWeight(b)>0)
-                    p=text(double(Border(b).data(1,1)),double(Border(b).data(1,2)),sprintf('%2.3f',weights(b)));
-                    set(p,'FontSize',20);
-                end
-            end
         end
         hold off;
+        tmp=weights(weights~=0); 
         
+        fprintf('min diff is %2.5f and max diff is %2.2f \n', min(tmp),max(tmp)); 
+ 
     case 'ENCODE:get_features'
         mapType=varargin{1};
         
@@ -1936,13 +1945,12 @@ switch what
         Y=bsxfun(@rdivide,Y,sqrt(mean(Y.^2)));
         XX=X'*X;
         XY=X'*Y;
-        %         A = -eye(numFeat);
-        %         b = zeros(numFeat,1);
+        A = -eye(numFeat);
+        b = zeros(numFeat,1);
+
         for p=1:numClusters,
-            % U(:,p) =
-            % cplexqp(XX+lambda(2)*eye(numFeat),ones(numFeat,1)*lambda(1)-XY(:,p),A,b);
-            % % I don't have the IBM cplexqp routine
-            u(:,p) = lsqnonneg(X,Y(:,p));
+            u(:,p) = cplexqp(XX+lambda(2)*eye(numFeat),ones(numFeat,1)*lambda(1)-XY(:,p),A,b);
+%             u(:,p) = lsqnonneg(X,Y(:,p));
         end;
         
         % Get corr between feature weights
