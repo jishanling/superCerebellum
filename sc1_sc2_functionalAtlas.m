@@ -25,39 +25,39 @@ returnSubjs=[2,3,4,6,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
 
 switch what
     
-    case 'PARTICIPANT:info' 
+    case 'PARTICIPANT:info'
         % load in excel file with participant info
         
-        D=dload(fullfile(baseDir,'sc1_sc2_taskDesign.txt')); 
-
+        D=dload(fullfile(baseDir,'sc1_sc2_taskDesign.txt'));
+        
         % how many women/men ?
-        idx=D.include==1; 
-        fprintf('there are %d women and %d men \n',sum(char(D.Sex(idx))=='F'),sum(char(D.Sex(idx))=='M')); 
+        idx=D.include==1;
+        fprintf('there are %d women and %d men \n',sum(char(D.Sex(idx))=='F'),sum(char(D.Sex(idx))=='M'));
         
         % average age across men and women
         numdays = datenum(D.BEHA1(idx),'dd-mm-yy') - datenum(D.DOB(idx),'dd-mm-yy');
-        ages=round(numdays/365); 
+        ages=round(numdays/365);
         fprintf('the average age is %2.2f (sd=%2.2f) \n',mean(ages),std(ages))
         
         % average time between sessions
-        numdays = datenum(D.BEHB1(idx),'dd-mm-yy') - datenum(D.BEHA1(idx),'dd-mm-yy'); 
-        fprintf('the average amount of time between task sets is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays)); 
+        numdays = datenum(D.BEHB1(idx),'dd-mm-yy') - datenum(D.BEHA1(idx),'dd-mm-yy');
+        fprintf('the average amount of time between task sets is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays));
         
         % SCANNING
-        numdays = datenum(D.SCANA1(idx),'dd-mm-yy') - datenum(D.BEHA3(idx),'dd-mm-yy'); 
+        numdays = datenum(D.SCANA1(idx),'dd-mm-yy') - datenum(D.BEHA3(idx),'dd-mm-yy');
         fprintf('the average amount of time from behav 3 to scan 1 in setA is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays));
         
-        numdays = datenum(D.SCANB1(idx),'dd-mm-yy') - datenum(D.BEHB3(idx),'dd-mm-yy'); 
+        numdays = datenum(D.SCANB1(idx),'dd-mm-yy') - datenum(D.BEHB3(idx),'dd-mm-yy');
         fprintf('the average amount of time from behav 3 to scan 1  in setB is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays));
         
-        numdays = datenum(D.SCANA2(idx),'dd-mm-yy') - datenum(D.SCANA1(idx),'dd-mm-yy'); 
+        numdays = datenum(D.SCANA2(idx),'dd-mm-yy') - datenum(D.SCANA1(idx),'dd-mm-yy');
         fprintf('the average amount of time from scan 1 to scan 2 in setA is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays));
         
-        numdays = datenum(D.SCANB2(idx),'dd-mm-yy') - datenum(D.SCANB1(idx),'dd-mm-yy'); 
+        numdays = datenum(D.SCANB2(idx),'dd-mm-yy') - datenum(D.SCANB1(idx),'dd-mm-yy');
         fprintf('the average amount of time from scan 1 to scan 2 in setB is %2.2f days (sd=%2.2f) \n',mean(numdays),std(numdays));
-
+        
         %  BEHAVIOUR
-        numdays = datenum(D.BEHA3(idx),'dd-mm-yy') - datenum(D.BEHA1(idx),'dd-mm-yy'); 
+        numdays = datenum(D.BEHA3(idx),'dd-mm-yy') - datenum(D.BEHA1(idx),'dd-mm-yy');
         fprintf('the average amount of time across behav sessions in setA is %2.2f days (sd=%2.2f) \n',mean(numdays+1),std(numdays+1));
         
         numdays = datenum(D.BEHB3(idx),'dd-mm-yy') - datenum(D.BEHB1(idx),'dd-mm-yy');
@@ -65,7 +65,6 @@ switch what
         
     case 'BEHAVIOURAL:get_data'
         sess=varargin{1}; % 'behavioural' or 'scanning'
-        type=varargin{2}; % plot 'subject' or 'run'
         
         sn=returnSubjs;
         
@@ -86,6 +85,7 @@ switch what
                 end
                 S.taskName=A.taskName;
                 S.numCorr=A.numCorr;
+                S.rt=A.rt;
                 S.SN=repmat(s,length(A.taskName),1);
                 S.runNum=A.runNum;
                 S.respMade=A.respMade;
@@ -95,7 +95,7 @@ switch what
         end
         
         % save out results
-        save(fullfile(studyDir{2},behavDir,sprintf('%sAccuracy-%s.mat',sess,type)),'T');
+        save(fullfile(studyDir{2},behavDir,sprintf('%sLearning.mat',sess)),'T');
     case 'PLOT:behavioural'
         sess=varargin{1}; % 'behavioural' or 'scanning'
         type=varargin{2}; % plot 'subject' or 'run'
@@ -103,7 +103,7 @@ switch what
         vararginoptions({varargin{3:end}},{'CAT'}); % option if doing individual map analysis
         
         % load in data
-        load(fullfile(studyDir{2},behavDir,sprintf('%sAccuracy-%s.mat',sess,type)),'T')
+        load(fullfile(studyDir{2},behavDir,sprintf('%sLearning.mat',sess)),'T')
         
         switch type,
             case 'subject'
@@ -174,11 +174,29 @@ switch what
         
         varargout={X,featNames,numConds,F};
     case 'ACTIVITY:patterns'   % estimate each of the task conditions (motor features are subtracted)
-        study=varargin{1};
-        taskType=varargin{2}; % 'allConds', 'averageConds','averageTasks'
+        sn=varargin{1}; % 'group' or <subjNum>
+        study=varargin{2};
+        taskType=varargin{3}; % 'allConds', 'averageConds','averageTasks'
         
-        subjs=length(returnSubjs);
         lambda=.01;
+        
+        % group or individual ?
+        if ~strcmp(sn,'group'),
+            % load in map
+            if length(study)>1,
+                outDir=fullfile(studyDir{2},caretDir,sprintf('x%s',subj_name{sn}),'cerebellum'); dircheck(outDir)
+            else
+                outDir=fullfile(studyDir{study},caretDir,sprintf('x%s',subj_name{sn}),'cerebellum');dircheck(outDir);
+            end
+            subjs=sn;
+        else
+            if length(study)<1,
+                outDir=fullfile(studyDir{study},caretDir,'suit_flat','glm4');
+            else
+                outDir=fullfile(studyDir{2},caretDir,'suit_flat','glm4');
+            end
+            subjs=returnSubjs;
+        end
         
         % load in task structure file
         F=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
@@ -198,7 +216,7 @@ switch what
         
         % set up volume info
         numFeat=size(X,2)-numConds;
-        Yy=zeros(numConds+numFeat,subjs,V.dim(1)*V.dim(2)*V.dim(3));
+        Yy=zeros(numConds+numFeat,length(subjs),V.dim(1)*V.dim(2)*V.dim(3));
         C{1}.dim=V.dim;
         C{1}.mat=V.mat;
         
@@ -206,8 +224,8 @@ switch what
         X(rest,numConds+1:numConds+3)=X(rest,numConds+1:numConds+3)*-1;
         
         % regress out motor features
-        for s=1:subjs,
-            B(:,s,:)=(X'*X+eye(numConds+numFeat)*lambda)\(X'*data(:,:,s));
+        for s=1:length(subjs),
+            B(:,s,:)=(X'*X+eye(numConds+numFeat)*lambda)\(X'*data(:,:,subjs(s)));
             fprintf('ridge regress done for subj%d done \n',returnSubjs(s))
         end;
         clear data
@@ -222,7 +240,13 @@ switch what
         % make volume
         Yy(:,:,volIndx)=B;
         Yy=permute(Yy,[2 1 3]);
-        indices=nanmean(Yy,1);
+        
+        % group or individual ?
+        if strcmp('sn','group'),
+            indices=nanmean(Yy,1);
+        else
+            indices=Yy;
+        end
         indices=reshape(indices,[size(indices,2),size(indices,3)]);
         
         % map vol2surf
@@ -235,7 +259,7 @@ switch what
         
         switch taskType,
             case 'allConds'
-                outName='unCorr_allTaskConds';
+                condName='unCorr_allTaskConds';
             case 'averageConds'
                 condNumUni=[F.condNumUni;62;63;64];
                 X1=indicatorMatrix('identity_p',condNumUni);
@@ -249,44 +273,16 @@ switch what
                 S.column_name=condNames';
                 S.num_cols=size(S.column_name,2);
                 S.column_color_mapping=S.column_color_mapping(1:S.num_cols,:);
-                outName='unCorr_avrgTaskConds'; % average of certain tasks
-            case 'averageTasks'
-                taskNumUni=[F.taskNumUni;27;28;29];
-                X1=indicatorMatrix('identity_p',taskNumUni);
-                uniqueTasks=S.data*X1;
-                % get new taskNames
-                taskNames={'GoNoGo','ToM','actionObservation','affective','arithmetic','checkerBoard',...
-                    'emotional','intervalTiming','motorImagery','motorSequence','nBack','nBackPic','spatialNavigation',...
-                    'stroop','verbGeneration','visualSearch','rest','CPRO','prediction','spatialMap','natureMovie','romanceMovie',...
-                    'landscapeMovie','mentalRotation','emotionProcess','respAlt','lHand','rHand','saccades'};
-                S.data=uniqueTasks;
-                S.column_name=taskNames;
-                S.num_cols=size(S.column_name,2);
-                S.column_color_mapping=S.column_color_mapping(1:S.num_cols,:);
-                outName='unCorr_avrgTasks'; % average of certain tasks
-            case 'averageMDS'
-                F=dload(fullfile(baseDir,'sc1_sc2_taskConds_MDS.txt'));
-                
-                taskNumUni=[F.MDSNumUni;22;23;24];
-                X1=indicatorMatrix('identity_p',taskNumUni);
-                uniqueTasks=S.data*X1;
-                % get new taskNames
-                MDSNames={'Rules','Go','ToM','VideoActions','Movies','Pictures','Math','Stroop','FingerSimple',...
-                    'Mentalising','FingerSeq','WorkingMemory','VerbGen','WordRead','VisualSearch','Prediction',...
-                    'RespAlt','SpatialMap','romanceMovie','MentalRotation','BodyMotion','lHand','rHand','saccades'};
-                S.data=uniqueTasks;
-                S.column_name=MDSNames;
-                S.num_cols=size(S.column_name,2);
-                S.column_color_mapping=S.column_color_mapping(1:S.num_cols,:);
-                outName='unCorr_MDSClusters'; % average of certain tasks
+                condName='unCorr_avrgTaskConds'; % average of certain tasks
         end
         
         % save out metric
-        if length(study)>1,
-            caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4',sprintf('%s.metric',outName)),S);
+        if strcmp(sn,'group'),
+            outName=condName;
         else
-            caret_save(fullfile(studyDir{study},caretDir,'suit_flat','glm4',sprintf('%s.metric',outName)),S)
+            outName=sprintf('%s_%s',subj_name{sn},condName);
         end
+        caret_save(fullfile(outDir,sprintf('%s.metric',outName)),S);
     case 'ACTIVITY:reliability'
         glm=varargin{1};
         type=varargin{2}; % 'cerebellum' or 'cortex' 'basalGanglia'
@@ -347,7 +343,7 @@ switch what
         drawline(0,'dir','horz');
         ttest(sqrt(A.within1.*A.within2),A.across,2,'paired');
         
-        x1=nanmean(A.within1);x2=nanmean(A.within2);x3=nanmean(A.across); 
+        x1=nanmean(A.within1);x2=nanmean(A.within2);x3=nanmean(A.across);
         SEM1=std(A.within1)/sqrt(length(returnSubjs));SEM2=std(A.within2)/sqrt(length(returnSubjs));SEM3=std(A.across)/sqrt(length(returnSubjs));
         fprintf('average corr for set A is %2.3f; CI:%2.3f-%2.3f \n average corr for set B is %2.3f; CI:%2.3f-%2.3f and average corr across sets A and B is %2.3f; CI:%2.3f-%2.3f \n',...
             x1,x1-(1.96*SEM1),x1+(1.96*SEM1),x2,...
@@ -519,34 +515,42 @@ switch what
             A=addstruct(A,T);
         end;
         
+        % before - code below was computing corr on study 2 only (structure
+        % was T instead of A)
         D=[];
-        sn=unique(T.SN);
+        sn=unique(A.SN);
         numSubj = length(sn);
-        RR=[];
-        for f=unique(T.freq)'
-            for s = 1:numSubj
-                for se=1:2
-                    temp = T.data(T.SN==sn(s) & T.sess==se & T.freq==f,:);
-                    temp = bsxfun(@minus,temp,mean(temp));
-                    D(:,:,s+(se-1)*length(sn))=temp;
+        SS=[];
+        for st=1:2, % loop over studies
+            RR=[];
+            for f=unique(A.freq)', % loop over frequencies
+                for s = 1:numSubj  % loop over subjects
+                    for se=1:2     % loop over sessions
+                        temp = A.data(A.study==st & A.SN==sn(s) & A.sess==se & A.freq==f,:);
+                        %                         temp = bsxfun(@minus,temp,mean(temp)); 
+                        D(:,:,s+(se-1)*length(sn))=temp;
+                    end;
                 end;
+                C=intersubj_corr(D);
+                R.sess = [ones(1,numSubj) ones(1,numSubj)*2]';
+                R.subj = [1:numSubj 1:numSubj]';
+                R.subj = sn(R.subj);
+                R.freq = f*ones(numSubj*2,1);
+                R.study= st*ones(numSubj*2,1);
+                SameSess = bsxfun(@eq,R.sess',R.sess);
+                SameSubj = bsxfun(@eq,R.subj',R.subj);
+                for i=1:numSubj*2;
+                    R.withinSubj(i,:)=C(i,SameSubj(i,:) & ~SameSess(i,:));
+                    R.betweenSubj(i,:)=mean(C(i,~SameSubj(i,:)));
+                    R.totSS(i,1) = nansum(nansum(D(:,:,i).^2));
+                end;
+                RR=addstruct(RR,R);
             end;
-            C=intersubj_corr(D);
-            R.sess = [ones(1,numSubj) ones(1,numSubj)*2]';
-            R.subj = [1:numSubj 1:numSubj]';
-            R.subj = sn(R.subj);
-            R.freq = f*ones(numSubj*2,1);
-            SameSess = bsxfun(@eq,R.sess',R.sess);
-            SameSubj = bsxfun(@eq,R.subj',R.subj);
-            for i=1:numSubj*2;
-                R.withinSubj(i,:)=C(i,SameSubj(i,:) & ~SameSess(i,:));
-                R.betweenSubj(i,:)=mean(C(i,~SameSubj(i,:)));
-                R.totSS(i,1) = nansum(nansum(D(:,:,i).^2));
-            end;
-            RR=addstruct(RR,R);
-        end;
-        save(fullfile(studyDir{2},'encoding','glm4','cereb_spatialCorr_freq.mat'),'-struct','RR');
-        varargout={RR};
+            clear temp D R
+            SS=addstruct(SS,RR);
+        end
+        save(fullfile(studyDir{2},'encoding','glm4','cereb_spatialCorr_freq.mat'),'-struct','SS');
+        varargout={SS};
     case 'PLOT:spatialFreqCorr'
         CAT=varargin{1};
         
@@ -1264,7 +1268,7 @@ switch what
     case 'MAP:Group_Indiv' % put the individual maps into group space
         mapType=varargin{1}; % 'SC12_10cluster', or 'SC1_10cluster', or 'SC2_10cluster'
         % example:
-        % sc1_sc2_functionalAtlas('MAP:Group_Indiv','SC12_10cluster') 
+        % sc1_sc2_functionalAtlas('MAP:Group_Indiv','SC12_10cluster')
         
         subjs=returnSubjs;
         
@@ -1371,7 +1375,7 @@ switch what
         
         % center the data (remove overall mean)
         X_C=bsxfun(@minus,UFullAvrgAll,mean(UFullAvrgAll));
-        varargout={X_C,volIndx,V,sn};  
+        varargout={X_C,volIndx,V,sn};
     case 'EVAL:crossval'
         sn=varargin{1}; % 'group' or <subjNum>
         mapType=varargin{2}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks', 'Cole_10Networks','SC<studyNum>_<num>cluster'
@@ -1439,7 +1443,7 @@ switch what
             R.crossval = zeros(length(R.corr),1);
             RR = addstruct(RR,R);
         end;
-        save(outName,'-struct','RR');   
+        save(outName,'-struct','RR');
     case 'EVAL:average' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
         mapType=varargin{1}; % ex.'SC12_10cluster' or 'SC1_10cluster';
         condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
@@ -1492,7 +1496,7 @@ switch what
             A.dist(idx,1)=dist;
         end
         
-        save(outDir,'-struct','A');    
+        save(outDir,'-struct','A');
     case 'EVAL:PLOT:CURVES'
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
         data=varargin{2}; % evaluating data from study [1] or [2], both [3] or average of [1] and [2] after eval [4]
@@ -1897,15 +1901,15 @@ switch what
                 set(p,'MarkerSize',LineWeight(b));
                 weights(b)=EdgeWeight(b);
                 % plot DCBC of each functional boundary ?
-%                 p=text(double(Border(b).data(1,1)),double(Border(b).data(1,2)),sprintf('%2.3f',weights(b)));
-%                 set(p,'FontSize',20);
+                %                 p=text(double(Border(b).data(1,1)),double(Border(b).data(1,2)),sprintf('%2.3f',weights(b)));
+                %                 set(p,'FontSize',20);
             end;
         end
         hold off;
-        tmp=weights(weights~=0); 
+        tmp=weights(weights~=0);
         
-        fprintf('min diff is %2.5f and max diff is %2.2f \n', min(tmp),max(tmp)); 
- 
+        fprintf('min diff is %2.5f and max diff is %2.2f \n', min(tmp),max(tmp));
+        
     case 'ENCODE:get_features'
         mapType=varargin{1};
         
@@ -1938,8 +1942,10 @@ switch what
         numFeat = length(FeatureNames);
         numClusters = size(W,2);
         
+        
         lambda = [0.01 0.001];
         X=bsxfun(@minus,F,mean(F,1));
+        
         Y=bsxfun(@minus,W,mean(W,1));
         X=bsxfun(@rdivide,X,sqrt(mean(X.^2)));
         Y=bsxfun(@rdivide,Y,sqrt(mean(Y.^2)));
@@ -1947,10 +1953,10 @@ switch what
         XY=X'*Y;
         A = -eye(numFeat);
         b = zeros(numFeat,1);
-
+        
         for p=1:numClusters,
             u(:,p) = cplexqp(XX+lambda(2)*eye(numFeat),ones(numFeat,1)*lambda(1)-XY(:,p),A,b);
-%             u(:,p) = lsqnonneg(X,Y(:,p));
+            %             u(:,p) = lsqnonneg(X,Y(:,p));
         end;
         
         % Get corr between feature weights
