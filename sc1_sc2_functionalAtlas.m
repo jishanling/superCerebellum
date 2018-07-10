@@ -1927,9 +1927,8 @@ switch what
         D.RightHand   = D.rightHandPresses ./D.duration;
         D.Saccade    = D.saccades./D.duration;
         
-        % remove some features
-        D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades','Attention',...
-            'AttentionCapacity','AttentionalFocus','TaskDifficulty'});
+        % remove superfluous 
+        D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades'});
         
         f=fieldnames(D);
         FeatureNames = f(5:end);
@@ -1941,8 +1940,7 @@ switch what
         numCond = length(D.conditionName);
         numFeat = length(FeatureNames);
         numClusters = size(W,2);
-        
-        
+
         lambda = [0.01 0.001];
         X=bsxfun(@minus,F,mean(F,1));
         
@@ -1962,7 +1960,7 @@ switch what
         % Get corr between feature weights
         C=corr(F,W);
         
-        % Present the list of the highest three correlation for each
+        % Present the list of the largest three weights for each
         % cluster
         for i=1:numClusters,
             [a,b]=sort(u(:,i),'descend');
@@ -1973,7 +1971,11 @@ switch what
                 B.featIdx(i,f)=b(f);
                 B.featCorrs(i,f)=a(f);
             end
+            % what % do top 3 make up of overall features ?
+            B.relSum(i,1)=(a(1)+a(2)+a(3))/sum(a)*100; 
         end;
+        
+        fprintf('on average, %2.2f%% of all feature weights are accounted by the top 3 features \n',mean(B.relSum)); 
         
         varargout={B,F,W,u,condNames,FeatureNames,X,Y};
     case 'ENCODE:project_featSpace'
