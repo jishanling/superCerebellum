@@ -2,11 +2,12 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
 studyDir{2}     =fullfile(baseDir,'sc2');
+studyStr        = {'SC1','SC2','SC12'}; 
 behavDir        ='/data';
 suitDir         ='/suit';
 caretDir        ='/surfaceCaret';
@@ -1265,53 +1266,50 @@ switch what
         CAT.markercolor={'k'};
         CAT.markerfill={'k'};
         lineplot(S.K,S.R2adj,'split',S.type,'CAT',CAT)
-    case 'MAP:Group_Indiv' % put the individual maps into group space
-        mapType=varargin{1}; % 'SC12_10cluster', or 'SC1_10cluster', or 'SC2_10cluster'
-        % example:
-        % sc1_sc2_functionalAtlas('MAP:Group_Indiv','SC12_10cluster')
-        
+    case 'MAP:Group_Indiv' % Cluster individual data based on group Features 
+        % sc1_sc2_functionalAtlas('MAP:Group_Indiv','10cluster',[1 2])
+        mapType=varargin{1}; % '10cluster', or '7cluster', or '17cluster'
+        study  = varargin{2}; % Data used from which study? 
+        mapName = ['SC12_' mapType];  % Use the features that have been learned over both experiments
         subjs=returnSubjs;
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+
+        % load group features (these don't need to be crossvalidated) 
+        load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapName),'SNN.mat'));
+        groupF=bestF(ismember(D.StudyNum,study),:);
+        groupF=bsxfun(@minus,groupF,mean(groupF,1)); % recenter if necessary 
+        numConds   = size(groupF,1);
+        numCluster = size(groupF,2); 
         
-        % load group
-        load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),'SNN.mat'));
-        groupF=bestF;
-        numConds=size(groupF,1);
-        
-        % load individual
-        for s=1:length(subjs),
-            load(fullfile(studyDir{2},'encoding','glm4',subj_name{subjs(s)},sprintf('SNN_%s.mat',mapType)));
-            outName=fullfile(studyDir{2},'encoding','glm4',subj_name{subjs(s)},sprintf('map_%s_group.nii',mapType));
-            indivG=bestG';
+        % load DATA from the individual
+        for s=1:length(subjs)
+            [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',subjs(s),study,'build');
+            numVox=size(X_C,2);  
+            individG=nan(numCluster,numVox); 
+            outname = fullfile(studyDir{2},'encoding','glm4',subj_name{subjs(s)},sprintf('map_%s_10clusters_group.nii',studyStr{sum(study)}));%2.2d
             
-            % try this:
-            x=groupF'*eye(numConds)*groupF;
-            
-            P=size(indivG,2);
-            
-            % non neg regression: use group to learn new weights for indiv
-            for i=1:P,
-                u(:,i)=lsqnonneg(pinv(x),indivG(:,i));
+            % Now express the X_C= groupF * indivdG
+            for i=1:numVox 
+                if (mod(i,2000)==0)
+                    fprintf('.'); 
+                end; 
+                individG(:,i)=lsqnonneg(groupF,X_C(:,i));
             end
+            fprintf(' %d done\n',subjs(s)); 
+            [~,ClusterI]=max(individG,[],1);
+            ClusterI(sum(individG,1)==0)=nan; 
+            % sc1sc2_spatialAnalysis('visualise_map',ClusterI,volIndx,V);
             
-            [~,groupFeat]=max(u,[],1);
-            
-            % load in Vol info
-            load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));
-            
-            Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
-            Yy(1,volIndx)=groupFeat;
-            Yy=reshape(Yy,[V.dim(1),V.dim(2),V.dim(3)]);
-            Yy(Yy==0)=NaN;
-            Vv{1}.dat=Yy;
-            Vv{1}.dim=V.dim;
-            Vv{1}.mat=V.mat;
-            
-            % save out vol of SNN feats
-            exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
-            X=spm_vol(exampleVol);
-            X.fname=outName;
-            X.private.dat.fname=V.fname;
-            spm_write_vol(X,Vv{1}.dat);
+            % Make file 
+            Yy=zeros(V.dim);
+            Yy(volIndx)=ClusterI;
+            Yy(isnan(Yy))=0;
+            Vv.dim=V.dim;
+            Vv.mat=V.mat;
+            Vv.fname = outname; 
+            Vv.dt=[2 0];    % uint8
+            Vv.pinfo = [1 0 0]'; % Set slope to 1 
+            spm_write_vol(Vv,Yy);
             
             fprintf('subj%d done \n',subjs(s));
         end
