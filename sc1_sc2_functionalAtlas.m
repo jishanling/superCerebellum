@@ -1913,7 +1913,7 @@ switch what
     case 'ENCODE:get_features'
         mapType=varargin{1};
         
-        D=dload(fullfile(baseDir,'featureTable_jd.txt')); % Read feature table
+        D=dload(fullfile(baseDir,'featureTable_jd_updated.txt')); % Read feature table
         S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt')); % List of task conditions
         
         load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'SNN.mat'));
@@ -1973,9 +1973,10 @@ switch what
             end
             % what % do top 3 make up of overall features ?
             B.relSum(i,1)=(a(1)+a(2)+a(3))/sum(a)*100; 
+            B.relSuma(i,1)=(a(1))/sum(a)*100; 
         end;
         
-        fprintf('on average, %2.2f%% of all feature weights are accounted by the top 3 features \n',mean(B.relSum)); 
+        fprintf('on average, %2.2f%% of all feature weights are accounted by the top 3 features \n with the top feature accounting for %2.2f %% \n',mean(B.relSum),mean(B.relSuma)); 
         
         varargout={B,F,W,u,condNames,FeatureNames,X,Y};
     case 'ENCODE:project_featSpace'
