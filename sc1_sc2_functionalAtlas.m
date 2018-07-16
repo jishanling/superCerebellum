@@ -2,12 +2,12 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
 studyDir{2}     =fullfile(baseDir,'sc2');
-studyStr        = {'SC1','SC2','SC12'}; 
+studyStr        = {'SC1','SC2','SC12'};
 behavDir        ='/data';
 suitDir         ='/suit';
 caretDir        ='/surfaceCaret';
@@ -528,7 +528,7 @@ switch what
                 for s = 1:numSubj  % loop over subjects
                     for se=1:2     % loop over sessions
                         temp = A.data(A.study==st & A.SN==sn(s) & A.sess==se & A.freq==f,:);
-                        %                         temp = bsxfun(@minus,temp,mean(temp)); 
+                        %                         temp = bsxfun(@minus,temp,mean(temp));
                         D(:,:,s+(se-1)*length(sn))=temp;
                     end;
                 end;
@@ -1266,49 +1266,49 @@ switch what
         CAT.markercolor={'k'};
         CAT.markerfill={'k'};
         lineplot(S.K,S.R2adj,'split',S.type,'CAT',CAT)
-    case 'MAP:Group_Indiv' % Cluster individual data based on group Features 
+    case 'MAP:Group_Indiv' % Cluster individual data based on group Features
         % sc1_sc2_functionalAtlas('MAP:Group_Indiv','10cluster',[1 2])
         mapType=varargin{1}; % '10cluster', or '7cluster', or '17cluster'
-        study  = varargin{2}; % Data used from which study? 
+        study  = varargin{2}; % Data used from which study?
         mapName = ['SC12_' mapType];  % Use the features that have been learned over both experiments
         subjs=returnSubjs;
         D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
-
-        % load group features (these don't need to be crossvalidated) 
+        
+        % load group features (these don't need to be crossvalidated)
         load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapName),'SNN.mat'));
         groupF=bestF(ismember(D.StudyNum,study),:);
-        groupF=bsxfun(@minus,groupF,mean(groupF,1)); % recenter if necessary 
+        groupF=bsxfun(@minus,groupF,mean(groupF,1)); % recenter if necessary
         numConds   = size(groupF,1);
-        numCluster = size(groupF,2); 
+        numCluster = size(groupF,2);
         
         % load DATA from the individual
         for s=1:length(subjs)
             [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',subjs(s),study,'build');
-            numVox=size(X_C,2);  
-            individG=nan(numCluster,numVox); 
+            numVox=size(X_C,2);
+            individG=nan(numCluster,numVox);
             outname = fullfile(studyDir{2},'encoding','glm4',subj_name{subjs(s)},sprintf('map_%s_10clusters_group.nii',studyStr{sum(study)}));%2.2d
             
             % Now express the X_C= groupF * indivdG
-            for i=1:numVox 
+            for i=1:numVox
                 if (mod(i,2000)==0)
-                    fprintf('.'); 
-                end; 
+                    fprintf('.');
+                end;
                 individG(:,i)=lsqnonneg(groupF,X_C(:,i));
             end
-            fprintf(' %d done\n',subjs(s)); 
+            fprintf(' %d done\n',subjs(s));
             [~,ClusterI]=max(individG,[],1);
-            ClusterI(sum(individG,1)==0)=nan; 
+            ClusterI(sum(individG,1)==0)=nan;
             % sc1sc2_spatialAnalysis('visualise_map',ClusterI,volIndx,V);
             
-            % Make file 
+            % Make file
             Yy=zeros(V.dim);
             Yy(volIndx)=ClusterI;
             Yy(isnan(Yy))=0;
             Vv.dim=V.dim;
             Vv.mat=V.mat;
-            Vv.fname = outname; 
+            Vv.fname = outname;
             Vv.dt=[2 0];    % uint8
-            Vv.pinfo = [1 0 0]'; % Set slope to 1 
+            Vv.pinfo = [1 0 0]'; % Set slope to 1
             spm_write_vol(Vv,Yy);
             
             fprintf('subj%d done \n',subjs(s));
@@ -1911,7 +1911,7 @@ switch what
     case 'ENCODE:get_features'
         mapType=varargin{1};
         
-        D=dload(fullfile(baseDir,'featureTable_jd.txt')); % Read feature table
+        D=dload(fullfile(baseDir,'featureTable_jd_updated.txt')); % Read feature table - updated with new features "naturalistic bio motion" and "naturalistic scenes"
         S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt')); % List of task conditions
         
         load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'SNN.mat'));
@@ -1925,7 +1925,7 @@ switch what
         D.RightHand   = D.rightHandPresses ./D.duration;
         D.Saccade    = D.saccades./D.duration;
         
-        % remove superfluous 
+        % remove superfluous
         D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades'});
         
         f=fieldnames(D);
@@ -1938,7 +1938,7 @@ switch what
         numCond = length(D.conditionName);
         numFeat = length(FeatureNames);
         numClusters = size(W,2);
-
+        
         lambda = [0.01 0.001];
         X=bsxfun(@minus,F,mean(F,1));
         
@@ -1970,10 +1970,11 @@ switch what
                 B.featCorrs(i,f)=a(f);
             end
             % what % do top 3 make up of overall features ?
-            B.relSum(i,1)=(a(1)+a(2)+a(3))/sum(a)*100; 
+            B.relSum(i,1)=(a(1)+a(2)+a(3))/sum(a)*100;
+            B.relSuma(i,1)=(a(1))/sum(a)*100;
         end;
         
-        fprintf('on average, %2.2f%% of all feature weights are accounted by the top 3 features \n',mean(B.relSum)); 
+        fprintf('on average, %2.2f%% of all feature weights are accounted by the top 3 features \n with the top feature accounting for %2.2f %% \n',mean(B.relSum),mean(B.relSuma));
         
         varargout={B,F,W,u,condNames,FeatureNames,X,Y};
     case 'ENCODE:project_featSpace'
