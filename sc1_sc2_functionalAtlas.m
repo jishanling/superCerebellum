@@ -1374,7 +1374,7 @@ switch what
         % center the data (remove overall mean)
         X_C=bsxfun(@minus,UFullAvrgAll,mean(UFullAvrgAll));
         varargout={X_C,volIndx,V,sn};
-    case 'EVAL:crossval'
+    case 'EVAL:crossval'% Evaluate group Map
         sn=varargin{1}; % 'group' or <subjNum>
         mapType=varargin{2}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks', 'Cole_10Networks','SC<studyNum>_<num>cluster'
         data=varargin{3}; % evaluating data from study [1] or [2] ?
@@ -1442,6 +1442,76 @@ switch what
             RR = addstruct(RR,R);
         end;
         save(outName,'-struct','RR');
+    case 'EVAL:crossval_individ' % Evaluate Individual maps
+        % T1=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC1_10cluster',2,'unique'); 
+        % T2=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC2_10cluster',1,'unique'); 
+        % T3=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC12_10cluster',1,'unique'); 
+        % T4=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC12_10cluster',2,'unique');
+        % T1.crossval = ones(length(T.SN),1); 
+        % T2.crossval = ones(length(T.SN),1); 
+        % T3.crossval = zeros(length(T.SN),1); 
+        % T4.crossval = zeros(length(T.SN),1); 
+        % T=addstruct(T1,T2); 
+        % T=addstruct(T,T3); 
+        % T=addstruct(T,T4); 
+        % save(fullfile('individEval_10Cluster','spatialBoundfunc_10Cluster_unique.mat'),'-struct','T'));
+        sn = returnSubjs; 
+        mapType=varargin{1}; % options 'SC1_10cluster'
+        study=varargin{2}; % evaluating data from study [1] or [2] ?
+        condType=varargin{3}; % 'unique' or 'all'. Are we evaluating on all taskConds or just those unique to either sc1 or sc2 ?
+        
+        load(fullfile(studyDir{study},'encoding','glm4','cereb_avrgDataStruct.mat'));
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));    
+        D1=getrow(D,D.StudyNum==study);
+
+        switch condType,
+            case 'unique'
+                % if funcMap - only evaluate unique tasks in sc1 or sc2
+                idx=D1.condNum(D1.overlap==0); % get index for unique tasks
+            case 'all'
+                idx=D1.condNum;
+        end
+        RR=[]; 
+        for s=sn 
+            % Now get the parcellation sampled into the same space
+            fprintf('%d :Bin',s); 
+            mapName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{s},sprintf('map_%s.nii',mapType));
+            [i,j,k]=ind2sub(V.dim,volIndx);
+            [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
+            VA= spm_vol(mapName);
+            [i1,j1,k1]=spmj_affine_transform(x,y,z,inv(VA.mat));
+            Parcel = spm_sample_vol(VA,i1,j1,k1,0);
+            % Divide the voxel pairs into all the spatial bins that we want
+            fprintf('parcels\n');
+            voxIn = Parcel>0;
+            XYZ= [x;y;z];
+            [BIN,R]=mva_spatialCorrBin(XYZ(:,voxIn),'Parcel',Parcel(1,voxIn));
+            clear XYZ i k l x y z i1 j1 k1 VA Parcel; % Free memory
+
+            % Now calculate the uncrossvalidated and crossvalidated
+            % Estimation of the correlation for each subject
+            for c=1:length(idx),
+                i1(c) = find(T.SN==s & T.sess==1 & T.cond==idx(c));
+                i2(c) = find(T.SN==s & T.sess==2 & T.cond==idx(c));
+            end
+            D=(T.data(i1,voxIn)+T.data(i2,voxIn))/2;
+            
+            fprintf('- cross');
+            N=length(R.N); 
+            R.SN = ones(N,1)*s;
+            R.map=repmat({mapType},N,1); 
+            R.study = ones(N,1)*study;
+            R.corr = mva_spatialCorr(T.data([i1;i2],voxIn),BIN,...
+                'CrossvalPart',T.sess([i1;i2],1),'excludeNegVoxels',1);
+            R.crossval = ones(N,1);
+            RR = addstruct(RR,R);
+            
+            fprintf('- correl\n');
+            R.corr=mva_spatialCorr(D,BIN);
+            R.crossval = zeros(N,1);
+            RR = addstruct(RR,R);
+        end;
+        varargout={RR}; 
     case 'EVAL:average' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
         mapType=varargin{1}; % ex.'SC12_10cluster' or 'SC1_10cluster';
         condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
