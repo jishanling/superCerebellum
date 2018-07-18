@@ -1447,14 +1447,14 @@ switch what
         % T2=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC2_10cluster',1,'unique'); 
         % T3=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC12_10cluster',1,'unique'); 
         % T4=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC12_10cluster',2,'unique');
-        % T1.crossval = ones(length(T.SN),1); 
-        % T2.crossval = ones(length(T.SN),1); 
-        % T3.crossval = zeros(length(T.SN),1); 
-        % T4.crossval = zeros(length(T.SN),1); 
-        % T=addstruct(T1,T2); 
-        % T=addstruct(T,T3); 
-        % T=addstruct(T,T4); 
-        % save(fullfile('individEval_10Cluster','spatialBoundfunc_10Cluster_unique.mat'),'-struct','T'));
+%         T1.generalisation = ones(length(T1.SN),1); 
+%         T2.generalisation = ones(length(T2.SN),1); 
+%         T3.generalisation = zeros(length(T3.SN),1); 
+%         T4.generalisation = zeros(length(T4.SN),1); 
+%         T=addstruct(T1,T2); 
+%         T=addstruct(T,T3); 
+%         T=addstruct(T,T4); 
+%         save(fullfile('spatialBoundfunc_10Cluster_unique.mat'),'-struct','T'));
         sn = returnSubjs; 
         mapType=varargin{1}; % options 'SC1_10cluster'
         study=varargin{2}; % evaluating data from study [1] or [2] ?
