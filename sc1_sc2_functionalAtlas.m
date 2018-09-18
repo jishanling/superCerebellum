@@ -1246,30 +1246,6 @@ switch what
                 end;
             end;
         end;
-    case 'HCP:ROI_ana'
-        multiTask='HCP_12cluster';
-        K=12;
-        
-        % get HCP contrasts
-        [X_C,condNames]=sc1_sc2_functionalAtlas('HCP:get_data');
-        
-        %
-        load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',multiTask),'SNN.mat'));
-        
-        % find winner
-        [x,groupFeat]=max(bestG,[],2);
-        
-        % ROI
-        for t=1:size(X_C,1),
-            for r=1:K,
-                ROI{r}.data(t,:)=X_C(t,groupFeat==r);
-                ROI{r}.taskName{t,1}=condNames{t};
-                
-                H(t,r)=nanmean(ROI{r}.data(t,:),2);
-            end
-        end
-        
-        disp(x);
         
     case 'MAP:vol2surf'
         % this function takes any labelled volume (already in SUIT space)
