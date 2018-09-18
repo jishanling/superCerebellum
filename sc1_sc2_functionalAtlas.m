@@ -27,7 +27,7 @@ subj_name = {'s01','s02','s03','s04','s05','s06','s07','s08','s09','s10','s11',.
 returnSubjs=[2,3,4,6,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
 
 hem={'lh','rh'};
-hemName={'LeftHem','RightHem'}; 
+hemName={'LeftHem','RightHem'};
 
 switch what
     
@@ -1711,8 +1711,8 @@ switch what
         
     case 'CORTEX:makeModel'
         study=varargin{1};
-        sn=varargin{2}; 
-
+        sn=varargin{2};
+        
         load(fullfile(studyDir{2},encodeDir,'glm4','groupEval_SC12_10cluster','SNN.mat'));
         
         % load cerebellar betas
@@ -1723,13 +1723,13 @@ switch what
         % get masked betas
         X=Yp.data*bestG;
         
-        varargout={X}; 
+        varargout={X};
     case 'CORTEX:runModel'
         sn=varargin{1}; % returnSubjs
         study=varargin{2}; % 1 or 2
         
         subjs=length(sn);
-
+        
         % loop over subjects
         for h=1:2,
             Ys=[];
@@ -1778,8 +1778,8 @@ switch what
             clear Ys
         end
     case 'CORTEX:visualiseModel'
-
-        caretFSDir=fullfile(studyDir{1},caretDir,'fsaverage_sym'); 
+        
+        caretFSDir=fullfile(studyDir{1},caretDir,'fsaverage_sym');
         
         % loop over subjects
         for h=1:2,
@@ -1788,24 +1788,24 @@ switch what
                 load(fullfile(studyDir{study},encodeDir,'glm4',sprintf('encode_cerebModel_%s.mat',hem{h})));
                 
                 % get average across subjects
-                modeSubjs(study,:)=mode(Ys.winner,1); 
-
+                modeSubjs(study,:)=mode(Ys.winner,1);
+                
             end
             % get average across studies
             modeStudy=mode(modeSubjs,1);
             
-            % load in medial wall 
-            M=caret_load(fullfile(caretFSDir,hemName{h},sprintf('%s.medialWall.paint',hem{h}))); 
+            % load in medial wall
+            M=caret_load(fullfile(caretFSDir,hemName{h},sprintf('%s.medialWall.paint',hem{h})));
             
             % black out medial wall
             modeStudy(M.data==1)=0;
             
             % make paint file for cortex
             S=caret_struct('paint','data',modeStudy');
-
+            
             caret_save(fullfile(caretFSDir,hemName{h},sprintf('%s.cerebModel.paint',hem{h})),S);
         end
-
+        
     case 'EVAL:get_data'  % always use this case to get task-evoked activity patterns (remove mean of shared tasks + center)
         sn=varargin{1}; % Subj numbers to include
         study=varargin{2}; % 1 or 2 or [1,2]
@@ -1866,7 +1866,7 @@ switch what
         % center the data (remove overall mean)
         X_C=bsxfun(@minus,UFullAvrgAll,mean(UFullAvrgAll));
         varargout={X_C,volIndx,V,sn};
-    case 'EVAL:crossval'
+    case 'EVAL:crossval'% Evaluate group Map
         sn=varargin{1}; % 'group' or <subjNum>
         mapType=varargin{2}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks', 'Cole_10Networks','SC<studyNum>_<num>cluster'
         data=varargin{3}; % evaluating data from study [1] or [2] ?
@@ -1934,6 +1934,76 @@ switch what
             RR = addstruct(RR,R);
         end;
         save(outName,'-struct','RR');
+    case 'EVAL:crossval_individ' % Evaluate Individual maps
+        % T1=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC1_10cluster',2,'unique');
+        % T2=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC2_10cluster',1,'unique');
+        % T3=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC12_10cluster',1,'unique');
+        % T4=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC12_10cluster',2,'unique');
+        %         T1.generalisation = ones(length(T1.SN),1);
+        %         T2.generalisation = ones(length(T2.SN),1);
+        %         T3.generalisation = zeros(length(T3.SN),1);
+        %         T4.generalisation = zeros(length(T4.SN),1);
+        %         T=addstruct(T1,T2);
+        %         T=addstruct(T,T3);
+        %         T=addstruct(T,T4);
+        %         save(fullfile('spatialBoundfunc_10Cluster_unique.mat'),'-struct','T'));
+        sn = returnSubjs;
+        mapType=varargin{1}; % options 'SC1_10cluster'
+        study=varargin{2}; % evaluating data from study [1] or [2] ?
+        condType=varargin{3}; % 'unique' or 'all'. Are we evaluating on all taskConds or just those unique to either sc1 or sc2 ?
+        
+        load(fullfile(studyDir{study},'encoding','glm4','cereb_avrgDataStruct.mat'));
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        D1=getrow(D,D.StudyNum==study);
+        
+        switch condType,
+            case 'unique'
+                % if funcMap - only evaluate unique tasks in sc1 or sc2
+                idx=D1.condNum(D1.overlap==0); % get index for unique tasks
+            case 'all'
+                idx=D1.condNum;
+        end
+        RR=[];
+        for s=sn
+            % Now get the parcellation sampled into the same space
+            fprintf('%d :Bin',s);
+            mapName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{s},sprintf('map_%s.nii',mapType));
+            [i,j,k]=ind2sub(V.dim,volIndx);
+            [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
+            VA= spm_vol(mapName);
+            [i1,j1,k1]=spmj_affine_transform(x,y,z,inv(VA.mat));
+            Parcel = spm_sample_vol(VA,i1,j1,k1,0);
+            % Divide the voxel pairs into all the spatial bins that we want
+            fprintf('parcels\n');
+            voxIn = Parcel>0;
+            XYZ= [x;y;z];
+            [BIN,R]=mva_spatialCorrBin(XYZ(:,voxIn),'Parcel',Parcel(1,voxIn));
+            clear XYZ i k l x y z i1 j1 k1 VA Parcel; % Free memory
+            
+            % Now calculate the uncrossvalidated and crossvalidated
+            % Estimation of the correlation for each subject
+            for c=1:length(idx),
+                i1(c) = find(T.SN==s & T.sess==1 & T.cond==idx(c));
+                i2(c) = find(T.SN==s & T.sess==2 & T.cond==idx(c));
+            end
+            D=(T.data(i1,voxIn)+T.data(i2,voxIn))/2;
+            
+            fprintf('- cross');
+            N=length(R.N);
+            R.SN = ones(N,1)*s;
+            R.map=repmat({mapType},N,1);
+            R.study = ones(N,1)*study;
+            R.corr = mva_spatialCorr(T.data([i1;i2],voxIn),BIN,...
+                'CrossvalPart',T.sess([i1;i2],1),'excludeNegVoxels',1);
+            R.crossval = ones(N,1);
+            RR = addstruct(RR,R);
+            
+            fprintf('- correl\n');
+            R.corr=mva_spatialCorr(D,BIN);
+            R.crossval = zeros(N,1);
+            RR = addstruct(RR,R);
+        end;
+        varargout={RR};
     case 'EVAL:average' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
         mapType=varargin{1}; % ex.'SC12_10cluster' or 'SC1_10cluster';
         condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
@@ -2433,8 +2503,12 @@ switch what
     case 'ENCODE:get_features'
         mapType=varargin{1};
         
+        <<<<<<< HEAD
         D=dload(fullfile(baseDir,'featureTable_functionalAtlas.txt'));
         
+        =======
+        D=dload(fullfile(baseDir,'featureTable_jd_updated.txt')); % Read feature table - updated with new features "naturalistic bio motion" and "naturalistic scenes"
+        >>>>>>> e63178d691078ec65a55edaa0221b60335df8b4a
         S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt')); % List of task conditions
         
         load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'SNN.mat'));
@@ -2449,7 +2523,11 @@ switch what
         D.Saccade    = D.saccades./D.duration;
         
         % remove superfluous
+        <<<<<<< HEAD
         D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades','Imagination','LongtermMemory','SceneRecog'});
+        =======
+        D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades'});
+        >>>>>>> e63178d691078ec65a55edaa0221b60335df8b4a
         
         f=fieldnames(D);
         FeatureNames = f(5:end);
@@ -2497,7 +2575,11 @@ switch what
             B.relSuma(i,1)=(a(1))/sum(a)*100;
         end;
         
+        <<<<<<< HEAD
         %         fprintf('on average, %2.2f%% of all feature weights are accounted by the top 3 features \n with the top feature accounting for %2.2f %% \n',mean(B.relSum),mean(B.relSuma));
+        =======
+        fprintf('on average, %2.2f%% of all feature weights are accounted by the top 3 features \n with the top feature accounting for %2.2f %% \n',mean(B.relSum),mean(B.relSuma));
+        >>>>>>> e63178d691078ec65a55edaa0221b60335df8b4a
         
         varargout={B,F,W,u,condNames,FeatureNames,X,Y};
     case 'ENCODE:project_featSpace'
