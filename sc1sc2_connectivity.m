@@ -5,7 +5,7 @@ function varargout=sc1sc2_connectivity(what,varargin)
 type=[];
 % % (1) Directories
 % rootDir           = '/Users/jdiedrichsen/Data/super_cerebellum';
-rootDir           = '/Volumes/MotorControl/data/super_cerebellum_new/';
+rootDir           = '/Volumes/MotorControl/data/super_cerebellum_new';
 % rootDir         = '/Users/chernandez/Cerebellum';
 sc1Dir          = [rootDir '/sc1'];
 sc2Dir          = [rootDir '/sc2'];
@@ -16,7 +16,7 @@ dicomDir        =['imaging_data_dicom'];
 anatomicalDir   =['anatomicals'];
 suitDir         =['suit'];
 caretDir        =['surfaceCaret'];
-regDir          =['RegionOfInterest/'];
+regDir          =['RegionOfInterest'];
 connDir         =['connectivity_cerebellum'];
 
 %==========================================================================
@@ -713,7 +713,8 @@ switch(what)
             end;
         end;
         varargout = {X,Y,T};
-    case 'mbeta_reliability'
+    case 'mbeta_reliability' % Get beta reliability only on common task conditions
+        % In the cerebellum (Y) 
         glm =4;
         vararginoptions(varargin,{'glm'});
         [X,Y,T]=sc1sc2_connectivity('get_mbeta_all','glm',glm);
@@ -752,54 +753,74 @@ switch(what)
         ylabel('Within-subject Reliability');
         set(gca,'XTickLabel',condNames,'XTickLabelRotation',60);
         varargout={RR,T};
-    case 'conn_mbeta'              % Estimate encoding model on the meanbetas
+    case 'conn_mbeta'              % Estimate connectivty model on the meanbetas
+        % L2=[100 500 1000 2000 3000 4000]; 
+        % sc1sc2_connectivity('conn_mbeta','method','ridgeFixed','lambdaL1',L2*0,'lambdaL2',L2,'name','mb4_162_ridge');
         T=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
         
         sn=goodsubj;
         RR= [];
-        glm=4;       % usually 4
         method= 'ridgeFixed';  % linRegress, ridgeFixed, nonNegExp, cplexqp, lasso, winnerTakeAll
-        yname = 'Cerebellum_grey';
+        yname = 'Cerebellum_grey';   
         xname = '162_tessellation_hem';
-        name  = 'glm4_162_ridge';
-        trainMode = 'crossed';
+        name  = 'mb4_162_ridge';  % mb4_162_ridge or ts4_yeo_nneg or mb5_162_lasso 
+        trainMode = 'crossed';    % training can be done in a crossed or uncrossed fashion 
         lambdaL1 = 2500;
         lambdaL2 = 2500;
-        meanSub=1;      % Mean Pattern Subtract?
-        subset = T.StudyNum==1; % Indices of the experiments / conditions that we want to use
-        vararginoptions(varargin,{'xname','type','subset','method','glm','partial','name','trainMode','lambdaL1','lambdaL2'});
-        subset = [subset;subset]; % Make the subset out onto both session
-        [X,Y,S]=sc1_connectivity('get_mbeta_all');
-        
-        trainXindx=[find(subset & S.sess==1);find(subset & S.sess==2)];
+        overwrite = 0;  % Overwrite old results or add to existing structure?
+        exper  = 1;     % Task set to train 
+        incInstr = 0;   % For future use: include Instruction 
+        vararginoptions(varargin,{'sn','xname','type','exper','method','glm',...
+             'name','trainMode','lambdaL1','lambdaL2','incInstr','overwrite'});
+
+        % Get data 
+        [X,Y,S]=sc1sc2_connectivity('get_mbeta_all','incInstr',incInstr);
+
+        % Save the fit 
+        outDir = fullfile(rootDir,expStr{exper},connDir,name);
+        dircheck(outDir);
+
+        % Find the data that we want to use for fitting the connectivity
+        % model 
+        SI1 = find(ismember(S.StudyNum,exper) & S.sess==1); 
+        SI2 = find(ismember(S.StudyNum,exper) & S.sess==2); 
+        trainXindx=[SI1;SI2];
         switch (trainMode)
             case 'crossed'
-                trainYindx=[find(subset & S.sess==2);find(subset & S.sess==1)];
+                trainYindx=[SI2;SI1];
             case 'uncrossed'
-                trainYindx=[find(subset & S.sess==1);find(subset & S.sess==2)];
+                trainYindx=[SI1;SI2];
         end;
         
+        % Estimate the model and store the information attached to it 
         for s=1:length(sn)
-            if(meanSub)
-                for sess=1:2
-                    indx=find(subset & S.sess==sess);
-                    X{s}(indx,:)=bsxfun(@minus,X{s}(indx,:),mean(X{s}(indx,:)));
-                    Y{s}(indx,:)=bsxfun(@minus,Y{s}(indx,:),mean(Y{s}(indx,:)));
-                end;
-            end;
+            % Find relevant file 
             fprintf('%d\n',sn(s));
-            
+            outName=fullfile(outDir,sprintf('%s_s%2.2d.mat',name,s));
+            if (exist(outName) && overwrite==0); 
+                RR=load(outName); 
+            else 
+                RR=[]; 
+            end; 
+
+            % Get data 
             xx = X{s}(trainXindx,:);
             yy = Y{s}(trainYindx,:);
             
-            R.SN = sn(s);
-            [W,R.fR2m,R.fRm] = sc1_encode_fit(yy,xx,method,'lambda',[lambdaL1 lambdaL2]);
-            R.W={W};
-            R.lambda = [lambdaL1 lambdaL2];
-            R.type   = {method};
-            RR=addstruct(RR,R);
+            % Run for all regularisation parameters 
+            for l=1:length(lambdaL1)
+                R.SN = sn(s);
+                [W,R.fR2m,R.fRm] = sc_connect_fit(yy,xx,method,'lambda',[lambdaL1(l) lambdaL2(l)]);
+                R.W={W};
+                R.lambda = [lambdaL1(l) lambdaL2(l)];
+                R.method   = {method};
+                R.incInstr = incInstr; 
+                R.trainMode = {trainMode}; 
+                R.xname  = {xname}; 
+                RR=addstruct(RR,R);
+            end; 
+            save(outName,'-struct','RR');
         end;
-        varargout={RR};
         
     case 'conn_ts'                 % Run encoding model on time series
         % sc1_connectivity('conn_ts',[2:22],'method','winnerTakeAll_nonNeg','name','glm4_162_nnWTA','lambdaL1',0,'lambdaL2',0);
