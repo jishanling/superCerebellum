@@ -673,19 +673,13 @@ switch(what)
         yname = 'Cerebellum_grey';
         xname = '162_tessellation_hem';
         incInstr = 0;                           % Include instruction?  
-        vararginoptions(varargin,{'exper','glm','yname','xname'});
+        vararginoptions(varargin,{'exper','glm','yname','xname','incInstr'});
         
         % Load the betas for all the tasks
         for e=1:2
             myRegDir = fullfile(rootDir,exper{e},regDir);
             YD{e}=load(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',yname)));
             XD{e}=load(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',xname)));
-            if (incInstr==0)  % If no instruction, add rest and center within session 
-                 YD{e}=[YD{e}(2:end);zeros(1,size(YD{e},2))]; 
-                 XD{e}=[XD{e}(2:end);zeros(1,size(XD{e},2))]; 
-                 YD{e}=bsxfun(@minus,YD{e},mean(YD{e})); 
-                 XD{e}=bsxfun(@minus,XD{e},mean(XD{e})); 
-            end; 
         end;
                     
         % Make an integrated structure, either including instruction or
@@ -706,6 +700,14 @@ switch(what)
             X{s}=[];
             Y{s}=[];
             for se=1:2
+                if (incInstr==0)  % If no instruction, add rest and center within session 
+                     for e=1:2 
+                         YD{e}.B{s,se}=[YD{e}.B{s,se}(2:end,:);zeros(1,size(YD{e}.B{s,se},2))]; 
+                         XD{e}.B{s,se}=[XD{e}.B{s,se}(2:end,:);zeros(1,size(XD{e}.B{s,se},2))]; 
+                         YD{e}.B{s,se}=bsxfun(@minus,YD{e}.B{s,se},mean(YD{e}.B{s,se})); 
+                         XD{e}.B{s,se}=bsxfun(@minus,XD{e}.B{s,se},mean(XD{e}.B{s,se})); 
+                     end; 
+                end;
                 Y{s}=[Y{s};YD{1}.B{s,se};YD{2}.B{s,se}];
                 X{s}=[X{s};XD{1}.B{s,se};XD{2}.B{s,se}];
             end;
