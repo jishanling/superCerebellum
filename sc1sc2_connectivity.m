@@ -576,97 +576,6 @@ switch(what)
         %     'C','R','Xx');
         varargout={DD,meanSD};
    
-    case 'conn_B'                  % Run encoding model on mean predicted time series - (old)
-        % sc1_imana_jd('encoding_B',[2],'method','ridgeFixed','name','162_ridge','lambdaL1',[0],'lambdaL2',[20000],'crossval',1);
-        
-        sn=varargin{1};        % [2:22]
-        glm=4;       % usually 4
-        method='cplexqpL1L2';  % linRegress, ridgeFixed, nonNegExp, cplexqp, lasso, winnerTakeAll
-        yname = 'cerebellum_grey';
-        xname = '162_tessellation_hem';
-        name  = '162';
-        lambdaL1 = [0];
-        lambdaL2 = [0];
-        crossval = [0 1];
-        type  = {'Yhatm'}; % Only mean beta
-        vararginoptions({varargin{2:end}},{'method','yname','xname','name','crossval','lambdaL1','lambdaL2'});
-        
-        encodeDirSp = fullfile(encodeDir,sprintf('glm%d',glm),'encode_5');
-        subjs=length(sn);
-        glmDir =[baseDir sprintf('/GLM_firstlevel_%d',glm)];
-        
-        % Load cortical time series
-        file = fullfile(regDir,sprintf('glm%d',glm),sprintf('ts_%s_all.mat',xname));
-        XX=load(file);
-        
-        if (strcmp(xname,'162_tessellation_hem'))
-            Tcort=load(fullfile(regDir,'data','162_reorder.mat'));
-            Tcort=getrow(Tcort,Tcort.good==1);
-            XX.B = XX.B(:,Tcort.regIndx,:);
-        end;
-        
-        if (strcmp(xname,'yeo'))
-            XX.B = XX.B(:,2:18,:);
-        end;
-        
-        % Build matrix to remove block mean
-        SPM=load(fullfile(baseDir,'GLM_firstlevel_4','SampleDesignMatrix.mat'));
-        for b=1:16
-            BN(SPM.Sess(b).row,b)=1;
-        end;
-        subj=[2:22]; % these are the subjects in the alldata
-        regIn = [1:464]; % Regressors of interest
-        for s=sn
-            TT=[];
-            T=[];
-            sindx=find(subj==s);
-            
-            % load Y and choose the predicted time series
-            Y=load(fullfile(regDir,'glm4',subj_name{s},sprintf('ts_%s.mat',yname)));
-            Y.Y = Y.Yhatm;
-            Y.Y = Y.Y - BN*pinv(BN)*Y.Y;
-            
-            % Load information on the betas
-            glmDirSubj=fullfile(glmDir, subj_name{s});
-            SPM.Info=load(fullfile(glmDirSubj,'SPM_info.mat'));
-            
-            % Take the mean betas and make the predicted
-            Zcond = indicatorMatrix('hierarchicalI',[SPM.Info.sess SPM.Info.cond]);
-            mB    = pinv(Zcond)*XX.B(regIn,:,sindx);
-            
-            
-            
-            for i=1:length(crossval)
-                % If necessary, crossvalidate by switching the position
-                if (crossval(i))
-                    MB(1:29,:)=mB(30:58,:);
-                    MB(30:58,:)=mB(1:29,:);
-                else
-                    MB=mB;
-                end;
-                
-                % Make predicted time series
-                X.Y = SPM.wX(:,regIn) * Zcond * MB;
-                
-                % Subtract out mean for each run.
-                X.Y = X.Y - BN*pinv(BN)*X.Y;
-                
-                for l=1:length(lambdaL1);
-                    T.SN = s;
-                    T.typeNum = 1;
-                    T.type    = {type{1}};
-                    T.lambda  = [lambdaL1(l) lambdaL2(l)];
-                    T.crossval = crossval(i);
-                    fprintf('Fitting s%2.2d %d\n',s,crossval(i));
-                    [W,T.fR2m,T.fRm,T.fR2v,T.fRv]=sc1_encode_fit(Y.Y,X.Y,method,'lambda',[lambdaL1(l) lambdaL2(l)]);
-                    T.W = {W};
-                    TT=addstruct(TT,T);
-                end;
-            end;
-            outName=fullfile(encodeDirSp,sprintf('encode_%s_s%2.2d.mat',name,s));
-            save(outName,'-struct','TT');
-            fprintf('encode model: cerebellar voxels predicted for %s \n',subj_name{s});
-        end
     case 'get_mbeta_all'           %  Gets the mean betas for each session and experiment 
         exper = {'sc1','sc2'};
         glm   = 4;
@@ -755,7 +664,11 @@ switch(what)
         varargout={RR,T};
     case 'conn_mbeta'              % Estimate connectivty model on the meanbetas
         % L2=[100 500 1000 2000 3000 4000]; 
-        % sc1sc2_connectivity('conn_mbeta','method','ridgeFixed','lambdaL1',L2*0,'lambdaL2',L2,'name','mb4_162_ridge');
+        % sc1sc2_connectivity('conn_mbeta','method','ridgeFixed','lambdaL1',L2*0,'lambdaL2',L2,'name','mb4_162_ridge','exper',1);        
+        % sc1sc2_connectivity('conn_mbeta','method','ridgeFixed','lambdaL1',L2*0,'lambdaL2',L2,'name','mb4_162_ridge','exper',2);
+        % L2=[100 1000 2000]; 
+        % sc1sc2_connectivity('conn_mbeta','method','cplexqpL1L2','lambdaL1',L2*0,'lambdaL2',L2,'name','mb4_162_nn','exper',1);
+  
         T=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
         
         sn=goodsubj;
