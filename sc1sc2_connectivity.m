@@ -796,7 +796,7 @@ switch(what)
         for s=1:length(sn)
             % Find relevant file 
             fprintf('%d\n',sn(s));
-            outName=fullfile(outDir,sprintf('%s_s%2.2d.mat',name,s));
+            outName=fullfile(outDir,sprintf('%s_%s.mat',name,subj_name{sn(s)}));
             if (exist(outName) && overwrite==0); 
                 RR=load(outName); 
             else 
@@ -820,8 +820,7 @@ switch(what)
                 RR=addstruct(RR,R);
             end; 
             save(outName,'-struct','RR');
-        end;
-        
+        end;        
     case 'conn_ts'                 % Run encoding model on time series
         % sc1_connectivity('conn_ts',[2:22],'method','winnerTakeAll_nonNeg','name','glm4_162_nnWTA','lambdaL1',0,'lambdaL2',0);
         % sc1_connectivity('conn_ts',goodsubj,'method','winnerTakeAll','name','glm4_162_WTA','lambdaL1',0,'lambdaL2',0);
@@ -1088,7 +1087,7 @@ switch(what)
         vararginoptions(varargin(2:end),{'subset','splitby','meanSub','xname','yname'});
 
         % Get all the mean betas and prepare the evaulation data 
-        [X,Y,S]=sc1sc2_connectivity('get_mbeta_all','xname',xname,'yname',yname);
+        [X,Y,S]=sc1sc2_connectivity('get_mbeta_all','xname',xname,'yname',yname,'incInstr',0);
         S.subset= [subset;subset];
         if (isempty(splitby))
             splitby = ones(length(T.StudyNum),1);
@@ -1123,18 +1122,50 @@ switch(what)
                 SSCy  = sum(sum(Y{s}(testAindx,goodindx).*Y{s}(testBindx,goodindx)));  % Covariance of Y's
                 SSCn  = sum(sum(predYnc(:,goodindx).*Y{s}(testBindx,goodindx)));   % Covariance of non-cross prediction and data
                 SSCc  = sum(sum(predY(:,goodindx).*Y{s}(testBindx,goodindx)));   % Covariance of cross prediction and data
-                R.SN    = s;
+                R.SN    = M.SN(m);
                 R.lambda = M.lambda(m,:);
-                R.type = M.type(m);
-                R.Rcv   = SSCc ./ sqrt(SSY.*SSP); % Crossvalidated predictive correlation
-                R.Rnc   = SSCn ./ sqrt(SSY.*SSP); % Non-crossvalidated predictive correlation
-                R.Ry    = SSCy ./ SSY;            % Reliability of data
+                R.method = M.method(m);
+                R.trainMode = M.trainMode(m);
+                R.xname = M.xname(m);
+                R.Rcv   = SSCc ./ sqrt(SSY.*SSP); % Double-Crossvalidated predictive correlation
+                R.Rnc   = SSCn ./ sqrt(SSY.*SSP); % Not double-crossvalidated predictive correlation
+                R.Ry    = SSCy ./ SSY;            % Reliability of data: noise ceiling 
                 R.Rp    = SSCp ./ SSP;            % Reliability of prediction
                 R.split = splits(sp);
                 RR = addstruct(RR,R);
             end;
         end;
         varargout={RR,Y{s}(testBindx,:),predY};
+    case 'evaluate_all'                     % Evaluates different sets of Connnectivity models
+        whatAna=varargin{1};                % Which particular models / experiments / modes do you want to compare 
+        outname = whatAna;
+        xnames = {'162_tessellation_hem'};
+        D=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
+        sn = goodsubj;
+        switch(whatAna)
+            case 'mb4_162_ridge'
+                name   = {'mb4_162_ridge' 'mb4_162_ridge'};
+                traindata = [1 2];
+                subset    = [D.StudyNum==2 D.StudyNum==1]; % Evaluate on the other experiment  
+                xnIn      = [1 1]; % use always 162 tesselation 
+                ysplit    = ones(length(D.StudyNum),1); % No splitting  
+        end;
+        RR=[];
+        for i=1:length(name)
+            sn=goodsubj;        % Restrict to good subjects 
+            for s=sn
+                fprintf('%d\n',s);
+                
+                % Load the connectivity weights
+                M = load(fullfile(rootDir,expStr{traindata(i)},'connectivity_cerebellum',name{i},sprintf('%s_%s.mat',name{i},subj_name{s})));
+                R=  sc1sc2_connectivity('evaluate',M,'xname',xnames{xnIn(i)},'subset',subset(:,i),'splitby',ysplit);
+                n = length(R.SN); 
+                R.traindata = ones(n,1)*traindata(i); 
+                RR=addstruct(RR,R);
+            end;
+        end;
+        save(fullfile(rootDir,'sc1','connectivity_cerebellum','evaluation',sprintf('eval_%s.mat',outname)),'-struct','RR');
+        varargout={RR};
     case 'make_obsPredicted'
         mapping = 'glm4_162_nn';
         sn = varargin{1};
@@ -1206,167 +1237,7 @@ switch(what)
         set(gca,'YLim',[-0.2 1]);
         drawline(0,'dir','horz');
         keyboard;
-    case 'evaluate_crossval_all'            % Evaluates different Connnectivity models
-        whatAna=varargin{1};
-        outname = whatAna;
-        xnames = {'162_tessellation_hem'};
-        D=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
-        sn = goodsubj;
-        switch(whatAna)
-            case 'buckner_margin_sc2'
-                
-                % Cross exeriment a--
-                %         outname = 'type_sc2';
-                %         encode = [4 4 4 4 5 5];
-                %         name   = {'162','162_bm','yeo','yeo_bm','162','yeo'};
-                %         xnames = {'162_tessellation_hem','yeo'};
-                %         xnIn   = [1 1 2 2 1 2];
-                %         glm    = [4 4 4 4 4 4];
-                %         correct = [0 1 0 1 0 0];
-                %         xdata   = 'sc2_b';
-                %         ydata   = 'sc2';
-                %         sn      = [3 6 8 9 10 12 17 18 20 21 22];
-                %         D=dload(fullfile(rootDir,'sc1_sc2_taskConds.dat'));
-                %         D=getrow(D,D.StudyNum==2);
-                %         ysplit = [1;D.overlap+2];
-                % Cross exeriment b--
-                %         outname = 'type_sc2_nosplit';
-                %         encode = [4];
-                %         name   = {'162'};
-                %         xnames = {'162_tessellation_hem','yeo'};
-                %         xnIn   = [1 ];
-                %         glm    = [4 ];
-                %         correct = [0];
-                %         xdata   = 'sc2_b';
-                %         ydata   = 'sc2';
-                %         sn      = [3 6 8 9 10 12 17 18 20 21 22];
-                %         D=dload(fullfile(rootDir,'sc1_sc2_taskConds.dat'));
-                %         D=getrow(D,D.StudyNum==2);
-                %         ysplit = [1;ones(size(D.overlap,1),1)*2];
-                
-                % Cross exeriment b--
-                %         outname = 'type_sc1_nosplit';
-                %         encode = [4 4 ];
-                %         name   = {'162','162_bm'};
-                %         xnames = {'162_tessellation_hem','yeo'};
-                %         xnIn   = [1 1];
-                %         glm    = [4 4];
-                %         correct = [0 1];
-                %         xdata   = 'sc1_b';
-                %         ydata   = 'sc1';
-                %         sn      = [3 6 8 9 10 12 17 18 20 21 22];
-                %         D=dload(fullfile(rootDir,'sc1_sc2_taskConds.dat'));
-                %         D=getrow(D,D.StudyNum==1);
-                %         ysplit = [1;ones(size(D.overlap,1),1)*2];
-                % Different regularisation L1L2/Winner take all,....
-                %          outname = 'L1L2_sc1';
-                %          encode = [4 4 4 4];
-                %          name   = {'WTAn','162_L1L2','162_L1L2b','162_L1L2c'};
-                %          xnames = {'162_tessellation_hem'};
-                %          xnIn   = [1 1 1 1];
-                %          glm    = [4 4 4 4];
-                %          correct = [0 0 0 0];
-                %          model   = [1 2 2 2];
-                %          xdata   = 'sc1_b';
-                %          ydata   = 'sc1';
-                %          sn      = [2:22];
-                %          D=dload(fullfile(rootDir,'sc1_sc2_taskConds.dat'));
-                %          D=getrow(D,D.StudyNum==1);
-                %          ysplit = [1;ones(size(D.overlap,1),1)*2];
-                %
-                
-                %          %
-            case 'glm4_162_L1L2'      % Negative_nonnegative
-                name   = {'glm4_162_nnL1L2','glm4_162_nnL1L2b','glm4_162_nnL1L2c'};
-                xnIn   = [1  1 1 ];
-                glm    = [4 4 4 ];
-                correct = [0 0 0 ];
-                D=getrow(D,D.StudyNum==1);
-                ysplit = [0;ones(size(D.overlap,1),1)];
-            case 'glm4_162_L1L2_sc2'      % Negative_nonnegative
-                outname = 'glm4_162_nnL1L2_sc2';
-                name   = {'glm4_162_nnL1L2','glm4_162_nnL1L2b','glm4_162_nnL1L2c'};
-                xnames = {'162_tessellation_hem'};
-                xnIn   = [1  1 1 ];
-                glm    = [4 4 4 ];
-                correct = [0 0 0 ];
-                glm    = [4 4 4 ];
-                model   = 'sc1';
-                data   = 'sc2';
-                D=dload(fullfile(rootDir,'sc1_sc2_taskConds.dat'));
-                D=getrow(D,D.StudyNum==2);
-                ysplit = [0;D.overlap+1];  % Add Instruction as zero
-            case 'glm4_162_nn_sc1'
-                name   = {'glm4_162_nn'};
-                xnIn   = [1 ];
-                glm    = [4 ];
-                correct = [0 ];
-                subset = D.StudyNum==1;
-                ysplit = [];
-            case 'glm4_162_nn'
-                K.name   = {'glm4_162_nn';'glm4_162_nn'};
-                K.xnIn   = [1;1];
-                K.glm        = [4;4];
-                K.testexper  = [1;2];
-                K.correct    = [0;0];
-                K.trainexper = [1;1];
-                subset = [D.StudyNum==1 (D.StudyNum==2 & D.overlap==0)];
-                ysplit = [];
-            case 'glm4_162_ridge_sc1'
-                name   = {'glm4_162_ridge'};
-                xnIn   = [1 ];
-                glm    = [4 ];
-                correct = [0 ];
-                model   = 'sc1';
-                data   = 'sc1';
-                D=getrow(D,D.StudyNum==1);
-                ysplit = [0;ones(size(D.overlap,1),1)];  % Add Instruction as zero
-            case 'glm4_162_ridge_sc2'
-                name   = {'glm4_162_ridge'};
-                xnames = {'162_tessellation_hem'};
-                xnIn   = [1 ];
-                glm    = [4 ];
-                correct = [0 ];
-                model   = 'sc1';
-                data   = 'sc2';
-                D=getrow(D,D.StudyNum==2);
-                ysplit = [0;D.overlap+1];  % Add Instruction as zero
-            case 'glm4_162_WTA_sc1'
-                name   = {'glm4_162_nnWTA','glm4_162_WTA'};
-                xnames = {'162_tessellation_hem'};
-                xnIn   = [1 1];
-                glm    = [4 4];
-                correct = [0 0];
-                model   = 'sc1';
-                data   = 'sc1';
-                D=getrow(D,D.StudyNum==1);
-                ysplit = [0;ones(size(D.overlap,1),1)];  % Add Instruction as zero
-            case 'glm4_162_WTA_sc2'
-                name   = {'glm4_162_nnWTA','glm4_162_WTA'};
-                xnames = {'162_tessellation_hem'};
-                xnIn   = [1 1];
-                glm    = [4 4];
-                correct = [0 0];
-                model   = 'sc1';
-                data   = 'sc2';
-                D=getrow(D,D.StudyNum==2);
-                ysplit = [0;D.overlap+1];  % Add Instruction as zero
-        end;
-        RR=[];
-        for i=1:length(K.name)
-            sn=goodsubj;        % Restrict to 17 good subjects
-            for s=sn
-                fprintf('%d\n',s);
-                
-                % Load the connectivity weights
-                T = load(fullfile(rootDir,expStr{K.trainexper(i)},'connectivity_cerebellum',K.name{i},sprintf('%s_%s.mat',K.name{i},subj_name{s})));
-                R=sc1_connectivity('evaluate',T,'xname',xnames{K.xnIn(i)},'subset',subset(:,i),'splitby',ysplit);
-                R = joinframes(R,getrow(K,i));
-                RR=addstruct(RR,R);
-            end;
-        end;
-        save(fullfile(rootDir,'sc1','connectivity_cerebellum','evaluation',sprintf('eval_%s.mat',outname)),'-struct','RR');
-        varargout={RR};
+   
     case 'evaluate_plot_type'   % Does sc1 and sc2 with BM or not
         
         T=load(fullfile(sc1Dir,'connectivity_cerebellum','evaluation','eval_glm4_162_nn.mat'));
