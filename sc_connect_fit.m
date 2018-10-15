@@ -19,7 +19,7 @@ i=0;
 [N,P] = size(Y);
 [N,Q] = size(X);
 lambda=0;
-C=zeros(Q,P);
+u=zeros(Q,P);
 features=[1:Q];
 
 vararginoptions(varargin,{'lambda'});
@@ -89,7 +89,8 @@ switch method
         XY=X'*Y;
         A = -eye(Q);
         b = zeros(Q,1);
-        for p=1:P
+        u=nan(Q,P);  % Make non-calculated to nan to keep track of missing voxels 
+        for p=find(~isnan(sum(Y)))
             u(:,p) = cplexqp(XX+lambda(2)*eye(Q),ones(Q,1)*lambda(1)-XY(:,p),A,b);
         end;
     case 'quadraticProg'           %  Non-neg least-squares over quadratic programming (cplex)
@@ -102,7 +103,7 @@ switch method
         A = -eye(Q);
         b = zeros(Q,1);
         for p=1:P
-            u(:,p) = quadprog(XX,ones(Q,1)*lambda(2)-XY(:,p),A,b,[],[],[],[],[],OPT);
+            u(:,p) = quadprog(XX+lambda(2)*eye(Q),ones(Q,1)*lambda(1)-XY(:,p),A,b,[],[],[],[],[],OPT);
         end;
     case 'lasso'                   %  Matlab's Lasso
         [N,P] = size(Y);
