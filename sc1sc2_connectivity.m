@@ -717,8 +717,9 @@ switch(what)
             end; 
 
             % Get data 
-            xx = X{s}(trainXindx,:);
-            yy = Y{s}(trainYindx,:);
+            subjn=find(goodsubj==sn(s));    
+            xx = X{subjn}(trainXindx,:);
+            yy = Y{subjn}(trainYindx,:);
             
             % Run for all regularisation parameters 
             for l=1:length(lambdaL1)
@@ -875,7 +876,6 @@ switch(what)
         set(gca,'XTickLabel',T.condNames,'XTickLabelRotation',70);
         keyboard;
         varargout={R,D};
-        
     case 'map_cortex'              % Map of where projections come from
         sn=varargin{1};        % [2:22]
         name = varargin{2};
@@ -984,7 +984,6 @@ switch(what)
         % Now map to surface-based representation
         D = suit_map2surf(Vres,'stats','mean');
         varargout={D,Vres};
-
     case 'evaluate' % Evaluates predictive performance of connectivity model 
         % M: is the model structure with the connectivity weights in it (M.W)
         % 'subset': what data should the evaluation be based upon? 
@@ -1045,6 +1044,14 @@ switch(what)
                 R.Ry    = SSCy ./ SSY;            % Reliability of data: noise ceiling 
                 R.Rp    = SSCp ./ SSP;            % Reliability of prediction
                 R.split = splits(sp);
+                % Calucate Sparseness measures 
+                Ws = sort(abs(M.W{m})); 
+                Wss= bsxfun(@rdivide,Ws,sum(Ws));% standardized coefficients (to the sum overall
+                R.spIdx = nanmean(Wss(end,:)); % Largest over the sum of the others 
+                N=size(Wss,1);
+                w=(N-[1:N]'+0.5)/N;
+                ginni = 1-2*sum(bsxfun(@times,Wss,w));
+                R.ginni = nanmean(ginni); % Ginni index: mean over voxels 
                 RR = addstruct(RR,R);
             end;
         end;
@@ -1057,10 +1064,16 @@ switch(what)
         sn = goodsubj;
         switch(whatAna)
             case 'mb4_162_ridge'
-                name   = {'mb4_162_ridge' 'mb4_162_ridge'};
+                name   = {'mb4_162_ridge';'mb4_162_ridge'};
                 traindata = [1 2];
                 subset    = [D.StudyNum==2 D.StudyNum==1]; % Evaluate on the other experiment  
                 xnIn      = [1 1]; % use always 162 tesselation 
+                ysplit    = ones(length(D.StudyNum),1); % No splitting  
+            case 'mb4_162_all' 
+                name   = {'mb4_162_ridge';'mb4_162_ridge';'mb4_162_wtan';'mb4_162_wtan';'mb4_162_nn';'mb4_162_nn'};
+                traindata = [1 2 1 2 1 2]';
+                subset    = [D.StudyNum==2 D.StudyNum==1 D.StudyNum==2 D.StudyNum==1 D.StudyNum==2 D.StudyNum==1]; % Evaluate on the other experiment  
+                xnIn      = [1 1 1 1 1 1]; % use always 162 tesselation 
                 ysplit    = ones(length(D.StudyNum),1); % No splitting  
         end;
         RR=[];
@@ -1150,39 +1163,6 @@ switch(what)
         set(gca,'YLim',[-0.2 1]);
         drawline(0,'dir','horz');
         keyboard;
-   
-    case 'evaluate_plot_type'   % Does sc1 and sc2 with BM or not
-        
-        T=load(fullfile(sc1Dir,'connectivity_cerebellum','evaluation','eval_glm4_162_nn.mat'));
-        
-        T.typeN = T.type;
-        j=find(strcmp(T.type,'Yres'));T.typeNum(j,1)=1;
-        for i=j';T.typeN{i}='1.resid';end;
-        j=find(strcmp(T.type,'Yhat'));T.typeNum(j,1)=2;
-        for i=j';T.typeN{i}='2.fitted';end;
-        j=find(strcmp(T.type,'Y'));T.typeNum(j,1)=3;
-        for i=j';T.typeN{i}='3.total';end;
-        j=find(strcmp(T.type,'Yhatr'));T.typeNum(j,1)=4;
-        for i=j';T.typeN{i}='4.fittedR';end;
-        j=find(strcmp(T.type,'Yhatm'));T.typeNum(j,1)=5;
-        for i=j';T.typeN{i}='5.fittedM';end;
-        
-        noiseCeiling=sqrt(T.Ry.*T.Rp);
-        
-        for i=1:2
-            indx =T.typeNum<4 & T.testexper==i;
-            subplot(1,2,i);
-            [x,y]=barplot(T.typeN,T.Rcv./noiseCeiling,'subset',indx,'gapwidth',[0.5 0 0]);
-            
-            % If not normalize, draw noise ceiling:
-            % mNC=pivottable(T.typeNum,[],noiseCeiling,'mean','subset',indx);
-            % drawline(mNC','dir','horz');
-            % set(gca,'YLim',[0 0.6]);
-            set(gca,'YLim',[0 1]);
-            ylabel('crossvalidated R');
-        end;
-        set(gcf,'PaperPosition',[2 2 6 2.5]);
-        wysiwyg;
     case 'evaluate_plot_numberOfConditions'
         T=load(fullfile(sc1Dir,'connectivity_cerebellum','evaluation','numberOfConditions_glm4_1_2.mat'));
         lineplot(T.numCond,T.Rcv./abs(ssqrt(T.Ry.*T.Rp)),'subset',T.exp==2,'split',T.split,'style_thickline',...
@@ -1193,83 +1173,31 @@ switch(what)
         drawline(0.319,'dir','horz');
         wysiwyg;
         
-    case 'crossval_plot_nn_vs_ridge'   % Does sc1 and sc2 with BM or not
-        name = {{'crossval_glm4_162_nnL1L2_sc1.mat','crossval_glm4_162_nnL1L2_sc2.mat'},...
-            {'crossval_glm4_162_ridge_sc1.mat','crossval_glm4_162_ridge_sc2.mat'}};
-        split = [1 2];
-        color = {'r','b'};
-        for z=1:2  % Over experiment
-            for n=1:2 % Over negative / open
-                subplot(2,2,(z-1)*2+n);
-                title(sprintf('Exp: %d Type: %d',z,n));
-                T=load(fullfile(sc1Dir,'connectivity_cerebellum','evaluation',name{n}{z}));
-                indx = (T.split==z);
-                [a,b,T.category]=unique([-T.lambda(:,1) T.lambda(:,2)],'rows');
-                [F,R]=pivottable(T.SN,[],T.Rcv,'mean','subset',indx);
-                for r=1:length(R)
-                    T.Rcv(T.SN==R(r))=T.Rcv(T.SN==R(r))-F(r);
-                end;
-                
-                T.Rcv=T.Rcv+mean(F);
-                xyplot(T.relMax,T.Rcv,T.category,'subset',indx,'linewidth',2','linecolor',color{n});
-                noiseCeiling=sqrt(T.Ry.*T.Rp);
-                mNC=pivottable(T.typeNum,[],noiseCeiling,'mean','subset',indx);
-                drawline(mNC','dir','horz');
-                set(gca,'YLim',[0.2 0.5]);
-            end;
-        end;
-        ylabel('crossvalidated R');
+    case 'evaluate_plot_method'   % Does sc1 and sc2 with BM or not
+        name = {'eval_mb4_162_all.mat'}; 
+        yfield = 'Rcv'; 
+        xfield = 'ginni'; 
+        
+        T=[]; 
+        for n=1:length(name)   % Loop over files
+            TT=load(fullfile(sc1Dir,'connectivity_cerebellum','evaluation',name{n}));
+            T=addstruct(T,TT); 
+        end; 
+        
+        [methStr,~,T.methNum] = unique(T.method); 
+        [lambda,b,T.lamCat]=unique([T.lambda],'rows');
+        % Do an xyplot normalized to an upper noise ceiling, which only is
+        % determined by the relability of the data 
+        xyplot(T.(xfield),T.(yfield)./sqrt(T.Ry),T.lamCat,'split',T.methNum,'style_thickline','leg',methStr,'subset',T.traindata==2); 
+        
+        % Now determine a lower noise ceiling.... This is determined by the
+        % reliability of the prediction, which is model dependent. We here
+        % use the average across models 
+        noiseCeil = mean(T.Rp); 
+        drawline(noiseCeil,'dir','horz'); 
+        set(gca,'YLim',[0.3 1]); 
         set(gcf,'PaperPosition',[2 2 6 6]);
-        wysiwyg;
-    case 'crossval_plot_L1L2'   % Does sc1 and sc2 with BM or not
-        name = {{'crossval_glm4_162_nnL1L2_sc1.mat','crossval_glm4_162_nnL1L2_sc2.mat'},...
-            {'crossval_glm4_162_WTA_sc1.mat','crossval_glm4_162_WTA_sc2.mat'}};
-        split = [1 2];
-        color = {'r','b'};
-        for z=1:2  % Over experiment
-            subplot(1,2,z);
-            T=load(fullfile(sc1Dir,'connectivity_cerebellum','evaluation',name{1}{z}));
-            [a,b,T.category]=unique([-T.lambda(:,1) T.lambda(:,2)],'rows');
-            W=load(fullfile(sc1Dir,'connectivity_cerebellum','evaluation',name{2}{z}));
-            W=getrow(W,strcmp(W.name,'glm4_162_nnWTA'));
-            W.relMax = ones(numel(W.relMax),1)*0.6;
-            W.relMax = ones(numel(W.relMax),1)*0.6;
-            W.category =zeros(numel(W.relMax),1);
-            T=addstruct(T,W);
-            indx = (T.split==z);
-            [F,R]=pivottable(T.SN,[],T.Rcv,'mean','subset',indx);
-            for r=1:length(R)
-                T.Rcv(T.SN==R(r))=T.Rcv(T.SN==R(r))-F(r);
-            end;
-            T.Rcv=T.Rcv+mean(F);
-            xyplot(T.relMax,T.Rcv,T.category,'subset',indx,'linewidth',2',...
-                'linecolor','b','markersize',4,'markertype','s',...
-                'subset',ismember(T.category,[0:8 10 17]));
-            noiseCeiling=sqrt(T.Ry.*T.Rp);
-            mNC=pivottable(T.typeNum,[],noiseCeiling,'mean','subset',indx);
-            drawline(mNC','dir','horz');
-            set(gca,'XLim',[0.18 0.62]);
-            if (z==1)
-                set(gca,'YLim',[0.32 0.42]);
-            else
-                set(gca,'YLim',[0.22 0.32]);
-            end;
-        end;
-        ylabel('crossvalidated R');
-        set(gcf,'PaperPosition',[2 2 5 3]);
-        wysiwyg;
-    case 'crossval_plot_cross'   % Does sc1 and sc2 with BM or not
-        name = {'encode_crossval_mB_cross_162_ridge_sc1.mat','encode_crossval_mB_cross_162_ridge_sc2.mat'};
-        for z=1:2
-            T=load(fullfile(encodeDir,name{z}));
-            
-            subplot(1,2,z);
-            barplot(T.crossval,T.Rcv,'subset',T.split==1);
-            drawline(mean(T.R(T.split==2)),'dir','horz');
-        end;
-        ylabel('crossvalidated R');
-        set(gcf,'PaperPosition',[2 2 6.5 3]);
-        wysiwyg;
+        % wysiwyg;
     case 'TS_subspace_overlap'   % Determine relative eigenvalues after projection
         load(fullfile(regDir,'glm4','Covariance_by_session.mat'));
         [numReg,~,numSubj,numSess]=size(C{1});
