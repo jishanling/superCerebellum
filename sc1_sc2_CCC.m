@@ -1523,11 +1523,11 @@ switch(what)
                 % loop over lambda (if there are multiple per model)
                 for l=1:numLambda,
                     
-12                    l1=lambdaL1{m}(l); 
+                    l1=lambdaL1{m}(l); 
                     l2=lambdaL2{m}(l);
                     
                     R.SN = sn(s);
-                    [W,R.fR2m,R.fRm] = sc1_encode_fit(yy,xx,method{m},'lambda',[l1 l2]);
+                    [W,R.fR2m,R.fRm] = sc_connect_fit(yy,xx,method{m},'lambda',[l1 l2]);
                     R.W={W};
                     R.lambda = [l1 l2];
                     R.model=model{m};
