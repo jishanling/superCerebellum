@@ -1455,78 +1455,132 @@ switch(what)
         
     case 'CONNECTIVITY:runModel'
         sn=varargin{1}; % subjNum
-        model=varargin{2}; % '162_tessellation_hem'
+        model=varargin{2}; % {'162_tessellation_hem'}
         data=varargin{3}; % 'Cerebellum_grey'
-        signal=varargin{4}; % 'fitted', 'residual', 'totalTS'
-        method=varargin{5}; % 'ridgeFixed', 'linear'
-        trainMode=varargin{6}; % 'crossed' or 'uncrossed'
+        signal=varargin{4}; % {'fitted'}: other options are 'residual', 'totalTS'
+        method=varargin{5}; % {'ridgeFixed'}, other options: nonNegative etc
+        trainMode=varargin{6}; % {'crossed'} or {'uncrossed}
+        study=varargin{7}; % building on which study ? 1 or 2 [1]
         
         T=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         
         RR= [];
-        lambdaL1 = 2500;
-        lambdaL2 = 2500;
+        SS=[];
+        lambdaL1 = {[0]}; % cell array and for each model there are a set of lambdas. e.g. {[10 100 1000],[10 100]}
+        lambdaL2 = {[0]};
         meanSub=1;      % Mean Pattern Subtract?
         incInstr=0;     % Include instruction ?
-        subset = T.StudyNum==1; % Indices of the experiments / conditions that we want to use
+        vararginoptions(varargin(8:end),{'lambdaL1','lambdaL2','meanSub','incInstr'});
         
-%         vararginoptions(varargin,{'model','type','subset','method','glm','partial','name','trainMode','lambdaL1','lambdaL2'});
-        subset = [subset;subset]; % Make the subset out onto both session
-        
-        switch signal,
-            case 'fitted'
-                [X,Y,S]=sc1_sc2_CCC('STRUCTURE:meanBeta',model,data,'incInstr',incInstr);
-            case 'residual'
-                [X,Y,S]=sc1_sc2_CCC('');
-            case 'totalTS'
-                [X,Y,S]=sc1_sc2_CCC('');
-        end
-        
-        trainXindx=[find(subset & S.sess==1);find(subset & S.sess==2)];
-        switch (trainMode)
-            case 'crossed'
-                trainYindx=[find(subset & S.sess==2);find(subset & S.sess==1)];
-            case 'uncrossed'
-                trainYindx=[find(subset & S.sess==1);find(subset & S.sess==2)];
-        end;
-        
-        for s=1:length(sn)
-            if(meanSub)
-                for sess=1:2
-                    indx=find(subset & S.sess==sess);
-                    X{s}(indx,:)=bsxfun(@minus,X{s}(indx,:),mean(X{s}(indx,:)));
-                    Y{s}(indx,:)=bsxfun(@minus,Y{s}(indx,:),mean(Y{s}(indx,:)));
-                end;
+        for m=1:length(model),
+            
+            % how many lambdas are we dealing with ?
+            if  isempty(lambdaL1{m}) || ~isempty(lambdaL2{m})
+                numLambda=length(lambdaL2{m});
+                lambdaL1=repmat(0,1,numLambda); 
+            elseif isempty(lambdaL1{m}) || ~isempty(lambdaL1{m})
+                numLambda=length(lambdaL1{m});
+                lambdaL2=repmat(0,1,numLambda); 
+            elseif lambdaL1{m} == lambdaL2{m}
+                numLambda=length(lambdaL1{m});
+            else
+                numLambda=1;
+            end
+            
+            subset = T.StudyNum==study; % Indices of the experiments / conditions that we want to use    
+            subset = [subset;subset]; % Make the subset out onto both session
+            
+            switch signal{m},
+                case 'fitted'
+                    [X,Y,S]=sc1_sc2_CCC('STRUCTURE:meanBeta',model{m},data,'incInstr',incInstr);
+                case 'residual'
+                    [X,Y,S]=sc1_sc2_CCC('');
+                case 'totalTS'
+                    [X,Y,S]=sc1_sc2_CCC('');
+            end
+            
+            trainXindx=[find(subset & S.sess==1);find(subset & S.sess==2)];
+            switch (trainMode{m})
+                case 'crossed'
+                    trainYindx=[find(subset & S.sess==2);find(subset & S.sess==1)];
+                case 'uncrossed'
+                    trainYindx=[find(subset & S.sess==1);find(subset & S.sess==2)];
             end;
-            fprintf('%d\n',sn(s));
             
-            xx = X{s}(trainXindx,:);
-            yy = Y{s}(trainYindx,:);
-            
-            R.SN = sn(s);
-            [W,R.fR2m,R.fRm] = sc1_encode_fit(yy,xx,method,'lambda',[lambdaL1 lambdaL2]);
-            R.W={W};
-            R.lambda = [lambdaL1 lambdaL2];
-            R.type   = {method};
-            RR=addstruct(RR,R);
-        end;
+            for s=1:length(sn)
+                if(meanSub)
+                    for sess=1:2
+                        indx=find(subset & S.sess==sess);
+                        X{s}(indx,:)=bsxfun(@minus,X{s}(indx,:),mean(X{s}(indx,:)));
+                        Y{s}(indx,:)=bsxfun(@minus,Y{s}(indx,:),mean(Y{s}(indx,:)));
+                    end;
+                end;
+                fprintf('%d\n',sn(s));
+                
+                xx = X{s}(trainXindx,:);
+                yy = Y{s}(trainYindx,:);
+                
+                % loop over lambda (if there are multiple per model)
+                for l=1:numLambda,
+                    
+12                    l1=lambdaL1{m}(l); 
+                    l2=lambdaL2{m}(l);
+                    
+                    R.SN = sn(s);
+                    [W,R.fR2m,R.fRm] = sc1_encode_fit(yy,xx,method{m},'lambda',[l1 l2]);
+                    R.W={W};
+                    R.lambda = [l1 l2];
+                    R.model=model{m};
+                    R.signal=signal{m};
+                    R.trainMode=trainMode{m};
+                    R.study=study(m);
+                    R.type   = {method{m}};
+                    RR=addstruct(RR,R);
+                    fprintf('lambda %d done ..\n',l)
+                end;
+               SS=addstruct(SS,RR);  
+            end
+        end
         varargout={RR};
     case 'CONNECTIVITY:evaluate' % Evaluates predictive performance of connectivity model
         % M: is the model structure with the connectivity weights in it (M.W)
         % 'subset': what data should the evaluation be based upon?
         % 'splitby': by which variable should the evaluation be split?
         % 'meanSub': Mean pattern subtraction before evaluation?
-        M = varargin{1};        % This is a structure with the fitted data
+        model=varargin{1}; % {'162_tessellation_hem','yeo_17'}
+        data=varargin{2};  % 'Cerebellum_grey'
+        signal=varargin{3}; % {'fitted','residual'}
+        method=varargin{4}; % {'ridgeFixed','nonNegative'}
+        trainMode=varargin{5}; % {'crossed','uncrossed'}
+        study=varargin{6}; % evaluating on which study, 1 or 2 ? [1,2]
+        % example:
+        % sc1_sc2_CCC('CONNECTIVITY:evaluate',{'162_tessellation_hem'},{'Cerebellum_grey'},{'fitted'},{'ridgeFixed'},{'crossed'})
+
+        % if the connectivity weights are built on sc1, then evaluate on
+        % sc2
+        if study==1,
+            studyModel=2; % connectivity weights: which study ?
+        elseif  study==2,
+            studyModel=1;
+        end
+          
         T = dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
-        subset = T.StudyNum==2;
-        splitby= T.condNum;
-        yname = 'Cerebellum_grey';
-        xname = '162_tessellation_hem';
+        incInstr=0; 
         meanSub = 0; % Mean pattern subtraction before prediction?
-        vararginoptions(varargin(2:end),{'subset','splitby','meanSub','xname','yname'});
+        lambdaL1={[0]}; 
+        lambdaL2={[0]}; 
+        vararginoptions(varargin(7:end),{'lambdaL1','lambdaL2','subset','splitby','meanSub','incInstr'});
         
-        % Get all the mean betas and prepare the evaulation data
-        [X,Y,S]=sc1_sc2_CCC('get_mbeta_all','xname',xname,'yname',yname,'incInstr',0);
+        % load in the connectivity weights (X): option to load in multiple
+        % models (each can have different methods, trainings etc)
+        M=sc1_sc2_CCC('CONNECTIVITY:runModel',returnSubjs,model,data,signal,method,trainMode,studyModel,'lambdaL1',lambdaL1,'lambdaL2',lambdaL2);
+        
+        % Get all the mean betas and prepare the evaulation data (Y)
+        [X,Y,S]=sc1_sc2_CCC('STRUCTURE:meanBeta',model,data,incInstr);
+        
+        % what are we evaluating ? 
+        subset = T.StudyNum==study;
+        splitby = T.condNum;
         S.subset= [subset;subset];
         if (isempty(splitby))
             splitby = ones(length(T.StudyNum),1);
