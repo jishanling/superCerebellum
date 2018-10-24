@@ -1662,7 +1662,6 @@ switch(what)
             end;
         end;
         save(fullfile(studyDir{2},connDir,'glm4','eval',sprintf('%s_%s_%s_sc%d_%s.mat',model,signal,method,study,condType)),'-struct','RR','-v7.3')
-        
     case 'CONNECTIVITY:plot' % loads in multiple methods and compares them
         model=varargin{1}; % '162_tessellation_hem' or 'yeo_17' etc
         signal=varargin{2}; % 'fitted' or 'residual'
@@ -1674,7 +1673,7 @@ switch(what)
         for m=1:length(method),
             for c=1:length(condType),
                 T=load(fullfile(studyDir{2},connDir,'glm4','eval',sprintf('%s_%s_%s_sc%d_%s.mat',model,signal,method{m},study,condType{c})));
-                T.methodNum=repmat(m,length(T.SN),1); 
+                T.methodNum=repmat(m,length(T.SN),1);
                 RR=addstruct(RR,T);
             end
         end
@@ -1694,16 +1693,16 @@ switch(what)
         
         % 'unique' versus 'all'
         figure(1)
-        lineplot(RR.lambda(:,2),RR.Rcv,'style_thickline','split',RR.split,'leg','auto','CAT',CAT,'subset',RR.methodNum==1)
-        ylabel('R-crossval')
+        lineplot(RR.lambda(:,2),RR.Rcv,'split',RR.split,'leg','auto','CAT',CAT,'subset',RR.methodNum==1 & strcmp(RR.trainMode,'crossed'))
+        ylabel('R')
         xlabel('lambda')
         title(sprintf('%s-%s',signal,method{1}))
         set(gca,'YLim',[.1 0.3],'FontSize',14,'ytick',[.1,.15,.2,.25,.3]);
         
         % 'crossed' versus 'uncrossed'
         figure(2)
-        lineplot(RR.lambda(:,2),RR.Rcv,'style_thickline','split',RR.trainMode,'leg','auto','CAT',CAT,'subset',RR.methodNum==1)
-        ylabel('R-crossval')
+        lineplot(RR.lambda(:,2),RR.Rcv,'split',RR.trainMode,'leg','auto','CAT',CAT,'subset',RR.methodNum==1 & strcmp(RR.split,'unique'))
+        ylabel('R')
         xlabel('lambda')
         title(sprintf('%s-%s',signal,method{1}))
         set(gca,'YLim',[.1 0.3],'FontSize',14,'ytick',[.1,.15,.2,.25,.3]);
@@ -1711,19 +1710,39 @@ switch(what)
         % split by taskConds (unique)
         condNames=S.condNames(S.StudyNum==study & S.overlap==0);
         figure(3)
-        barplot(RR.splitby,RR.Rcv,'subset',strcmp(RR.split,'unique'),'subset',RR.methodNum==1)
-        ylabel('R-crossval')
+        barplot(RR.splitby,RR.Rcv,'subset',RR.methodNum==1 & strcmp(RR.split,'unique'))
+        ylabel('R')
         title(sprintf('%s-%s',signal,method{1}))
         set(gca,'YLim',[0 0.4],'FontSize',8,'XTickLabel',condNames);
         
         % split by taskConds (all)
         condNames=S.condNames(S.StudyNum==study);
         figure(4)
-        barplot(RR.splitby,RR.Rcv,'subset',strcmp(RR.split,'all'),'subset',RR.methodNum==1)
-        ylabel('R-crossval')
+        barplot(RR.splitby,RR.Rcv,'subset',RR.methodNum==1 & strcmp(RR.split,'all'))
+        ylabel('R')
         title(sprintf('%s-%s',signal))
         set(gca,'YLim',[0 0.55],'FontSize',8,'XTickLabel',condNames);
-
+        
+        % plot Rcv and Rnc
+        figure(5)
+        lineplot(RR.lambda(:,2),RR.Rcv,'CAT',CAT,'subset',RR.methodNum==1 & strcmp(RR.split,'unique'))
+        hold on
+        CAT.linecolor={'k'};
+        CAT.linestyle={'-'};
+        CAT.errorcolor={'k'};
+        lineplot(RR.lambda(:,2),RR.Rnc,'CAT',CAT,'subset',RR.methodNum==1 & strcmp(RR.split,'unique'))
+        ylabel('R')
+        xlabel('lambda')
+        title(sprintf('%s-%s',signal,method{1}))
+        set(gca,'YLim',[.1 0.3],'FontSize',14,'ytick',[.1,.15,.2,.25,.3]);
+        
+        figure(6)
+        lineplot(RR.lambda(:,2),RR.Rcv,'split',RR.method,'leg','auto','subset',strcmp(RR.split,'unique') & strcmp(RR.trainMode,'crossed'))
+        ylabel('R')
+        xlabel('lambda')
+        set(gca,'YLim',[.1 0.3],'FontSize',14,'ytick',[.1,.15,.2,.25,.3]);
+                
+        keyboard;
         
     case 'MAP:cortex'              % Map of where projections come from
         sn=varargin{1};        % [2:22]
