@@ -10,14 +10,14 @@ atlasDir='/Users/maedbhking/Documents/Atlas_templates/';
 
 studyDir{1}     =fullfile(baseDir,'sc1');
 studyDir{2}     =fullfile(baseDir,'sc2');
-studyStr        = {'SC1','SC2','SC12'};
+studyStr        ={'SC1','SC2','SC12'};
 behavDir        =['data'];
 imagingDir      =['imaging_data'];
 suitDir         =['suit'];
 caretDir        =['surfaceCaret'];
 regDir          =['RegionOfInterest/'];
 connDir         =['connectivity'];
-encodeDir       ='/encoding';
+encodeDir       =['encoding'];
 
 %==========================================================================
 
@@ -1264,11 +1264,11 @@ switch(what)
         model=varargin{1}; % '162_tessellation_hem'
         data=varargin{2}; % 'Cerebellum_grey';
         incInstr=varargin{3}; % 0 or 1
-
-%         vararginoptions(varargin,{'exper','glm','yname','xname','incInstr'});
+        
+        %         vararginoptions(varargin,{'exper','glm','yname','xname','incInstr'});
         
         % Load the betas for all the tasks
-        for e=1:2
+        for e=1:2,
             myRegDir = fullfile(baseDir,exper{e},regDir);
             YD{e}=load(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',data)));
             XD{e}=load(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',model)));
@@ -1455,67 +1455,75 @@ switch(what)
         
     case 'CONNECTIVITY:runModel'
         sn=varargin{1}; % subjNum
-        model=varargin{2}; % {'162_tessellation_hem'}
+        model=varargin{2}; % '162_tessellation_hem'
         data=varargin{3}; % 'Cerebellum_grey'
-        signal=varargin{4}; % {'fitted'}: other options are 'residual', 'totalTS'
-        method=varargin{5}; % {'ridgeFixed'}, other options: nonNegative etc
-        trainMode=varargin{6}; % {'crossed'} or {'uncrossed}
+        signal=varargin{4}; % 'fitted': other options are 'residual', 'totalTS'
+        method=varargin{5}; % 'ridgeFixed', other options: nonNegative etc
+        trainMode=varargin{6}; % {'crossed'} or {'uncrossed} or {'crossed','uncrossed'}
         study=varargin{7}; % building on which study ? 1 or 2 [1]
         
         T=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         
         RR= [];
-        SS=[];
-        lambdaL1 = {[0]}; % cell array and for each model there are a set of lambdas. e.g. {[10 100 1000],[10 100]}
-        lambdaL2 = {[0]};
+        lambdaL1 = [0]; % cell array and for each model there are a set of lambdas. e.g. {[10 100 1000],[10 100]}
+        lambdaL2 = [0];
         meanSub=1;      % Mean Pattern Subtract?
         incInstr=0;     % Include instruction ?
         vararginoptions(varargin(8:end),{'lambdaL1','lambdaL2','meanSub','incInstr'});
         
-        for m=1:length(model),
-            
-            % how many lambdas are we dealing with ?
-            if  isempty(lambdaL1{m}) || ~isempty(lambdaL2{m})
-                numLambda=length(lambdaL2{m});
-                lambdaL1=repmat(0,1,numLambda); 
-            elseif isempty(lambdaL1{m}) || ~isempty(lambdaL1{m})
-                numLambda=length(lambdaL1{m});
-                lambdaL2=repmat(0,1,numLambda); 
-            elseif lambdaL1{m} == lambdaL2{m}
-                numLambda=length(lambdaL1{m});
-            else
-                numLambda=1;
-            end
-            
-            subset = T.StudyNum==study; % Indices of the experiments / conditions that we want to use    
-            subset = [subset;subset]; % Make the subset out onto both session
-            
-            switch signal{m},
-                case 'fitted'
-                    [X,Y,S]=sc1_sc2_CCC('STRUCTURE:meanBeta',model{m},data,'incInstr',incInstr);
-                case 'residual'
-                    [X,Y,S]=sc1_sc2_CCC('');
-                case 'totalTS'
-                    [X,Y,S]=sc1_sc2_CCC('');
-            end
-            
-            trainXindx=[find(subset & S.sess==1);find(subset & S.sess==2)];
-            switch (trainMode{m})
-                case 'crossed'
-                    trainYindx=[find(subset & S.sess==2);find(subset & S.sess==1)];
-                case 'uncrossed'
-                    trainYindx=[find(subset & S.sess==1);find(subset & S.sess==2)];
-            end;
-            
-            for s=1:length(sn)
-                if(meanSub)
-                    for sess=1:2
-                        indx=find(subset & S.sess==sess);
-                        X{s}(indx,:)=bsxfun(@minus,X{s}(indx,:),mean(X{s}(indx,:)));
-                        Y{s}(indx,:)=bsxfun(@minus,Y{s}(indx,:),mean(Y{s}(indx,:)));
-                    end;
+        % outName/inName
+        %         modelName=fullfile(studyDir{2},connDir,'glm4','weights',sprintf('%s_%s_%s_sc%d.mat',model,signal,method,study));
+        
+        % check to see if connectivity model exists [load if it does exist]
+        %         if exist(modelName),
+        %             load(modelName)
+        %         end
+        
+        % how many lambdas are we dealing with ?
+        if  sum(lambdaL1)>0 || sum(lambdaL2)==0
+            numLambda=length(lambdaL2);
+            lambdaL2=repmat(0,1,numLambda);
+        elseif sum(lambdaL2)>0 || sum(lambdaL1)==0
+            numLambda=length(lambdaL1);
+            lambdaL1=repmat(0,1,numLambda);
+        elseif size(lambdaL1) == size(lambdaL2)
+            numLambda=length(lambdaL1);
+        else
+            numLambda=1;
+        end
+        
+        subset = T.StudyNum==study; % Indices of the experiments / conditions that we want to use
+        subset = [subset;subset]; % Make the subset out onto both session
+        
+        switch signal,
+            case 'fitted'
+                [X,Y,S]=sc1_sc2_CCC('STRUCTURE:meanBeta',model,data,incInstr);
+            case 'residual'
+                [X,Y,S]=sc1_sc2_CCC('');
+            case 'totalTS'
+                [X,Y,S]=sc1_sc2_CCC('');
+        end
+        
+        trainXindx=[find(subset & S.sess==1);find(subset & S.sess==2)];
+        
+        for s=1:length(sn)
+            if(meanSub)
+                for sess=1:2
+                    indx=find(subset & S.sess==sess);
+                    X{s}(indx,:)=bsxfun(@minus,X{s}(indx,:),mean(X{s}(indx,:)));
+                    Y{s}(indx,:)=bsxfun(@minus,Y{s}(indx,:),mean(Y{s}(indx,:)));
                 end;
-                fprintf('%d\n',sn(s));
+            end;
+            fprintf('%d\n',sn(s));
+            
+            for t=1:length(trainMode),
+                
+                switch (trainMode{t})
+                    case 'crossed'
+                        trainYindx=[find(subset & S.sess==2);find(subset & S.sess==1)];
+                    case 'uncrossed'
+                        trainYindx=[find(subset & S.sess==1);find(subset & S.sess==2)];
+                end;
                 
                 xx = X{s}(trainXindx,:);
                 yy = Y{s}(trainYindx,:);
@@ -1523,39 +1531,40 @@ switch(what)
                 % loop over lambda (if there are multiple per model)
                 for l=1:numLambda,
                     
-                    l1=lambdaL1{m}(l); 
-                    l2=lambdaL2{m}(l);
+                    l1=lambdaL1(l);
+                    l2=lambdaL2(l);
                     
                     R.SN = sn(s);
-                    [W,R.fR2m,R.fRm] = sc_connect_fit(yy,xx,method{m},'lambda',[l1 l2]);
+                    [W,R.fR2m,R.fRm] = sc_connect_fit(yy,xx,method,'lambda',[l1 l2]);
                     R.W={W};
                     R.lambda = [l1 l2];
-                    R.model=model{m};
-                    R.signal=signal{m};
-                    R.trainMode=trainMode{m};
-                    R.study=study(m);
-                    R.type   = {method{m}};
+                    R.lambdaIdx = l;
+                    R.model={model};
+                    R.signal={signal};
+                    R.trainMode={trainMode{t}};
+                    R.trainIdx=t;
+                    R.study=study;
+                    R.method  = {method};
                     RR=addstruct(RR,R);
-                    fprintf('lambda %d done ..\n',l)
                 end;
-               SS=addstruct(SS,RR);  
             end
         end
-        varargout={RR};
+        % save connectivity weights
+        save(fullfile(studyDir{2},connDir,'glm4','weights',sprintf('%s_%s_%s_sc%d.mat',model,signal,method,study)),'-struct','RR','-v7.3')
     case 'CONNECTIVITY:evaluate' % Evaluates predictive performance of connectivity model
         % M: is the model structure with the connectivity weights in it (M.W)
         % 'subset': what data should the evaluation be based upon?
         % 'splitby': by which variable should the evaluation be split?
         % 'meanSub': Mean pattern subtraction before evaluation?
-        model=varargin{1}; % {'162_tessellation_hem','yeo_17'}
+        model=varargin{1}; % '162_tessellation_hem' or 'yeo_17' etc
         data=varargin{2};  % 'Cerebellum_grey'
-        signal=varargin{3}; % {'fitted','residual'}
-        method=varargin{4}; % {'ridgeFixed','nonNegative'}
-        trainMode=varargin{5}; % {'crossed','uncrossed'}
-        study=varargin{6}; % evaluating on which study, 1 or 2 ? [1,2]
+        signal=varargin{3}; % 'fitted' or 'residual'
+        method=varargin{4}; % 'ridgeFixed' or 'nonNegative'
+        study=varargin{5}; % evaluating on which study, 1 or 2 ? [1,2]
+        condType=varargin{6}; % 'unique' or 'all' taskConds
         % example:
-        % sc1_sc2_CCC('CONNECTIVITY:evaluate',{'162_tessellation_hem'},{'Cerebellum_grey'},{'fitted'},{'ridgeFixed'},{'crossed'})
-
+        % sc1_sc2_CCC('CONNECTIVITY:evaluate','162_tessellation_hem','Cerebellum_grey','fitted','ridgeFixed')
+        
         % if the connectivity weights are built on sc1, then evaluate on
         % sc2
         if study==1,
@@ -1563,72 +1572,158 @@ switch(what)
         elseif  study==2,
             studyModel=1;
         end
-          
+        
         T = dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
-        incInstr=0; 
+        incInstr=0;
         meanSub = 0; % Mean pattern subtraction before prediction?
-        lambdaL1={[0]}; 
-        lambdaL2={[0]}; 
-        vararginoptions(varargin(7:end),{'lambdaL1','lambdaL2','subset','splitby','meanSub','incInstr'});
+        lambdaL1=[0];
+        lambdaL2=[0];
+        vararginoptions(varargin(7:end),{'lambdaL1','lambdaL2','subset','meanSub','incInstr','trainMode'}); % 'condType' is either 'unique or 'all'
         
         % load in the connectivity weights (X): option to load in multiple
         % models (each can have different methods, trainings etc)
-        M=sc1_sc2_CCC('CONNECTIVITY:runModel',returnSubjs,model,data,signal,method,trainMode,studyModel,'lambdaL1',lambdaL1,'lambdaL2',lambdaL2);
+        %         M=sc1_sc2_CCC('CONNECTIVITY:runModel',returnSubjs,model,data,signal,method,'trainMode',trainMode,studyModel,'lambdaL1',lambdaL1,'lambdaL2',lambdaL2);
+        M=load(fullfile(studyDir{2},connDir,'glm4','weights',sprintf('%s_%s_%s_sc%d.mat',model,signal,method,studyModel)));
         
         % Get all the mean betas and prepare the evaulation data (Y)
         [X,Y,S]=sc1_sc2_CCC('STRUCTURE:meanBeta',model,data,incInstr);
         
-        % what are we evaluating ? 
+        % what are we evaluating ?
         subset = T.StudyNum==study;
-        splitby = T.condNum;
+        switch condType,
+            case 'unique'
+                splitby = (T.condNum & T.overlap==0).*T.condNum;
+            case 'all'
+                splitby = T.condNum;
+        end
         S.subset= [subset;subset];
         if (isempty(splitby))
             splitby = ones(length(T.StudyNum),1);
         end;
         S.splitby=[splitby;splitby];  % Double for the two conditions
         sS = getrow(S,S.subset);
-        splits = unique(sS.splitby);
+        splits = unique(sS.splitby); % related to one task set
+        splits(splits==0)=[]; % remove zero
         
-        % Loop over models and evaulate
+        % Loop over subjs and evaluate
         RR=[];
-        numModels = size(M.SN,1);
-        for m=1:numModels
-            s=find(goodsubj==M.SN(m));
-            goodindx = sum(abs(Y{s}(:,:)))>0 & ~isnan(sum(Y{s}(:,:))) & ~isnan(sum(M.W{m}));
-            for sp =1:length(splits);
-                if(meanSub)
-                    for sess=1:2
-                        indx=find(S.subset & S.sess==sess & S.splitby==splits(sp));
-                        X{s}(indx,:)=bsxfun(@minus,X{s}(indx,:),mean(X{s}(indx,:)));
-                        Y{s}(indx,:)=bsxfun(@minus,Y{s}(indx,:),mean(Y{s}(indx,:)));
+        numSubjs=unique(M.SN);
+        lambdas=unique(M.lambda(M.lambda~=0));
+        if isempty(lambdas), % WTA model doesn't have any lambdas ..
+            lambdas=1;
+        end
+        % WTA model doesn't have any lambdas ..
+        trainMode=unique(M.trainMode);
+        for s=1:length(numSubjs) % subjects
+            for t=1:length(trainMode),
+                for l=1:length(lambdas),
+                    % WTA model doesn't have any lambdas ..
+                    if ~isempty(lambdas),
+                        Mm=getrow(M,M.lambdaIdx==l & M.trainIdx==t);
+                    else
+                        Mm=getrow(M,M.trainIdx==t);
+                    end
+                    indx = sum(abs(Y{s}(:,:)))>0 & ~isnan(sum(Y{s}(:,:))) & ~isnan(sum(Mm.W{s})); % why is the absolute value being taken ?
+                    %                     indx = ~isnan(sum(Y{s}(:,:))) & ~isnan(sum(Mm.W{s}));
+                    for sp =1:length(splits); % task conditions
+                        if(meanSub)
+                            for sess=1:2 % sessions
+                                indx=find(S.subset & S.sess==sess & S.splitby==splits(sp));
+                                X{s}(indx,:)=bsxfun(@minus,X{s}(indx,:),mean(X{s}(indx,:)));
+                                Y{s}(indx,:)=bsxfun(@minus,Y{s}(indx,:),mean(Y{s}(indx,:)));
+                            end;
+                        end;
+                        testAindx=[find(S.subset & S.sess==1 & S.splitby==splits(sp));...
+                            find(S.subset & S.sess==2 & S.splitby==splits(sp))];
+                        testBindx=[find(S.subset & S.sess==2 & S.splitby==splits(sp));...
+                            find(S.subset & S.sess==1 & S.splitby==splits(sp))];
+                        predY   = X{s}(testAindx,:)*Mm.W{s};                    % Predicted Y using crossvalidation
+                        predYnc = X{s}(testBindx,:)*Mm.W{s};                    % Predicted Y not crossvalidated
+                        SSP   = sum(sum(predY(:,indx).^2));             % Sum of square of predictions
+                        SSY   = sum(sum(Y{s}(testBindx,indx).^2));               % Sum of squares of data
+                        SSCp  = sum(sum(predY(:,indx).*predYnc(:,indx))); % Covariance of Predictions
+                        SSCy  = sum(sum(Y{s}(testAindx,indx).*Y{s}(testBindx,indx)));  % Covariance of Y's
+                        SSCn  = sum(sum(predYnc(:,indx).*Y{s}(testBindx,indx)));   % Covariance of non-cross prediction and data
+                        SSCc  = sum(sum(predY(:,indx).*Y{s}(testBindx,indx)));   % Covariance of cross prediction and data
+                        R.SN    = Mm.SN(s);
+                        R.lambda = Mm.lambda(s,:);
+                        R.method = Mm.method(s);
+                        R.trainMode = Mm.trainMode(s);
+                        R.model = Mm.model(s);
+                        R.Rcv   = SSCc ./ sqrt(SSY.*SSP); % Double-Crossvalidated predictive correlation
+                        R.Rnc   = SSCn ./ sqrt(SSY.*SSP); % Not double-crossvalidated predictive correlation
+                        R.Ry    = SSCy ./ SSY;            % Reliability of data: noise ceiling
+                        R.Rp    = SSCp ./ SSP;            % Reliability of prediction
+                        R.splitby = splits(sp);
+                        R.split = {condType};
+                        RR = addstruct(RR,R);
                     end;
                 end;
-                testAindx=[find(S.subset & S.sess==1 & S.splitby==splits(sp));...
-                    find(S.subset & S.sess==2 & S.splitby==splits(sp))];
-                testBindx=[find(S.subset & S.sess==2 & S.splitby==splits(sp));...
-                    find(S.subset & S.sess==1 & S.splitby==splits(sp))];
-                predY   = X{s}(testAindx,:)*M.W{m};                    % Predicted Y using crossvalidation
-                predYnc = X{s}(testBindx,:)*M.W{m};                    % Predicted Y not crossvalidated
-                SSP   = sum(sum(predY(:,goodindx).^2));             % Sum of square of predictions
-                SSY   = sum(sum(Y{s}(testBindx,goodindx).^2));               % Sum of squares of data
-                SSCp  = sum(sum(predY(:,goodindx).*predYnc(:,goodindx))); % Covariance of PRedictions
-                SSCy  = sum(sum(Y{s}(testAindx,goodindx).*Y{s}(testBindx,goodindx)));  % Covariance of Y's
-                SSCn  = sum(sum(predYnc(:,goodindx).*Y{s}(testBindx,goodindx)));   % Covariance of non-cross prediction and data
-                SSCc  = sum(sum(predY(:,goodindx).*Y{s}(testBindx,goodindx)));   % Covariance of cross prediction and data
-                R.SN    = M.SN(m);
-                R.lambda = M.lambda(m,:);
-                R.method = M.method(m);
-                R.trainMode = M.trainMode(m);
-                R.xname = M.xname(m);
-                R.Rcv   = SSCc ./ sqrt(SSY.*SSP); % Double-Crossvalidated predictive correlation
-                R.Rnc   = SSCn ./ sqrt(SSY.*SSP); % Not double-crossvalidated predictive correlation
-                R.Ry    = SSCy ./ SSY;            % Reliability of data: noise ceiling
-                R.Rp    = SSCp ./ SSP;            % Reliability of prediction
-                R.split = splits(sp);
-                RR = addstruct(RR,R);
             end;
         end;
-        varargout={RR,Y{s}(testBindx,:),predY};
+        save(fullfile(studyDir{2},connDir,'glm4','eval',sprintf('%s_%s_%s_sc%d_%s.mat',model,signal,method,study,condType)),'-struct','RR','-v7.3')
+        
+    case 'CONNECTIVITY:plot' % loads in multiple methods and compares them
+        model=varargin{1}; % '162_tessellation_hem' or 'yeo_17' etc
+        signal=varargin{2}; % 'fitted' or 'residual'
+        method=varargin{3}; % {'ridgeFixed','cplexqp_L2'}
+        study=varargin{4}; % evaluating on which study, 1 or 2 ? [1,2]
+        condType=varargin{5}; % {'unique','all'} taskConds
+        
+        RR=[];
+        for m=1:length(method),
+            for c=1:length(condType),
+                T=load(fullfile(studyDir{2},connDir,'glm4','eval',sprintf('%s_%s_%s_sc%d_%s.mat',model,signal,method{m},study,condType{c})));
+                T.methodNum=repmat(m,length(T.SN),1); 
+                RR=addstruct(RR,T);
+            end
+        end
+        
+        S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        %         % temp: fix this
+        %         T.split=cellstr(T.split);
+        %         save(fullfile(studyDir{2},connDir,'glm4','eval',sprintf('%s_%s_%s_sc%d_%s.mat',model,signal,method,study,condType)),'-struct','T','-v7.3')
+        
+        % Aesthetics
+        CAT.markertype='none';
+        CAT.errorwidth=1;
+        CAT.linecolor={'r','k'};
+        CAT.errorcolor={'r','k'};
+        CAT.linewidth={3, 3};
+        CAT.linestyle={'-','-'};
+        
+        % 'unique' versus 'all'
+        figure(1)
+        lineplot(RR.lambda(:,2),RR.Rcv,'style_thickline','split',RR.split,'leg','auto','CAT',CAT,'subset',RR.methodNum==1)
+        ylabel('R-crossval')
+        xlabel('lambda')
+        title(sprintf('%s-%s',signal,method{1}))
+        set(gca,'YLim',[.1 0.3],'FontSize',14,'ytick',[.1,.15,.2,.25,.3]);
+        
+        % 'crossed' versus 'uncrossed'
+        figure(2)
+        lineplot(RR.lambda(:,2),RR.Rcv,'style_thickline','split',RR.trainMode,'leg','auto','CAT',CAT,'subset',RR.methodNum==1)
+        ylabel('R-crossval')
+        xlabel('lambda')
+        title(sprintf('%s-%s',signal,method{1}))
+        set(gca,'YLim',[.1 0.3],'FontSize',14,'ytick',[.1,.15,.2,.25,.3]);
+        
+        % split by taskConds (unique)
+        condNames=S.condNames(S.StudyNum==study & S.overlap==0);
+        figure(3)
+        barplot(RR.splitby,RR.Rcv,'subset',strcmp(RR.split,'unique'),'subset',RR.methodNum==1)
+        ylabel('R-crossval')
+        title(sprintf('%s-%s',signal,method{1}))
+        set(gca,'YLim',[0 0.4],'FontSize',8,'XTickLabel',condNames);
+        
+        % split by taskConds (all)
+        condNames=S.condNames(S.StudyNum==study);
+        figure(4)
+        barplot(RR.splitby,RR.Rcv,'subset',strcmp(RR.split,'all'),'subset',RR.methodNum==1)
+        ylabel('R-crossval')
+        title(sprintf('%s-%s',signal))
+        set(gca,'YLim',[0 0.55],'FontSize',8,'XTickLabel',condNames);
+
         
     case 'MAP:cortex'              % Map of where projections come from
         sn=varargin{1};        % [2:22]
