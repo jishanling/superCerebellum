@@ -2479,12 +2479,9 @@ switch what
     case 'ENCODE:get_features'
         mapType=varargin{1};
         
-        <<<<<<< HEAD
-        D=dload(fullfile(baseDir,'featureTable_functionalAtlas.txt'));
-        
-        =======
+        % D=dload(fullfile(baseDir,'featureTable_functionalAtlas.txt'));
         D=dload(fullfile(baseDir,'featureTable_jd_updated.txt')); % Read feature table - updated with new features "naturalistic bio motion" and "naturalistic scenes"
-        >>>>>>> e63178d691078ec65a55edaa0221b60335df8b4a
+
         S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt')); % List of task conditions
         
         load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'SNN.mat'));
@@ -2499,11 +2496,8 @@ switch what
         D.Saccade    = D.saccades./D.duration;
         
         % remove superfluous
-        <<<<<<< HEAD
-        D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades','Imagination','LongtermMemory','SceneRecog'});
-        =======
+        % D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades','Imagination','LongtermMemory','SceneRecog'});
         D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades'});
-        >>>>>>> e63178d691078ec65a55edaa0221b60335df8b4a
         
         f=fieldnames(D);
         FeatureNames = f(5:end);
@@ -2551,11 +2545,7 @@ switch what
             B.relSuma(i,1)=(a(1))/sum(a)*100;
         end;
         
-        <<<<<<< HEAD
         %         fprintf('on average, %2.2f%% of all feature weights are accounted by the top 3 features \n with the top feature accounting for %2.2f %% \n',mean(B.relSum),mean(B.relSuma));
-        =======
-        fprintf('on average, %2.2f%% of all feature weights are accounted by the top 3 features \n with the top feature accounting for %2.2f %% \n',mean(B.relSum),mean(B.relSuma));
-        >>>>>>> e63178d691078ec65a55edaa0221b60335df8b4a
         
         varargout={B,F,W,u,condNames,FeatureNames,X,Y};
     case 'ENCODE:project_featSpace'

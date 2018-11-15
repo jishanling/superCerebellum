@@ -734,7 +734,14 @@ switch(what)
                 RR=addstruct(RR,R);
             end; 
             save(outName,'-struct','RR');
-        end;        
+        end;  
+    case 'run_connB'
+        L1=[10 25 50 100];
+        L2=[250 500 1000 1750 3500]; 
+        sc1sc2_connectivity('conn_mbeta','method','cplexqpL1L2','lambdaL1',L1,'lambdaL2',L1*0,'name','mb4_162_nn','exper',1);
+        sc1sc2_connectivity('conn_mbeta','method','cplexqpL1L2','lambdaL1',L1,'lambdaL2',L1*0,'name','mb4_162_nn','exper',2);
+        sc1sc2_connectivity('conn_mbeta','method','cplexqpL1L2','lambdaL1',L2*0,'lambdaL2',L2,'name','mb4_162_nn','exper',1);
+        sc1sc2_connectivity('conn_mbeta','method','cplexqpL1L2','lambdaL1',L2*0,'lambdaL2',L2,'name','mb4_162_nn','exper',2);
     case 'conn_ts'                 % Run encoding model on time series
         % sc1_connectivity('conn_ts',[2:22],'method','winnerTakeAll_nonNeg','name','glm4_162_nnWTA','lambdaL1',0,'lambdaL2',0);
         % sc1_connectivity('conn_ts',goodsubj,'method','winnerTakeAll','name','glm4_162_WTA','lambdaL1',0,'lambdaL2',0);
@@ -1195,8 +1202,9 @@ switch(what)
         % use the average across models 
         noiseCeil = mean(T.Rp); 
         drawline(noiseCeil,'dir','horz'); 
-        set(gca,'YLim',[0.3 1]); 
+        set(gca,'YLim',[0 1]); 
         set(gcf,'PaperPosition',[2 2 6 6]);
+        varargout={T};
         % wysiwyg;
     case 'TS_subspace_overlap'   % Determine relative eigenvalues after projection
         load(fullfile(regDir,'glm4','Covariance_by_session.mat'));
