@@ -2,7 +2,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 atlasDir='/Users/maedbhking/Documents/Atlas_templates/';
@@ -1347,17 +1347,17 @@ switch what
         % save out paint and area files
         caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.paint',outName)),M);
     case 'MAP:optimal'     % figure out optimal map for multiple clusters
-        % example:sc1_sc2_functionalAtlas('MAP:optimal',<subjNums>,1,6,'group')
+        % example:sc1_sc2_functionalAtlas('MAP:optimal',<subjNums>,1,6)
         sn=varargin{1};     % 'group' or <subjNum>
         study=varargin{2};  % 1 or 2 or [1,2]
         K=varargin{3};      % K=numClusters (i.e. 5);
         
         numCount=5;         % How often the "same" solution needs to be found
-        
-        vararginoptions({varargin{4:end}},{'sess'}); % option if doing individual sessions
-        
         tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
-        maxIter=100; % if it's not finding a similar solution - force stop at 100 iters
+        maxIter=100;        % if it's not finding a similar solution - force stop at 100 outer iterations (starting values)
+        
+        vararginoptions({varargin{4:end}},{'sess','numCount','tol_rand','maxIter'}); % option if doing individual sessions
+        
         
         % Set the String correctly
         studyStr = sprintf('SC%d',study);
@@ -1385,20 +1385,21 @@ switch what
         
         % Intialize iterations[G
         bestErr = inf;
-        bestSol = ones(size(X_C,1),1);
+        bestSol = ones(size(X_C,2),1);
         iter=1; % How many iterations
         count=0;
-        while iter<maxIter,
-            [F,G,Info,winner]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get current error
+        while iter<maxIter, % try different starting values 
+            [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get a segmentation using 
             errors(iter)=Info.error;    % record error
-            randInd(iter)=RandIndex(bestSol,winner); %
+            [~,currentSol]=max(G,[],2); % Calculate clusters based on winner-take-all assigment
+            randInd(iter)=RandIndex(bestSol,currentSol); %
             
             % Check if we have a similar solution
             if randInd(iter)>tol_rand % Similar solution
                 count=count+1;       % count up one
                 if (Info.error<bestErr)  % If we got slightly better - update
                     bestErr = Info.error;
-                    bestSol = winner;
+                    bestSol = currentSol;
                     bestG   = G;
                     bestF   = F;
                     bestInfo = Info;
@@ -1406,7 +1407,7 @@ switch what
             else                     % Different (enough) solution
                 if (Info.error<bestErr) % Is this a better solution
                     bestErr = Info.error;
-                    bestSol = winner;
+                    bestSol = currentSol;
                     bestG   = G;
                     bestF   = F;
                     bestInfo = Info;
@@ -1420,7 +1421,11 @@ switch what
             end;
             iter=iter+1;
         end;
-        save(outName,'bestG','bestF','bestInfo','errors','randInd','iter','count','volIndx','V');
+        if (nargout>0)
+            varargout={struct('G',bestG,'F',bestF,'Info',bestInfo,'errors',errors,'randInd',randInd,'iter',iter)}; 
+        else
+            save(outName,'bestG','bestF','bestInfo','errors','randInd','iter','count','volIndx','V'); % Save results only when no return argument is demanded 
+        end; 
     case 'MAP:computeR2'   % temporary function to compute SSE for SNN
         study=varargin{1}; % 1 or 2 or [1,2]
         K=varargin{2};     % K=numClusters (i.e. 5);
