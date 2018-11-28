@@ -291,7 +291,7 @@ switch(what)
         inputDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',inputMap));
         load(fullfile(inputDir,'SNN.mat'));
         Vv{1}.dim=V.dim;
-        Vv{1}.mat=V.mat;        
+        Vv{1}.mat=V.mat;
         Vv{1}.dat=zeros(V.dim);
         G = bsxfun(@rdivide,bestG,sum(bestG,2));
         numComp = size(bestG,2);
@@ -301,6 +301,62 @@ switch(what)
             M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
             suit_plotflatmap(M.data,'type','func','border',[],'cscale',[0 0.4])
         end;
+    case 'SNN:bootstrap'
+        type = 'oldF';      % {'oldF','newF'}: Estimate a new F every bootstrap interation?
+        study=[1 2];        % Study 1 or 2 or [1,2]
+        K=10;               % K=numClusters (i.e. 5);
+        numBSIter = 20;     % Number of Bootstrap iterations
+        vararginoptions(varargin,{'type','study','K','numBSIter'});
+        S=sc1_sc2_functionalAtlas('MAP:optimal',returnSubjs,study,K); % Find solution on full
+        
+        N =length(returnSubjs);
+        for i=1:numBSIter
+            % sample with replacement
+            T.samp(i,:)=returnSubjs(unidrnd(N,1,N));
+            switch (type)
+                case 'oldF'
+                    [X,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',T.samp(i,:),study,'build');
+                    [N,P] = size(X);
+                    G=zeros(K,P);
+                    for p=1:P
+                        G(:,p) = lsqnonneg(S.bestF,X(:,p));
+                    end;
+                    G=G';
+                case 'newF'
+                    S1=sc1_sc2_functionalAtlas('MAP:optimal',T.samp(i,:),study,K); % Find solution on boostrap
+                    G=S1.bestG';
+            end;
+            keyboard;
+            
+        end;
+    case 'CLUSTER:LocalRand'
+        compare={'groupEval_SC12_7cluster','groupEval_SC12_8cluster','groupEval_SC12_9cluster',...
+           'groupEval_SC12_10cluster','groupEval_SC12_11cluster','groupEval_SC12_12cluster',...
+           'groupEval_SC1_7cluster','groupEval_SC1_8cluster','groupEval_SC1_9cluster',...
+           'groupEval_SC1_10cluster','groupEval_SC1_11cluster','groupEval_SC1_12cluster',...
+           'groupEval_SC2_7cluster','groupEval_SC2_8cluster','groupEval_SC2_9cluster',...
+           'groupEval_SC2_10cluster','groupEval_SC2_11cluster','groupEval_SC2_12cluster',...
+           };
+        radius = 10; 
+        vararginoptions(varargin,{'radius','compare'}); 
+        numMaps = length(compare);
+        for i=1:numMaps
+            T=load(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'SNN.mat'));
+            [~,c(:,i)]=max(T.bestG,[],2);
+        end;
+        ar=[];
+        [x,y,z]=ind2sub(T.V.dim,T.volIndx);
+        [x,y,z]=spmj_affine_transform(x,y,z,T.V.mat);
+        xyz=[x;y;z];
+        D=surfing_eucldist(xyz,xyz);        % Eucledian distance
+
+        for i=1:numMaps-1
+            for j=i+1:numMaps
+                ar(:,end+1)=RandIndexLocal(c(:,i),c(:,j),D,radius); 
+            end;
+        end;
+        sc1sc2_spatialAnalysis('visualise_map',mean(ar,2),T.volIndx,T.V,'type','func');
+        max(mean(ar,2))
         
     case 'visualise_map' % Plot any data on the cerebellar flatmap
         data = varargin{1};     % Data to plot
