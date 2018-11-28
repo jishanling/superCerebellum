@@ -1356,7 +1356,10 @@ switch what
         tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
         maxIter=100;        % if it's not finding a similar solution - force stop at 100 outer iterations (starting values)
         
-        vararginoptions({varargin{4:end}},{'sess','numCount','tol_rand','maxIter'}); % option if doing individual sessions
+        algorithmName = {'SNN','CNV'}; % Semi-nonengative matrix fact. vs. Convex non-negative matrix factorization 
+        algorithmString = {'Eval','Cnvf'}; % Semi-nonengative mare
+        algorithm = 2; 
+        vararginoptions({varargin{4:end}},{'sess','numCount','tol_rand','maxIter','algorithm'}); % option if doing individual sessions
         
         
         % Set the String correctly
@@ -1368,16 +1371,17 @@ switch what
         % Set output filename: group or indiv ?
         if strcmp(sn,'group'), % group
             sn=returnSubjs;
+            
             if exist('sess'),
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_sess%d_%dcluster',studyStr,sess,K));
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('group%s_%s_sess%d_%dcluster',algorithmString{algorithm},studyStr,sess,K));
             else
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%dcluster',studyStr,K));
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('group%s_%s_%dcluster',algorithmString{algorithm},studyStr,K));
             end
             dircheck(outDir);
             outName=fullfile(outDir,'SNN.mat');
         else % indiv
             outDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
-            outName=fullfile(outDir,sprintf('SNN_%s_%dcluster.mat',studyStr,K));
+            outName=fullfile(outDir,sprintf('%s_%s_%dcluster.mat',algorithmName{algorithm},studyStr,K));
         end
         
         % get data
@@ -1389,7 +1393,12 @@ switch what
         iter=1; % How many iterations
         count=0;
         while iter<maxIter, % try different starting values 
-            [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get a segmentation using 
+            switch (algorithm)
+                case 1
+                    [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get a segmentation using 
+                case 2 % convec
+                    [F,G,Info]=cnvSemiNonNegMatFac(X_C,K,'threshold',0.01); % get a segmentation using 
+            end; 
             errors(iter)=Info.error;    % record error
             [~,currentSol]=max(G,[],2); % Calculate clusters based on winner-take-all assigment
             randInd(iter)=RandIndex(bestSol,currentSol); %
