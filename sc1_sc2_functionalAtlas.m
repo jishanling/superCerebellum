@@ -1397,7 +1397,7 @@ switch what
                 case 1
                     [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get a segmentation using 
                 case 2 % convec
-                    [F,G,Info]=cnvSemiNonNegMatFac(X_C,K,'threshold',0.01); % get a segmentation using 
+                    [F,G,Info]=cnvSemiNonNegMatFac(X_C,K,'threshold',0.01,'maxIter',500); % get a segmentation using 
             end; 
             errors(iter)=Info.error;    % record error
             [~,currentSol]=max(G,[],2); % Calculate clusters based on winner-take-all assigment

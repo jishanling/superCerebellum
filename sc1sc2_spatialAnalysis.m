@@ -305,30 +305,101 @@ switch(what)
         type = 'oldF';      % {'oldF','newF'}: Estimate a new F every bootstrap interation?
         study=[1 2];        % Study 1 or 2 or [1,2]
         K=10;               % K=numClusters (i.e. 5);
-        numBSIter = 20;     % Number of Bootstrap iterations
-        vararginoptions(varargin,{'type','study','K','numBSIter'});
-        S=sc1_sc2_functionalAtlas('MAP:optimal',returnSubjs,study,K); % Find solution on full
+        numBSIter = 1000;     % Number of Bootstrap iterations
+        algorithmString = {'Eval','Cnvf'}; % Semi-nonengative mare
+        algorithm = 2; 
+        vararginoptions(varargin,{'type','study','K','numBSIter','algorithm'});
         
+        % Set the String correctly
+        studyStr = sprintf('SC%d',study);
+        if length(study)>1
+            studyStr='SC12'; % both studies combined
+        end        
+        outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('group%s_%s_%dcluster',algorithmString{algorithm},studyStr,K));
+
+        S = load(fullfile(outDir,'SNN.mat')); 
         N =length(returnSubjs);
+        
+        
+        
         for i=1:numBSIter
-            % sample with replacement
-            T.samp(i,:)=returnSubjs(unidrnd(N,1,N));
+            % sample with replacement 
+            if (i==1)
+                T.samp(i,:)=returnSubjs; 
+            else 
+                T.samp(i,:)=returnSubjs(unidrnd(N,1,N));
+            end; 
+            [X,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',T.samp(i,:),study,'build');
             switch (type)
-                case 'oldF'
-                    [X,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',T.samp(i,:),study,'build');
-                    [N,P] = size(X);
-                    G=zeros(K,P);
-                    for p=1:P
-                        G(:,p) = lsqnonneg(S.bestF,X(:,p));
-                    end;
-                    G=G';
                 case 'newF'
-                    S1=sc1_sc2_functionalAtlas('MAP:optimal',T.samp(i,:),study,K); % Find solution on boostrap
-                    G=S1.bestG';
+                    switch (algorithm)
+                        case 1
+                            [F,G,Info]=semiNonNegMatFac(X,K,'G0',S.bestG,'threshold',0.001); % get a segmentation using 
+                        case 2 % convec
+                            [F,G,Info]=cnvSemiNonNegMatFac(X,K,'G0',S.bestG,'threshold',0.01,'maxIter',100); % get a segmentation using 
+                    end; 
+                    keyboard; 
+                case 'oldF'
+                    [M,P]=size(X); 
+                    G=zeros(P,K);
+                    for p=1:P
+                        G(p,:) = lsqnonneg(double(S.bestF),X(:,p));
+                    end;
+                    R = X-double(S.bestF)*G'; 
+                    T.Error(i,1)=sum(sum(R.*R)); 
+                    [~,g]=max(G,[],2); 
+                    T.assign(i,:)=g';
+                    fprintf('.'); 
             end;
-            keyboard;
-            
         end;
+        fprintf('\n'); 
+        save(fullfile(outDir,'bootstrap_oldF.mat'),'-struct','T');
+        varargout={T};
+    case 'SNN:bootstrap_eval' 
+        T=load('bootstrap_oldF.mat');  
+        [~,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',2,1,'build'); % Get V and volindx 
+        N=size(T.Error,1); 
+        for n=2:N 
+            T.RandIndx(n,1)=RandIndex(T.assign(1,:)',T.assign(n,:)'); 
+        end; 
+        % Generate map of assignments 
+        CON=bsxfun(@eq,T.assign(2:N,:),T.assign(1,:)); % Consistency of assignment 
+        con = mean(CON); 
+        figure(1); 
+        histplot(T.RandIndx(2:end),'numcat',10); 
+        
+        % If cmap is file, load and normalize 
+        cmap=dlmread('colourMap.txt');
+        cmap = cmap(:,2:end); 
+        cmap = bsxfun(@rdivide,cmap,max(cmap)); 
+        
+        figure(2); 
+        sc1sc2_spatialAnalysis('visualise_map',T.assign(1,:)',volIndx,V,'type','label','cmap',cmap); 
+        figure(3); 
+        sc1sc2_spatialAnalysis('visualise_map',con',volIndx,V,'type','func');
+        figure(4); % Weighted color index 
+        COL=cmap(T.assign(1,:)',:); % color data 
+        sc1sc2_spatialAnalysis('visualise_map',COL,volIndx,V,'type','rgb');
+        keyboard; 
+    case 'Cluster:GlobalRand' 
+        compare={'groupCnvf_SC12_10cluster','groupCnvf_SC1_10cluster','groupCnvf_SC2_10cluster'};
+        compare={'groupEval_SC12_10cluster','groupEval_SC1_10cluster','groupEval_SC2_10cluster'};
+        compare={'groupCnvf_SC12_7cluster','groupCnvf_SC1_7cluster','groupCnvf_SC2_7cluster'};
+        compare={'groupEval_SC12_7cluster','groupEval_SC1_7cluster','groupEval_SC2_7cluster'};
+        numMaps = length(compare);
+        for i=1:numMaps
+            T=load(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'SNN.mat'));
+            [~,c(:,i)]=max(T.bestG,[],2);
+        end;
+
+        for i=1:numMaps-1
+            for j=i+1:numMaps
+                AR(i,j)=RandIndex(c(:,i),c(:,j));
+                AR(j,i)=AR(i,j); 
+            end;
+        end;
+        varargout={AR}; 
+        
     case 'CLUSTER:LocalRand'
         compare={'groupEval_SC12_7cluster','groupEval_SC12_8cluster','groupEval_SC12_9cluster',...
            'groupEval_SC12_10cluster','groupEval_SC12_11cluster','groupEval_SC12_12cluster',...
@@ -365,7 +436,7 @@ switch(what)
         cmap = [];
         type = 'label';     % func / label
         vararginoptions(varargin(4:end),{'cmap','type'});
-        
+                    
         % map features on group
         V.dat=zeros([V.dim(1) V.dim(2) V.dim(3)]);
         V.dat(volIndx)=data;
@@ -376,7 +447,7 @@ switch(what)
                 if (isempty(cmap))
                     cmap = colorcube(max(data));
                 end;
-            case 'func'
+            case {'func','rgb'}
                 stats = 'nanmean';
                 if (isempty(cmap))
                     cmap = hot;
@@ -634,8 +705,7 @@ switch(what)
             RR = addstruct(RR,R);
             fprintf('uncrossval eval done for subj %d \n',sn(s));
         end;
-        save(outDir,'-struct','RR');
-        
+        save(outDir,'-struct','RR');      
     case 'EVALBOUND:Figure'
         set(gcf,'position',[10 10 1600 800]);
         
