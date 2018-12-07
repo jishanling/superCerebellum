@@ -374,13 +374,32 @@ switch(what)
         cmap = bsxfun(@rdivide,cmap,max(cmap)); 
         
         figure(2); 
-        sc1sc2_spatialAnalysis('visualise_map',T.assign(1,:)',volIndx,V,'type','label','cmap',cmap); 
+        LA=sc1sc2_spatialAnalysis('visualise_map',T.assign(1,:)',volIndx,V,'type','label','cmap',cmap); 
+        
         figure(3); 
-        sc1sc2_spatialAnalysis('visualise_map',con',volIndx,V,'type','func');
+        CO=sc1sc2_spatialAnalysis('visualise_map',con',volIndx,V,'type','func');
+        
         figure(4); % Weighted color index 
-        COL=cmap(T.assign(1,:)',:); % color data 
-        sc1sc2_spatialAnalysis('visualise_map',COL,volIndx,V,'type','rgb');
-        keyboard; 
+        i = ~isnan(LA.data); 
+        RGB = nan(size(LA.data,1),3);
+        HSV = nan(size(LA.data,1),3);
+        
+        RGB(i,:)=cmap(LA.data(i),:); % color data 
+        HSV(i,:) = rgb2hsv(RGB(i,:)); % color data 
+        minCO = 0.5; % min(CO.data(i,1)); 
+        scaleC = (CO.data(i,1)-minCO)./(1-minCO); 
+        scaleC(scaleC<0)=0; 
+        HSV(i,2) = HSV(i,2).*scaleC; 
+        HSV(i,3) = (1-scaleC).*0.7+scaleC.*HSV(i,3); % Towards light gray 
+        mRGB(i,:) = hsv2rgb(HSV(i,:)); % color data 
+        suit_plotflatmap(mRGB,'type','rgb');
+        
+        figure(5); % Different Alphas 
+        scaleA=nan(size(RGB,1),1); 
+        scaleA(i,1)=scaleC; 
+        suit_plotflatmap(RGB,'type','rgb','alpha',scaleA);
+        
+        
     case 'Cluster:GlobalRand' 
         compare={'groupCnvf_SC12_10cluster','groupCnvf_SC1_10cluster','groupCnvf_SC2_10cluster'};
         compare={'groupEval_SC12_10cluster','groupEval_SC1_10cluster','groupEval_SC2_10cluster'};
