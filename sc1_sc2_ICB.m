@@ -465,29 +465,54 @@ switch what
         save(outName,'-struct','RR');
     case 'EVAL:PLOT:CURVES'
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
-        type=varargin{2}; % 'group' or 'indiv'
         
-        vararginoptions({varargin{3:end}},{'CAT','sn'}); % option if doing individual map analysis
+        vararginoptions({varargin{2:end}},{'CAT','sn'}); % option if doing individual map analysis
         
-        switch type,
-            case 'group'
-                T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'spatialBoundfunc_ICB.mat'));
-            case 'indiv'
-                T=[];
-                for s=1:length(sn)
-                    tmp=load(fullfile(studyDir{2},'encoding','glm4',MDTB_subjs{sn(s)},sprintf('%s_spatialBoundfunc_ICB.mat',mapType)));
-                    S=getrow(tmp,tmp.SN==sn(s)); % only predicting the same subject !
-                    T=addstruct(T,S);
-                end
-            otherwise
-                fprintf('no such case')
+        T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'spatialBoundfunc_ICB.mat'));
+        
+        % distances are diff across evals so need to get dist per bin:
+        for b=1:length(unique(T.bin)),
+            dist=mode(round(T.dist(T.bin==b)));
+            idx=find(T.bin==b);
+            T.dist(idx,1)=dist;
         end
-        
+
         if exist('CAT'),
             xyplot(T.dist,T.corr,T.dist,'split',T.bwParcel,'subset',T.crossval==0 & T.dist<=35,'CAT',CAT,'leg',{'within','between'},'leglocation','SouthEast');
         else
             xyplot(T.dist,T.corr,T.dist,'split',T.bwParcel,'subset',T.crossval==0 & T.dist<=35,'leg',{'within','between'},'leglocation','SouthEast');
         end
+    case 'EVAL:STATS:CURVES'
+        mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
+        crossval=0;
+        
+        T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'spatialBoundfunc_ICB.mat'));
+        
+        % do stats (over all bins) for group only
+        C=getrow(T,T.crossval==crossval & T.dist<=35); % only crossval and dist<35
+        S=tapply(C,{'bwParcel','SN'},{'corr'});
+        fprintf('overall \n')
+        ttest(S.corr(S.bwParcel==0), S.corr(S.bwParcel==1),2,'paired');
+        
+        % calculate effect size
+        Group1=S.corr(S.bwParcel==0);
+        Group2=S.corr(S.bwParcel==1);
+        
+        num=((Group1-1)*std(Group1)^2 + (Group2-1)*std(Group2)^2);
+        denom=Group1+Group2-2;
+        
+        pooledSTD= sqrt(mean(num)/mean(denom));
+        
+        ES_pooled=(mean(Group1)-mean(Group2))/pooledSTD;
+        
+        fprintf('Effect size for within and between for %s is %2.2f when denom is pooled std  \n',mapType,ES_pooled);
+        
+        % summary stats
+        x1=nanmean(S.corr(S.bwParcel==0));x2=nanmean(S.corr(S.bwParcel==1));
+        SEM1=std(S.corr(S.bwParcel==0))/sqrt(length(T.SN));SEM2=std(S.bwParcel==1)/sqrt(length(T.SN));
+        fprintf('average within corr is %2.2f; CI:%2.2f-%2.2f \n average between corr is %2.2f; CI:%2.2f-%2.2f \n',...
+            nanmean(S.corr(S.bwParcel==0)),x1-(1.96*SEM1),x1+(1.96*SEM1),nanmean(S.corr(S.bwParcel==1)),...
+            x2-(1.96*SEM2),x2+(1.96*SEM2));
         
     case 'AXES:group_curves' % make separate graphs for 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_10cluster'
         toPlot=varargin{1}; % 'SC12_10cluster'
@@ -500,10 +525,10 @@ switch what
         CAT.linewidth={2, 2};
         CAT.linestyle={'-','-'};
         
-        sc1_sc2_ICB('EVAL:PLOT:CURVES',toPlot,'group','CAT',CAT);
+        sc1_sc2_ICB('EVAL:PLOT:CURVES',toPlot,'CAT',CAT);
         
         % Labelling
-        set(gca,'YLim',[0 0.3],'XLim',[0 35],'FontSize',10,'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'}); %
+        set(gca,'YLim',[0 0.3],'XLim',[0 35],'FontSize',14,'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'}); %
         xlabel('Spatial Distances (mm)');
         ylabel('Activity Correlation (R)');
         %         title(plotName);
