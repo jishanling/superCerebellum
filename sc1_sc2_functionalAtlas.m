@@ -2954,7 +2954,7 @@ switch what
     case 'AXES:diff_curves' % make summary graph for diff curves for all maps
         toPlot=varargin{1};% {'SC12_5cluster','SC12_7cluster','SC12_9cluster','SC12_11cluster','SC12_13cluster','SC12_15cluster','SC12_17cluster'}
         plotName=varargin{2}; % {'5','7','9','11','13','15','17};
-        evalNums=varargin{3}; % repmat([4],length(plotName),1)
+        evalNums=varargin{3}; % repmat([4],length(plotName),1) 4: Unique tasks, averaged across sc1/sc2
         
         % aesthetics
         CAT.errorwidth=.5;
