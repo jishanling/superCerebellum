@@ -1,14 +1,15 @@
 function varargout=sc1_sc2_HCP(what,varargin)
 
 % Directories
-baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+baseDir_orig          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+baseDir          = '/Volumes/Seagate Backup Plus Drive';
 % baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 atlasDir='/Users/maedbhking/Documents/Atlas_templates/';
 
-studyDir{1}     =fullfile(baseDir,'sc1');
-studyDir{2}     =fullfile(baseDir,'sc2');
+studyDir{1}     =fullfile(baseDir_orig,'sc1');
+studyDir{2}     =fullfile(baseDir_orig,'sc2');
 HCPDir          =fullfile(baseDir,'hcp');
 studyStr        = {'SC1','SC2','SC12'};
 behavDir        ='/data';
@@ -124,9 +125,14 @@ loc_AC = {[-94,-131,-114],... %s100307
     [-99,-130,-108],... %s899885
     };
 
-taskNames = {'EM_FACES','EM_SHAPES','GA_PUNISH','GA_REWARD','LA_MATH','LA_STORY','MO_CUE',...
-    'MO_LF','MO_LH','MO_PLACE','MO_RF','MO_RH','MO_T','WM_TOOL','WM_PLACE','WM_0BCK','WM_2BK',...
+taskNames_new = {'EM_FACES','EM_SHAPES','GA_PUNISH','GA_REWARD','LA_MATH','LA_STORY','MO_CUE',...
+    'MO_LF','MO_LH','MO_RF','MO_RH','MO_T','WM_TOOL','WM_PLACE','WM_0BK','WM_2BK',...
+    'WM_BODY','WM_FACE','RE_MATCH','RE_REL','SO_RANDOM','SO_TOM','rest'};
+
+taskNames={'EM_FACES','EM_SHAPES','GA_PUNISH','GA_REWARD','LA_MATH','LA_STORY','MO_CUE',...
+    'MO_LF','MO_LH','MO_RF','MO_RH','MO_T','WM_TOOL','WM_PLACE','WM_0BK','WM_2BK',...
     'WM_BODY','WM_FACE','RE_MATCH','RE_REL','SO_RANDOM','SO_TOM'};
+
 
 switch what
     
@@ -474,6 +480,8 @@ switch what
         volIndx=find(X>grey_threshold);
         [i,j,k]= ind2sub(size(X),volIndx');
         
+        P=size(volIndx,1); % number of voxels
+        
         T=[];
         for s=1:length(HCP_subjs),
             
@@ -489,45 +497,45 @@ switch what
                     S.condName{c,1}=taskNames{c};
                     S.condNum(c,1)=c;
                     S.SN(c,1)=HCP_subjs(s);
-                    %                     S.volIndx(c,:)=volIndx';
                 end
                 fprintf('subj %d done for %s contrast \n',HCP_subjs(s),taskNames{c})
             end
+            % add intercept (rest)
+            S.data=[S.data; zeros(1,P)];
+            S.condName=[S.condName;'rest'];
+            S.condNum=[S.condNum;c+1];
+            S.SN=[S.SN;HCP_subjs(s)];
             T=addstruct(T,S);
             clear S
         end
         outName=fullfile(HCPDir,'suit','contrasts','cereb_avrgDataStruct.mat');
         save(outName,'T','volIndx','V');
         
-    case 'ACTIVITY:map2surf'
-        
-        outDir=fullfile(studyDir{2},caretDir,'suit_flat','glm4');
+    case 'ACTIVITY:SNR'
         
         load(fullfile(HCPDir,'suit','contrasts','cereb_avrgDataStruct.mat'));
         
-        CN=unique(T.condNum(T.condNum~=0));
+        outDir=fullfile(studyDir{2},caretDir,'suit_flat','glm4');
+        
+        CN=unique(T.condNum(T.condNum~=0)); % task conditions
+        condNames=unique(T.condName(T.condNum~=0));
+        P=size(T.data,2); % number of voxels
         
         % Tet up volume info
         Yy=zeros(length(CN),V.dim(1)*V.dim(2)*V.dim(3));
         C{1}.dim=V.dim;
         C{1}.mat=V.mat;
         
-        % get group maps for contrasts
-        
+        % loop over tasks
+        % calculate SSQ, variance, sd
         for c=1:length(CN),
             A=getrow(T,T.condNum==CN(c));
-            B(c,:)=nanmean(A.data,1);
-            fprintf('getting group contrast for %s \n',taskNames{CN(c)})
+            A_avrg=nanmean(A.data,1);
+            SSQ(c,:)=bsxfun(@minus,A_avrg,nanmean(A_avrg));
         end
         
-        % subtract baseline - do we have a baseline here ??
-        %         baseline=nanmean(B,1);
-        %         B=bTxfun(@minus,B,baseline);
-        
-        % zscore the activity patterns
-        B=zscore(B);
-        
-        Yy(:,volIndx)=B;
+        Yy(:,volIndx)=SSQ;
+        outName='HCP_SSQ';
         
         % map vol2surf
         indices=reshape(Yy,[size(Yy,1) V.dim(1),V.dim(2),V.dim(3)]);
@@ -535,7 +543,46 @@ switch what
             data=reshape(indices(i,:,:,:),[C{1}.dim]);
             C{i}.dat=data;
         end
-        P=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',taskNames(CN));  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
+        P=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',condNames');  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
+        
+        % save out metric
+        caret_save(fullfile(outDir,sprintf('%s.metric',outName)),P);
+    case 'ACTIVITY:patterns'
+        outDir=fullfile(studyDir{2},caretDir,'suit_flat','glm4');
+        
+        load(fullfile(HCPDir,'suit','contrasts','cereb_avrgDataStruct.mat'));
+        
+        CN=unique(T.condNum(T.condNum~=0));
+        SN=unique(T.SN(T.condNum~=0));
+        
+        % Set up volume info
+        Yy=zeros(length(CN),V.dim(1)*V.dim(2)*V.dim(3));
+        C{1}.dim=V.dim;
+        C{1}.mat=V.mat;
+        
+        % do normalisation (subtract avrg taskCond)
+        for c=1:length(CN),
+            A=getrow(T,T.condNum==CN(c));
+            B(c,:,:)=A.data;
+        end
+        % subtract baseline (avrg of all taskConds from each task)
+        B_avrg=nanmean(B,1);
+        Bb=bsxfun(@minus,B,B_avrg);
+        
+        % get group avrg
+        B=permute(Bb,[1,3,2]);
+        B_group=nanmean(B,3);
+        
+        Yy(:,volIndx)=B_group;
+        
+        % map vol2surf
+        indices=reshape(Yy,[size(Yy,1) V.dim(1),V.dim(2),V.dim(3)]);
+        for i=1:size(indices,1),
+            data=reshape(indices(i,:,:,:),[C{1}.dim]);
+            C{i}.dat=data;
+        end
+        
+        P=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',taskNames_new(CN));  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
         
         % save out metric
         outName='HCP_contrasts';
@@ -560,17 +607,85 @@ switch what
         M=caret_suit_map2surf(Vv,'space','SUIT');
         
         suit_plotflatmap(M.data)
-    case 'EVAL:HCP'% Evaluate group Map on HCP data
+    case 'ACTIVITY:indiv'
+        
+        outDir=fullfile(studyDir{2},caretDir,'suit_flat','glm4');
+        
+        load(fullfile(HCPDir,'suit','contrasts','cereb_avrgDataStruct.mat'));
+        
+        CN=unique(T.condNum(T.condNum~=0));
+        SN=unique(T.SN(T.SN~=0));
+        P=size(T.data,2);
+        B=zeros(length(SN),P,length(CN));
+        
+        % Set up volume info
+        Yy=zeros(length(CN),V.dim(1)*V.dim(2)*V.dim(3),length(SN));
+        C{1}.dim=V.dim;
+        C{1}.mat=V.mat;
+        
+        % fix baseline here
+        for c=1:length(CN),
+            A=getrow(T,T.condNum==CN(c));
+            A_avrg=nanmean(A.data,1);
+            B(:,:,c)=bsxfun(@minus,A.data,A_avrg);
+        end
+        
+        B=permute(B,[3 2 1]);
+        Yy(:,volIndx,:)=B;
+        
+        % map vol2surf
+        idx=1;
+        indices=reshape(Yy,[size(Yy,1) V.dim(1),V.dim(2),V.dim(3) size(Yy,3)]);
+        for i=1:size(indices,1), % loop over taskConds
+            for ii=1:size(indices,5), % loop over subjs
+                data=reshape(indices(i,:,:,:,ii),[C{1}.dim]);
+                C{idx}.dat=data;
+                colNames{idx}=sprintf('%s-subj%d',taskNames_new{i},ii);
+                idx=idx+1;
+                fprintf('%s-subj%d done \n',taskNames_new{CN(i)},ii)
+            end
+        end
+        
+        P=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',colNames);  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
+        
+        % save out metric
+        outName='HCP_contrasts_allSubjs';
+        caret_save(fullfile(outDir,sprintf('%s.metric',outName)),P);
+        
+    case 'EVAL:HCP'       % evaluate group map on individual HCP data
         mapType=varargin{1}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks', 'Cole_10Networks'
+        condType=varargin{2}; % which subset of tasks are we choosing 'subset1', 'subset2' ...
         
         % load in func data to test (e.g. if map is sc1; func data should
         % be sc2)
         load(fullfile(HCPDir,'suit','contrasts','cereb_avrgDataStruct.mat'));
         
+        CN=unique(T.condNum(T.condNum~=0));
+        condNames=T.condName(CN);
+        SN=unique(T.SN(T.SN~=0));
+        P=size(T.data,2);
+        
+        switch condType,
+            case 'subset1' % includes all taskConds
+                idx=CN';
+            case 'subset2' % doesn't include cue, lf, rf, tongue, la-story
+                idx=[1:5,9,11,13,14,16:23];
+            case 'subset3' % doesn't include cue, lf, rf, tongue
+                idx=[1:6,9,11,13,14,16:23];
+        end
+        
+        % do normalisation (subtract avrg taskCond)
+        for c=1:length(idx),
+            A=getrow(T,T.condNum==idx(c));
+            B(c,:,:)=A.data;
+        end
+        % subtract baseline (avrg of all taskConds from each task)
+        B_avrg=nanmean(B,1);
+        Bb=bsxfun(@minus,B,B_avrg);
+        
         % load in group map
         mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
-        outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'spatialBoundfunc_HCP.mat');
-        sn=unique(T.SN(T.SN~=0))';
+        outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s.mat',condType));
         
         volIndx=volIndx';
         
@@ -588,8 +703,78 @@ switch what
         [BIN,R]=mva_spatialCorrBin(XYZ(:,voxIn),'Parcel',Parcel(1,voxIn));
         clear XYZ i k l x y z i1 j1 k1 VA Parcel; % Free memory
         % Now calculate the estimation of the correlation for each subject
-        for s=sn,
-            D=T.data(find(T.SN==s),voxIn);
+        for s=1:length(SN),
+            D=Bb(:,s,voxIn);
+            D=permute(D,[1,3,2]); % conditions x voxels
+            fprintf('%d cross\n',s);
+            R.SN = ones(length(R.N),1)*s;
+            R.corr=mva_spatialCorr(D,BIN);
+            R.crossval = zeros(length(R.corr),1);
+            RR = addstruct(RR,R);
+        end;
+        save(outName,'-struct','RR');
+    case 'EVAL:HCP_groupSubj'       % evaluate group map on individual HCP data
+        mapType=varargin{1}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks', 'Cole_10Networks'
+        condType=varargin{2}; % which subset of tasks are we choosing 'subset1', 'subset2' ...
+        groupSize=varargin{3}; % how many subjs are we grouping together ? 10,25,50,100 etc
+        
+        % load in func data to test (e.g. if map is sc1; func data should
+        % be sc2)
+        load(fullfile(HCPDir,'suit','contrasts','cereb_avrgDataStruct.mat'));
+        
+        CN=unique(T.condNum(T.condNum~=0));
+        condNames=T.condName(CN);
+        SN=unique(T.SN(T.SN~=0));
+        P=size(T.data,2);
+        
+        switch condType,
+            case 'subset1' % includes all taskConds
+                idx=CN';
+            case 'subset2' % doesn't include cue, lf, rf, tongue, la-story
+                idx=[1:5,9,11,13,14,16:23];
+            case 'subset3' % doesn't include cue, lf, rf, tongue
+                idx=[1:6,9,11,13,14,16:23];
+        end
+        
+        % do normalisation (subtract avrg taskCond)
+        for c=1:length(idx),
+            A=getrow(T,T.condNum==idx(c));
+            B(c,:,:)=A.data;
+        end
+        % subtract baseline (avrg of all taskConds from each task)
+        B_avrg=nanmean(B,1);
+        Bb=bsxfun(@minus,B,B_avrg);
+        
+        % group subjs into 10
+        groups=[0:groupSize:100];
+        for s=1:length(groups)-1,
+            tmp=Bb(:,groups(s)+1:groups(s+1),:);
+            Bb_group(:,s,:)=nanmean(tmp,2);
+        end
+        
+        % load in group map
+        mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
+        outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s_groupSize%d.mat',condType,groupSize));
+        
+        volIndx=volIndx';
+        
+        % Now get the parcellation sampled into the same space
+        [i,j,k]=ind2sub(V.dim,volIndx);
+        [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
+        VA= spm_vol(mapName);
+        [i1,j1,k1]=spmj_affine_transform(x,y,z,inv(VA.mat));
+        Parcel = spm_sample_vol(VA,i1,j1,k1,0);
+        % Divide the voxel pairs into all the spatial bins that we want
+        fprintf('parcels\n');
+        voxIn = Parcel>0;
+        XYZ= [x;y;z];
+        RR=[];
+        [BIN,R]=mva_spatialCorrBin(XYZ(:,voxIn),'Parcel',Parcel(1,voxIn));
+        clear XYZ i k l x y z i1 j1 k1 VA Parcel; % Free memory
+        % Now calculate the estimation of the correlation for each subject
+        for s=1:length(groups)-1,
+            D=Bb_group(:,s,voxIn);
+            D=permute(D,[1,3,2]); % conditions x voxels
             fprintf('%d cross\n',s);
             R.SN = ones(length(R.N),1)*s;
             R.corr=mva_spatialCorr(D,BIN);
@@ -599,10 +784,11 @@ switch what
         save(outName,'-struct','RR');
     case 'EVAL:PLOT:CURVES'
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
+        condType=varargin{2}; % 'subset1', 'subset2' etc
         
-        vararginoptions({varargin{2:end}},{'CAT','sn'}); % option if doing individual map analysis
+        vararginoptions({varargin{3:end}},{'CAT','sn'}); % option if doing individual map analysis
         
-        T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'spatialBoundfunc_HCP.mat'));
+        T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s.mat',condType)));
         
         % distances are diff across evals so need to get dist per bin:
         for b=1:length(unique(T.bin)),
@@ -610,7 +796,7 @@ switch what
             idx=find(T.bin==b);
             T.dist(idx,1)=dist;
         end
-
+        
         if exist('CAT'),
             xyplot(T.dist,T.corr,T.dist,'split',T.bwParcel,'subset',T.crossval==0 & T.dist<=35,'CAT',CAT,'leg',{'within','between'},'leglocation','SouthEast');
         else
@@ -618,9 +804,10 @@ switch what
         end
     case 'EVAL:STATS:CURVES'
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
+        condType=varargin{2};
         crossval=0;
-
-        T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'spatialBoundfunc_HCP.mat'));
+        
+        T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s.mat',condType)));
         
         % do stats (over all bins) for group only
         C=getrow(T,T.crossval==crossval & T.dist<=35); % only crossval and dist<35
@@ -647,9 +834,90 @@ switch what
         fprintf('average within corr is %2.2f; CI:%2.2f-%2.2f \n average between corr is %2.2f; CI:%2.2f-%2.2f \n',...
             nanmean(S.corr(S.bwParcel==0)),x1-(1.96*SEM1),x1+(1.96*SEM1),nanmean(S.corr(S.bwParcel==1)),...
             x2-(1.96*SEM2),x2+(1.96*SEM2));
+    case 'EVAL:PLOT:DIFF'
+        mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
+        condType=varargin{2}; % 'subset1', 'subset2' etc
+        
+        vararginoptions({varargin{3:end}},{'CAT','sn'}); % option if plotting individual map analysis
+        
+        T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s.mat',condType)));  %sprintf('spatialBoundfunc_HCP_%s.mat',condType)
+        
+        % distances are diff across evals so need to get dist per bin:
+        for b=1:length(unique(T.bin)),
+            dist=mode(round(T.dist(T.bin==b)));
+            idx=find(T.bin==b);
+            T.dist(idx,1)=dist;
+        end
+        
+        % plot boxplot of different clusters
+        W=getrow(T,T.bwParcel==0); % within
+        B=getrow(T,T.bwParcel==1); % between
+        W.diff=W.corr-B.corr;
+        W=rmfield(W,{'bwParcel','crossval','corr'});
+        
+        if exist('CAT'),
+            lineplot(W.dist,W.diff,'subset',W.dist<=35,'CAT',CAT,'leg','auto');
+        else
+            lineplot(W.dist,W.diff,'subset',W.dist<=35);
+        end
+    case 'EVAL:STATS:DIFF'
+        mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
+        condType=varargin{2}; % 'subset3_groupSize25'
+        crossval=0;
+
+        % do stats
+        P=[];
+        for m=1:length(mapType),
+            T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc_HCP_%s.mat',condType)));
+        
+            A=getrow(T,T.crossval==crossval);
+            A.type=repmat({sprintf('%d.%s',m,mapType{m})},length(A.bin),1);
+            A.m=repmat(m,length(A.bin),1);
+            P=addstruct(P,A);
+            clear A
+        end
+        
+        W=getrow(P,P.bwParcel==0); % within
+        B=getrow(P,P.bwParcel==1); % between
+        W.diff=W.corr-B.corr;
+        % do stats (integrate over spatial bins)
+        W=rmfield(W,{'bwParcel','crossval','corr'});
+        C=getrow(W,W.dist<=35);
+        S=tapply(C,{'m','SN','type'},{'diff'});
+        
+        % do F test (or t test if just two groups)
+        if length(unique(S.m))>2,
+            X=[S.diff(S.m==1),S.diff(S.m==2),S.diff(S.m==3)];
+            results=anovaMixed(S.diff,S.SN,'between',S.m,'betweenNames',{'a','b','c'});
+            
+        else
+            ttest(S.diff(S.m==1), S.diff(S.m==2),2,'paired');
+            
+            % calculate effect size
+            Group1=S.diff(S.m==1);
+            Group2=S.diff(S.m==2);
+            
+            ES_group1=(mean(Group1)-mean(Group2))/std(Group1); % uses the std of one of the groups
+            ES_group2=(mean(Group1)-mean(Group2))/std(Group2); % uses the std of one of the groups
+            % this is biased as the effect size changes depending on which
+            % group you choose. Therefore, pooled estimate is better.
+            
+            num=((Group1-1)*std(Group1)^2 + (Group2-1)*std(Group2)^2);
+            denom=Group1+Group2-2;
+            
+            pooledSTD= sqrt(mean(num)/mean(denom));
+            
+            ES_pooled=(mean(Group1)-mean(Group2))/pooledSTD;
+            
+            fprintf('Effect size between %s and %s is %2.2f when denom is std(Group1) \n',mapType{1},mapType{2},ES_group1);
+            fprintf('Effect size between %s and %s is %2.2f when denom is std(Group2) \n',mapType{1},mapType{2},ES_group2);
+            fprintf('Effect size between %s and %s is %2.2f when denom is pooled std  \n',mapType{1},mapType{2},ES_pooled);
+            
+        end
         
     case 'AXES:group_curves' % make separate graphs for 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_10cluster'
         toPlot=varargin{1}; % 'SC12_10cluster'
+        condType=varargin{2}; % 'subset1', 'subset2' etc
         
         % Aesthetics
         CAT.markertype='none';
@@ -659,7 +927,7 @@ switch what
         CAT.linewidth={2, 2};
         CAT.linestyle={'-','-'};
         
-        sc1_sc2_HCP('EVAL:PLOT:CURVES',toPlot,'CAT',CAT);
+        sc1_sc2_HCP('EVAL:PLOT:CURVES',toPlot,condType,'CAT',CAT);
         
         % Labelling
         set(gca,'YLim',[0 0.55],'XLim',[0 35],'FontSize',14,'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'}); %
@@ -670,6 +938,39 @@ switch what
         %         axis('auto')
         % do stats
         %         sc1_sc2_ICB('EVAL:STATS:CURVES',toPlot)
+    case 'AXES:diff_curves' % make summary graph for diff curves for all maps
+        toPlot=varargin{1}; % {'SC12_10cluster','Buckner_17Networks'}
+        condType=varargin{2}; % 'subset1', 'subset2' etc
+        
+        % aesthetics
+        CAT.errorwidth=.5;
+        CAT.markertype='none';
+        CAT.linewidth=3;
+        CAT.linestyle={'-','-','-','-','-','-'};
+        CAT.linewidth={2, 2, 2, 2, 2, 2};
+        errorcolor={'k','r','b','g','r','r'};
+        linecolor={'k','r','b','g','r','r'};
+        
+        %         errorcolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
+        %         linecolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
+        %
+        for m=1:length(toPlot),
+            CAT.errorcolor=errorcolor{m};
+            CAT.linecolor=linecolor{m};
+            sc1_sc2_HCP('EVAL:PLOT:DIFF',toPlot{m},condType,'CAT',CAT); % always take crossval + unique
+            hold on
+        end
+        hold off
+        
+        % Labelling
+        set(gca,'YLim',[-0.02 0.08],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
+        xlabel('Spatial Distances (mm)');
+        ylabel('Difference');
+        set(gcf,'units','centimeters','position',[5,5,9,12])
+        %         legend(plotName,'Location','NorthWest')
+        
+        % do stats
+        %         sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',toPlot,evalNums,'group',1,'unique'); % always take crossval + unique
 end
 
 
