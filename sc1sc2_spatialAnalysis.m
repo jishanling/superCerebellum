@@ -401,9 +401,9 @@ switch(what)
         
         
     case 'Cluster:GlobalRand' 
-        compare={'groupCnvf_SC12_10cluster','groupCnvf_SC1_10cluster','groupCnvf_SC2_10cluster'};
+        compare={'groupEval_SC12_10cnvf','groupEval_SC1_10cluster','groupEval_SC2_10cluster'};
         compare={'groupEval_SC12_10cluster','groupEval_SC1_10cluster','groupEval_SC2_10cluster'};
-        compare={'groupCnvf_SC12_7cluster','groupCnvf_SC1_7cluster','groupCnvf_SC2_7cluster'};
+        compare={'groupEval_SC12_7cnvf','groupEval_SC1_7cnvf','groupEvals=_SC2_7cnvf'};
         compare={'groupEval_SC12_7cluster','groupEval_SC1_7cluster','groupEval_SC2_7cluster'};
         numMaps = length(compare);
         for i=1:numMaps

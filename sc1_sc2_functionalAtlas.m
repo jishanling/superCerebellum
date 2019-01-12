@@ -3,7 +3,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
 % baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
-% baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
+baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 atlasDir='/Users/maedbhking/Documents/Atlas_templates/';
 
@@ -1424,8 +1424,10 @@ switch what
         K=varargin{3};      % K=numClusters (i.e. 5);
         
         numCount=5;         % How often the "same" solution needs to be found
-        
-        vararginoptions({varargin{4:end}},{'sess'}); % option if doing individual sessions
+        algorithmName = {'SNN','CNV'}; % Semi-nonengative matrix fact. vs. Convex non-negative matrix factorization 
+        algorithmString = {'cluster','cnvf'}; % Semi-nonengative mare
+        algorithm = 2; 
+        vararginoptions({varargin{4:end}},{'sess','numCount','tol_rand','maxIter','algorithm'}); % option if doing individual sessions
         
         tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
         maxIter=100; % if it's not finding a similar solution - force stop at 100 iters
@@ -1440,15 +1442,15 @@ switch what
         if strcmp(sn,'group'), % group
             sn=returnSubjs;
             if exist('sess'),
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_sess%d_%dcluster',studyStr,sess,K));
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_sess%d_%d%s',studyStr,sess,K,algorithmString{algorithm}));
             else
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%dcluster',studyStr,K));
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%d%s',studyStr,K,algorithmString{algorithm}));
             end
             dircheck(outDir);
             outName=fullfile(outDir,'SNN.mat');
         else % indiv
             outDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
-            outName=fullfile(outDir,sprintf('SNN_%s_%dcluster.mat',studyStr,K));
+            outName=fullfile(outDir,sprintf('SNN_%s_%d%s.mat',studyStr,K,algorithmString{algorithm}));
         end
         
         % get data
@@ -1460,7 +1462,12 @@ switch what
         iter=1; % How many iterations
         count=0;
         while iter<maxIter,
-            [F,G,Info,winner]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get current error
+            switch (algorithm)
+                case 1
+                    [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get a segmentation using 
+                case 2 % convec
+                    [F,G,Info]=cnvSemiNonNegMatFac(X_C,K,'threshold',0.01,'maxiter',500); % get a segmentation using 
+            end; 
             errors(iter)=Info.error;    % record error
             randInd(iter)=RandIndex(bestSol,winner); %
             
