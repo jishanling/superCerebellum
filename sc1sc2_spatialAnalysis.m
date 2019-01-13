@@ -356,6 +356,7 @@ switch(what)
         save(fullfile(outDir,'bootstrap_oldF.mat'),'-struct','T');
         varargout={T};
     case 'SNN:bootstrap_eval' 
+        mapsize = [ 2 2 5 4]; % For paper size 
         T=load('bootstrap_oldF.mat');  
         [~,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',2,1,'build'); % Get V and volindx 
         N=size(T.Error,1); 
@@ -365,39 +366,61 @@ switch(what)
         % Generate map of assignments 
         CON=bsxfun(@eq,T.assign(2:N,:),T.assign(1,:)); % Consistency of assignment 
         con = mean(CON); 
+        
+        
+        % This is the histogram of Rand coefficients
         figure(1); 
         histplot(T.RandIndx(2:end),'numcat',10); 
+        set(gcf,'PaperPosition',[2 2 5 3]); 
+        wysiwyg; 
         
+        figure(2); 
         % If cmap is file, load and normalize 
         cmap=dlmread('colourMap.txt');
         cmap = cmap(:,2:end); 
         cmap = bsxfun(@rdivide,cmap,max(cmap)); 
         
-        figure(2); 
+        % Figure 2: Normal hard assignment
         LA=sc1sc2_spatialAnalysis('visualise_map',T.assign(1,:)',volIndx,V,'type','label','cmap',cmap); 
-        
-        figure(3); 
+        % title('Hard assignment'); 
+        axis off; 
+        set(gcf,'PaperPosition',mapsize); 
+        wysiwyg; 
+
+        % Figure 3: Consistency 
+        figure(3);
         CO=sc1sc2_spatialAnalysis('visualise_map',con',volIndx,V,'type','func');
-        
-        figure(4); % Weighted color index 
+        % title('Consistency of assignment'); 
+        axis off; 
+        set(gcf,'PaperPosition',mapsize); 
+        wysiwyg; 
+  
+        % Figure 4: Certainty is expressed as a morph to gray (saturation) 
+        figure(4);
         i = ~isnan(LA.data); 
         RGB = nan(size(LA.data,1),3);
         HSV = nan(size(LA.data,1),3);
         
         RGB(i,:)=cmap(LA.data(i),:); % color data 
         HSV(i,:) = rgb2hsv(RGB(i,:)); % color data 
-        minCO = 0.5; % min(CO.data(i,1)); 
-        scaleC = (CO.data(i,1)-minCO)./(1-minCO); 
-        scaleC(scaleC<0)=0; 
-        HSV(i,2) = HSV(i,2).*scaleC; 
-        HSV(i,3) = (1-scaleC).*0.7+scaleC.*HSV(i,3); % Towards light gray 
+        minCO = 0.5; % Setting the lower bound of consistency that will be totally gray
+        scaleC = (CO.data(i,1)-minCO)./(1-minCO);  % 
+        scaleC(scaleC<0)=0;     % scaling factor between gray and color 
+        HSV(i,2) = HSV(i,2).*scaleC;                % Scale Saturation 
+        HSV(i,3) = (1-scaleC).*0.85+scaleC.*HSV(i,3); % Change towards a light gray 
         mRGB(i,:) = hsv2rgb(HSV(i,:)); % color data 
         suit_plotflatmap(mRGB,'type','rgb');
+        % title('Weighted color map');
+        axis off; 
+        set(gcf,'PaperPosition',mapsize); 
+        wysiwyg; 
+
         
-        figure(5); % Different Alphas 
-        scaleA=nan(size(RGB,1),1); 
-        scaleA(i,1)=scaleC; 
-        suit_plotflatmap(RGB,'type','rgb','alpha',scaleA);
+        % figure(5); % Different Alphas: We decided that this did not look
+        % as good. 
+        % scaleA=nan(size(RGB,1),1); 
+        % scaleA(i,1)=scaleC; 
+        % suit_plotflatmap(RGB,'type','rgb','alpha',scaleA);
         
         
     case 'Cluster:GlobalRand' 

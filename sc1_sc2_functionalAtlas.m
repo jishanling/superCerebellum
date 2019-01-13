@@ -2,8 +2,8 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
-baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
+baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+% baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 atlasDir='/Users/maedbhking/Documents/Atlas_templates/';
 
@@ -1373,50 +1373,50 @@ switch what
                     end
                 end
         end
-    case 'MAP:make_metric' % make metric files. ONE for all SNN maps. ONE for all subjs (for final multi-task task)
-        type=varargin{1}; % 'subjs' or 'SNNMaps'
+    case 'MAP:make_paint' % Make a paint file from a set of parcellations 
+        type=varargin{1}; % 'SNNindivid','SNNgroup','CNVFgroup'
         
-        inputMap='SC12_10cluster';
+        switch (type) % Most straightforward to define both the input maps (full path) and 
+            % outname depending on type 
+            case 'SNNindivid'       % Previous 'subjs' 
+                inputMap='SC12_10cluster';
+                for s=1:length(returnSubjs),
+                    inputDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{s});
+                    mapName{s}=sprintf('map_%s.nii',inputMap);
+                    column_names{s}=sprinft('Subj%d',subj_name{s});
+                end; 
+                outname='Multi-Task-indivSubjs';
+            case 'SNNgroup' 
+                clusters=[5:24];
+                for m=1:length(clusters),
+                    mapName{m}=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC12_%dclusters',clusters(m)),'map.nii');
+                    column_names{m}=sprinft('%dclusters',clusters(m));
+                end
+                outname='SNN_maps'; 
+            case 'CNVFgroup' 
+                clusters=[10];
+                for m=1:length(clusters),
+                    mapName{m}=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC12_%dcnvf',clusters(m)),'map.nii');
+                    column_names{m}=sprintf('%dclusters',clusters(m));
+                end
+                outname='CNVF_maps'; 
+        end; 
         
-        if strcmp(type,'subjs'),
-            mapType=returnSubjs;
-        else
-            clusters=[5:24];
-            for m=1:length(clusters),
-                mapType{m}=sprintf('SC12_%dcluster',clusters(m));
-            end
-        end
-        
-        % looping over subjects or maps ?
-        for s=1:length(mapType),
-            switch type,
-                case 'subjs'
-                    inputDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{mapType(s)});
-                    mapName=sprintf('map_%s.nii',inputMap);
-                    colNames=subj_name{returnSubjs(s)};
-                    outName='Multi-Task-indivSubjs';
-                case 'SNNMaps'
-                    inputDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType{s}));
-                    mapName='map.nii';
-                    colNames=sprintf('cluster%d',clusters(s));
-                    outName='SNNMaps';
-            end
-            
-            Vo=spm_vol(fullfile(inputDir,mapName));
+        for s=1:length(mapName) 
+            Vo=spm_vol(mapName{s});
             Vi=spm_read_vols(Vo);
-            Vv{s}.dat=Vi;
-            Vv{s}.dim=Vo.dim;
-            Vv{s}.mat=Vo.mat;
-            column_names{s}=colNames;
+            Vv(s).dat=Vi;
+            Vv(s).dim=Vo.dim;
+            Vv(s).mat=Vo.mat;
         end
         
-        M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode','column_names',column_names);
+        M=suit_map2surf(Vv,'space','SUIT','stats','mode');
         
         % make paint and area files
-        M=caret_struct('paint','data',M.data,'column_name',M.column_name);
+        M=caret_struct('paint','data',M,'column_name',column_names);
         
         % save out paint and area files
-        caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.paint',outName)),M);
+        caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.paint',outname)),M);
     case 'MAP:optimal'     % figure out optimal map for multiple clusters
         % example:sc1_sc2_functionalAtlas('MAP:optimal',<subjNums>,1,6,'group')
         sn=varargin{1};     % 'group' or <subjNum>
