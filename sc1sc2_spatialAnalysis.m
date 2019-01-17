@@ -443,33 +443,70 @@ switch(what)
         varargout={AR}; 
         
     case 'CLUSTER:LocalRand'
-        compare={'groupEval_SC12_7cluster','groupEval_SC12_8cluster','groupEval_SC12_9cluster',...
-           'groupEval_SC12_10cluster','groupEval_SC12_11cluster','groupEval_SC12_12cluster',...
-           'groupEval_SC1_7cluster','groupEval_SC1_8cluster','groupEval_SC1_9cluster',...
-           'groupEval_SC1_10cluster','groupEval_SC1_11cluster','groupEval_SC1_12cluster',...
-           'groupEval_SC2_7cluster','groupEval_SC2_8cluster','groupEval_SC2_9cluster',...
-           'groupEval_SC2_10cluster','groupEval_SC2_11cluster','groupEval_SC2_12cluster',...
+        type = 'searchlight'; % 'voxelwise','searchlight', or 'searchlightvoxel'
+        compare={'groupEval_SC12_7cnvf','groupEval_SC12_10cnvf',...
+            'groupEval_Buckner_7Networks','groupEval_Buckner_17Networks',...
+            'groupEval_Cole_10Networks'...
+            
+            % ,'groupEval_SC12_9cluster',...
+           % 'groupEval_SC12_10cluster','groupEval_SC12_11cluster','groupEval_SC12_12cluster',...
+           % 'groupEval_SC1_7cluster','groupEval_SC1_8cluster','groupEval_SC1_9cluster',...
+           % 'groupEval_SC1_10cluster','groupEval_SC1_11cluster','groupEval_SC1_12cluster',...
+           % 'groupEval_SC2_7cluster','groupEval_SC2_8cluster','groupEval_SC2_9cluster',...
+           % 'groupEval_SC2_10cluster','groupEval_SC2_11cluster','groupEval_SC2_12cluster',...
            };
+        split = [1 1 2 2 2];  
         radius = 10; 
-        vararginoptions(varargin,{'radius','compare'}); 
+        vararginoptions(varargin,{'radius','compare','type','split'}); 
         numMaps = length(compare);
+        load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));  % Just to get V and volIndex
+        clear T; 
+         
         for i=1:numMaps
-            T=load(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'SNN.mat'));
-            [~,c(:,i)]=max(T.bestG,[],2);
+            try 
+                T=load(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'SNN.mat'));
+                [~,c(:,i)]=max(T.bestG,[],2);
+            catch 
+                Vi=spm_vol(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'map.nii'));
+                [i1,j1,k1]=ind2sub(V.dim,volIndx');
+                [x,y,z]=spmj_affine_transform(i1,j1,k1,V.mat);
+                [i2,j2,k2]=spmj_affine_transform(x,y,z,inv(Vi.mat));
+                c(:,i)=spm_sample_vol(Vi,i2,j2,k2,0);
+            end; 
         end;
         ar=[];
         [x,y,z]=ind2sub(T.V.dim,T.volIndx);
         [x,y,z]=spmj_affine_transform(x,y,z,T.V.mat);
         xyz=[x;y;z];
         D=surfing_eucldist(xyz,xyz);        % Eucledian distance
-
+        pair = []; 
         for i=1:numMaps-1
             for j=i+1:numMaps
-                ar(:,end+1)=RandIndexLocal(c(:,i),c(:,j),D,radius); 
+                ar(:,end+1)=RandIndexLocal(type,c(:,i),c(:,j),D,radius); 
+                if (~isempty(split)) 
+                    if (split(i)==split(j) && split(i)==1)
+                        pair(end+1)=1; 
+                    elseif (split(i)==split(j) && split(i)==2)
+                        pair(end+1)=2;
+                    elseif (split(i)~=split(j))
+                        pair(end+1)=3; 
+                    else 
+                        pair(end+1)=0; 
+                    end;
+                end; 
             end;
         end;
-        sc1sc2_spatialAnalysis('visualise_map',mean(ar,2),T.volIndx,T.V,'type','func');
-        max(mean(ar,2))
+        numPlots = length(unique(pair)); 
+        for i=1:numPlots 
+            subplot(1,numPlots,i); 
+            sc1sc2_spatialAnalysis('visualise_map',mean(ar(:,pair==i),2),T.volIndx,T.V,'type','func');
+        end; 
+        Output.type= type; 
+        Output.compare= compare; 
+        Output.split= split; 
+        Output.ar= ar; 
+        Output.pair= pair; 
+        varargout = {Output}; 
         
     case 'visualise_map' % Plot any data on the cerebellar flatmap
         data = varargin{1};     % Data to plot
