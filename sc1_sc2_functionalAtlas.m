@@ -1424,8 +1424,7 @@ switch what
         K=varargin{3};      % K=numClusters (i.e. 5);
         
         numCount=5;         % How often the "same" solution needs to be found
-        algorithmName = {'SNN','CNV'}; % Semi-nonengative matrix fact. vs. Convex non-negative matrix factorization 
-        algorithmString = {'cluster','cnvf'}; % Semi-nonengative mare
+        algorithmString = {'snn','cnvf','ica'}; % Semi-nonengative matrix factorization 
         algorithm = 2; 
         vararginoptions({varargin{4:end}},{'sess','numCount','tol_rand','maxIter','algorithm'}); % option if doing individual sessions
         
@@ -1433,24 +1432,21 @@ switch what
         maxIter=100; % if it's not finding a similar solution - force stop at 100 iters
         
         % Set the String correctly
-        studyStr = sprintf('SC%d',study);
         if length(study)>1
             studyStr='SC12'; % both studies combined
+        else 
+            studyStr = sprintf('SC%d',study);
         end
         
         % Set output filename: group or indiv ?
         if strcmp(sn,'group'), % group
             sn=returnSubjs;
-            if exist('sess'),
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_sess%d_%d%s',studyStr,sess,K,algorithmString{algorithm}));
-            else
-                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%d%s',studyStr,K,algorithmString{algorithm}));
-            end
+            outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K));
             dircheck(outDir);
             outName=fullfile(outDir,'SNN.mat');
         else % indiv
             outDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
-            outName=fullfile(outDir,sprintf('SNN_%s_%d%s.mat',studyStr,K,algorithmString{algorithm}));
+            outName=fullfile(outDir,sprintf('SNN_%s_%s_%d.mat',studyStr,algorithmString{algorithm},K));
         end
         
         % get data
