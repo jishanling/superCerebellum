@@ -455,7 +455,7 @@ switch(what)
            % 'groupEval_SC2_7cluster','groupEval_SC2_8cluster','groupEval_SC2_9cluster',...
            % 'groupEval_SC2_10cluster','groupEval_SC2_11cluster','groupEval_SC2_12cluster',...
            };
-        split = [1 1 2 2 2];  
+        split = [1 1 2 2 2]; 
         radius = 10; 
         vararginoptions(varargin,{'radius','compare','type','split'}); 
         numMaps = length(compare);
@@ -507,14 +507,30 @@ switch(what)
         Output.ar= ar; 
         Output.pair= pair; 
         varargout = {Output}; 
+    case 'CLUSTER:TaskvsRest'
+        %Out=sc1sc2_spatialAnalysis('CLUSTER:LocalRand');
+        % save(fullfile(studyDir{2},encodeDir,'glm4','LocalRand_TaskRest.mat'),'-struct','Out');
+        load(fullfile(studyDir{2},encodeDir,'glm4','LocalRand_TaskRest.mat')); 
+        load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));  % Just to get V and volIndex
+        clear T; 
+        titles = {'Task-Task','Rest-Rest','Task-Rest'}; 
+        set(gcf,'PaperPosition',[2 2 13 4]);
+        wysiwyg; 
+        for i=1:3
+            subplot(1,3,i); 
+            sc1sc2_spatialAnalysis('visualise_map',mean(ar(:,pair==i),2),volIndx,V,'type','func','cscale',[0 0.8]);
+            axis equal; 
+            title(titles{i}); 
+        end; 
         
     case 'visualise_map' % Plot any data on the cerebellar flatmap
         data = varargin{1};     % Data to plot
         volIndx = varargin{2};  % Indices into the volume (mask)
         V = varargin{3};        % Cerebellar suit volume
         cmap = [];
+        cscale = []; 
         type = 'label';     % func / label
-        vararginoptions(varargin(4:end),{'cmap','type'});
+        vararginoptions(varargin(4:end),{'cmap','type','cscale'});
                     
         % map features on group
         V.dat=zeros([V.dim(1) V.dim(2) V.dim(3)]);
@@ -535,7 +551,7 @@ switch(what)
         
         % save out vol of ICA feats
         data=suit_map2surf(V,'space','SUIT','stats',stats);
-        suit_plotflatmap(data,'type',type,'cmap',cmap);
+        suit_plotflatmap(data,'type',type,'cmap',cmap,'cscale',cscale);
         
         P=caret_struct('paint','data',data);
         varargout={P};
