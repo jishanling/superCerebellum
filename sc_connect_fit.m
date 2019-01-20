@@ -82,14 +82,14 @@ switch method
         for p=1:P
             u(:,p) = cplexqp(XX+lambda(2)*eye(Q),-XY(:,p),A,b);
         end;
-    case 'cplexqpL1L2'                 %  Non-neg least-squares over quadratic programming - Elastic net
+    case 'cplexqpL1L2'             %  Non-neg least-squares over quadratic programming - Elastic net
         [N,P]= size(Y);
         [N,Q]= size(X);
         XX=X'*X;
         XY=X'*Y;
         A = -eye(Q);
         b = zeros(Q,1);
-        u=nan(Q,P);  % Make non-calculated to nan to keep track of missing voxels 
+        u=nan(Q,P);  % Make non-calculated to nan to keep track of missing voxels
         for p=find(~isnan(sum(Y)))
             u(:,p) = cplexqp(XX+lambda(2)*eye(Q),ones(Q,1)*lambda(1)-XY(:,p),A,b);
         end;
@@ -105,17 +105,23 @@ switch method
         for p=1:P
             u(:,p) = quadprog(XX+lambda(2)*eye(Q),ones(Q,1)*lambda(1)-XY(:,p),A,b,[],[],[],[],[],OPT);
         end;
-    case 'lasso'                   %  Matlab's Lasso
+    case 'elasticNet'              %  Matlab's elastic net - determines optimal lambdas 
         [N,P] = size(Y);
         for p=1:P
-            u(:,p) = lasso(X,Y(:,p),'Lambda',0.015);
+            u(:,p) = lasso(X,Y(:,p),'Lambda',lambda(1),'Alpha',.5);
         end;
-    case 'l1'                       % l1 ls
+    case 'l1'                      %  Matlab's l1 - determines optimal lambdas
+       [N,P] = size(Y);
+        for p=1:P
+%             u(:,p) = lasso(X,Y(:,p),'Alpha',1); % 1- l1
+            [B,S]=lasso(X,Y(:,p)); 
+        end;
+    case 'l2'                      %  Matlab's l2 - determines optimal lambas
         [N,P] = size(Y);
         for p=1:P
-            [u(:,p)]=l1_ls(X,Y(:,p),lambda(1),[],1);
-        end;
-    case 'l1_nonneg'                % l1 ls nonneg -
+            u(:,p) = lasso(X,Y(:,p),'Alpha',.1); % l2
+        end;    
+    case 'l1_nonneg'               % l1 ls nonneg -
         [N,P] = size(Y);
         for p=1:P
             [u(:,p)]=l1_ls_nonneg(X,Y(:,p),lambda(1),[],1);
@@ -157,13 +163,13 @@ SST = nansum(Y.*Y);
 
 Ypred=X*u;
 res =Y-Ypred;
-SSR = sum(res.^2);
+SSR = nansum(res.^2);
 R2_vox(1,:) = 1-SSR./SST;
 R2          = 1-nansum(SSR)/nansum(SST);
 
 % R (per voxel)
-SYP = sum(Y.*Ypred,1);
-SPP = sum(Ypred.*Ypred);
+SYP = nansum(Y.*Ypred,1);
+SPP = nansum(Ypred.*Ypred);
 
 R_vox(1,:) = SYP./sqrt(SST.*SPP);
 R          = nansum(SYP)./sqrt(nansum(SST).*nansum(SPP));
@@ -199,4 +205,9 @@ function [f,d]=sc1_nonnegExp_L1(theta,XY,XX,lambda)
 u=exp(theta);
 f  = -2*sum(sum(XY.*u))+sum(sum(XX.*(u*u')))+lambda*sum(sum(u));  % Sum of square errors
 d  = 2*(-XY + XX *u).*u+lambda*u;
+
+% Add a L1-norm penality on exp(theta)
+function [f,d]=L1_norm(theta,XY,XX,lambda)
+f  = -2*sum(sum(XY.*theta))+sum(sum(XX.*(theta*theta')))+lambda*sum(sum(theta));  % Sum of square errors
+d  = 2*(-XY + XX *theta).*theta+lambda*theta;
 

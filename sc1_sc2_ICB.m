@@ -290,7 +290,11 @@ switch what
                 spm_imcalc(nam,'cerebellarGreySUIT.nii','mean(X)',opt);
                 fprintf('averaged cerebellar grey mask in SUIT space has been computed \n')
         end
+<<<<<<< HEAD
     case 'PREP:cereb:voxels_old'                 % STEP 11.6: Get UW cerebellar data (voxels)
+=======
+    case 'PREP:cereb:voxels'                 % STEP 11.6: Get UW cerebellar data (voxels)
+>>>>>>> b59eb197fba4166de28734ba6da7640df273ff17
         sn=varargin{1};
         
         P=24076; % # of cerebellar voxels
@@ -345,7 +349,11 @@ switch what
         end
         volIndx=volIndx';
         save(outName,'S','volIndx','V');
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> b59eb197fba4166de28734ba6da7640df273ff17
     case 'ACTIVITY:map2surf'
         sn=varargin{1}; % 'group' or <subjNum>
         

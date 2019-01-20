@@ -15,7 +15,16 @@ name=strsplit(n,'.');
 
 % Read CIFTI
 cii=ft_read_cifti(image);
-numVox=size(cii.indexmax,1); 
+
+if isfield(cii,'indexmax'),
+    labels=cii.indexmax;
+else % this includes cortical labels, which need to be removed
+    labels=cii.x1; 
+    cii.pos(cii.brainstructure==1 | cii.brainstructure==2,:,:)=[]; 
+    labels(cii.brainstructure==1 | cii.brainstructure==2)=[]; 
+end
+
+numVox=size(labels,1);
 
 % Conversion from mm to vox
 for v=1:numVox,
@@ -26,7 +35,7 @@ end
 % Write Labels
 DATA=zeros(cii.dim);
 for i=1:numVox,
-    DATA(vox(i,1),vox(i,2),vox(i,3))=cii.indexmax(i); 
+    DATA(vox(i,1),vox(i,2),vox(i,3))=labels(i); 
 end
 
 % MNI 2mm data structure

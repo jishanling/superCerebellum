@@ -12,6 +12,8 @@ baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
 % baseDir        = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir        = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
+externalDir     ='/Volumes/Seagate Backup Plus Drive';
+
 studyDir{1}     =fullfile(baseDir,'sc1');
 studyDir{2}     =fullfile(baseDir,'sc2');
 restDir         =fullfile(baseDir,'restingState');
@@ -2111,9 +2113,9 @@ switch(what)
         subjs=length(sn);
         for s=1:subjs,
             for t=1:numel(type),
-                %                 sc1_sc2_imana('ROI:define',sn(s),type{t})
+                sc1_sc2_imana('ROI:define',sn(s),type{t})
                 sc1_sc2_imana('ROI:betas',sn(s),study,glm,type{t})
-                sc1_sc2_imana('ROI:stats',sn(s),study,glm,1,type{t}) % remove mean
+                %                 sc1_sc2_imana('ROI:stats',sn(s),study,glm,1,type{t}) % remove mean
                 %             sc1_SC2_imana('ROI:RDM_stability',s,glm,type)
             end
         end
@@ -2122,7 +2124,7 @@ switch(what)
         
         % Run FREESURFER before this step!
         sn=varargin{1}; % subjNum
-        type=varargin{2}; % 'cortical_lobes','yeo','desikan','cerebellum','cerebellum_grey'
+        type=varargin{2}; % 'cortical_lobes','yeo','desikan','cerebellum','cerebellum_grey','cerebellum_MDTB'
         
         subjs=length(sn);
         idx=0;
@@ -2350,6 +2352,14 @@ switch(what)
                     R{1}.name = ['dentate'];
                     R{1}.value = 1;
                     R=region_calcregions(R);
+                case 'cerebellum_MDTB'
+                    % Get cerebellum
+                    file = fullfile(studyDir{2},encodeDir,'glm4','groupEval_SC12_10cluster','map.nii');
+                    R{1}.type = 'roi_image';
+                    R{1}.file= file;
+                    R{1}.name = ['cerebellum_MDTB'];
+                    R{1}.value = 1;
+                    R=region_calcregions(R);
             end
             dircheck(fullfile(studyDir{1},regDir,'data',subj_name{sn(s)}));
             %             dircheck(fullfile(regDir,'glm4',subj_name{sn(s)},sprintf('%s_masks',type)));
@@ -2380,6 +2390,8 @@ switch(what)
             
             % load data
             load(fullfile(studyDir{1},regDir,'data',subj_name{sn(s)},sprintf('regions_%s.mat',type))); % 'regions' are defined in 'ROI_define'
+            
+            SPM=spmj_move_rawdata(SPM,fullfile(externalDir,'sc1','imaging_data',subj_name{sn(s)})); % imaging data is always saved in sc1
             
             % Get the raw data files
             V=SPM.xY.VY;
@@ -2930,7 +2942,7 @@ switch(what)
             end
             fprintf('IPM calculated for subj%d \n',sn(s));
             clear Y partVec condVec
-        end     
+        end
     case 'PREP:avrg_betas'                   % STEP 11.10
         sn=varargin{1};
         study=varargin{2}; % studyNum
@@ -3011,8 +3023,16 @@ switch(what)
         study=varargin{1}; % studyNum
         sess=varargin{2}; % 'behavioural' or 'scanning'
         type=varargin{3}; % taskType
+        metric=varargin{4}; % 'RT' or 'accuracy'
         
-        sn=returnSubjs; 
+        sn=returnSubjs;
+        
+        CAT.errorwidth=.5;
+        CAT.linestyle={'-'};
+        CAT.linewidth={2};
+        CAT.errorcolor={'k'};
+        CAT.linecolor={'k'};
+        CAT.markersize=8;
         
         switch type
             case 'stroop'
@@ -3022,22 +3042,39 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<28);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                figure(s)
-                subplot(2,1,1)
-                lineplot([A.runNum], A.rt, 'split',A.trialType,'leg',{'incongruent','congruent'},'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                
-                subplot(2,1,2)
-                lineplot([A.runNum], A.numCorr, 'split',A.trialType,'leg',{'incongruent','congruent'},'subset', A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent correct')
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot([A.runNum], A.rt, 'split',A.trialType,'leg',{'incongruent','congruent'},'CAT',CAT);% 'subset',A.respMade==1
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'YLim',[0.4 .9],'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'YLim',[0.4 .9],'FontSize',12)
+                        end
+                    case 'accuracy'
+                        figure()
+                        lineplot([A.runNum], A.numCorr, 'split',A.trialType,'leg',{'incongruent','congruent'},'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Percent correct')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==1);
+                        fprintf('%s-incongruent: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==2);
+                        fprintf('%s-congruent: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
             case 'nBack'
                 A=[];
                 for s=sn,
@@ -3046,22 +3083,29 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<51);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.possCorr,'leg', {'No Match','Match'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.possCorr,'leg', {'No Match','Match'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.possCorr,'leg', {'No Match','Match'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.possCorr,'leg', {'No Match','Match'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.falseID A.runNum],'mean','subset',A.possCorr==0);
+                        fprintf('%s-0Back: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[~A.numCorr A.runNum],'mean','subset',A.possCorr==1);
+                        fprintf('%s-2Back: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
             case 'visualSearch'
                 A=[];
                 for s=sn,
@@ -3070,32 +3114,50 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>6 & A.runNum<27);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                figure(s)
-                subplot(4,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'absent','present'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                
-                subplot(4,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'absent','present'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
-                
-                subplot(4,1,3)
-                lineplot(A.runNum, A.rt, 'split', A.setSize,'leg', {'4','8','12'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                
-                subplot(4,1,4)
-                lineplot(A.runNum, A.numCorr, 'split', A.setSize,'leg', {'4','8','12'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'absent','present'},'CAT',CAT);
+                        lineplot(A.runNum, A.rt,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        
+                        lineplot(A.runNum, A.rt, 'split', A.setSize,'leg', {'4','8','12'},'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'absent','present'}, 'subset',A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        
+                        lineplot(A.runNum, A.numCorr, 'split', A.setSize,'leg', {'4','8','12'}, 'subset',A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.setSize==4);
+                        fprintf('%s-easy: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.setSize==8);
+                        fprintf('%s-medium: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.setSize==12);
+                        fprintf('%s-hard: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
             case 'GoNoGo'
                 A=[];
                 for s=sn,
@@ -3104,22 +3166,39 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>7 & A.runNum<27);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'negative','positive'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'negative','positive'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'negative','positive'},'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'negative','positive'},'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[~A.numCorr.*A.possCorr A.runNum],'mean','subset',A.trialType==1);
+                        fprintf('%s-negative: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[~A.numCorr.*A.possCorr A.runNum],'mean','subset',A.trialType==2);
+                        fprintf('%s-postive: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
             case 'nBackPic'
                 A=[];
                 for s=sn,
@@ -3128,22 +3207,29 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<51);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.possCorr,'leg', {'No Match','Match'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.possCorr,'leg', {'No Match','Match'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.possCorr,'leg', {'No Match','Match'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.possCorr,'leg', {'No Match','Match'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.falseID A.runNum],'mean','subset',A.possCorr==0);
+                        fprintf('%s-0Back: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[~A.numCorr A.runNum],'mean','subset',A.possCorr==1);
+                        fprintf('%s-2Back: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
             case 'affective'
                 A=[];
                 for s=sn,
@@ -3152,22 +3238,29 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<51);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'unpleasant','pleasant'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'unpleasant','pleasant'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'unpleasant','pleasant'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'unpleasant','pleasant'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==1);
+                        fprintf('%s-unpleasant: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==2);
+                        fprintf('%s-pleasant: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
             case 'emotional'
                 A=[];
                 for s=sn,
@@ -3176,22 +3269,29 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<51);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'sad','happy'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'sad','happy'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'sad','happy'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'sad','happy'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==1);
+                        fprintf('%s-sad: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==2);
+                        fprintf('%s-happy: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
             case 'ToM'
                 A=[];
                 for s=sn,
@@ -3200,22 +3300,27 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<51);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt,'split',A.condition,'leg',{'false','true'},'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr,'split',A.condition,'leg',{'false','true'},'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum, A.rt,'split',A.condition,'leg',{'false','true'},'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr,'split',A.condition,'leg',{'false','true'},'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[~A.numCorr A.runNum],'mean');
+                        fprintf('%s: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
             case 'arithmetic'
                 A=[];
                 for s=sn,
@@ -3224,22 +3329,39 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<27);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'equations','control'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'equations','control'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
+                switch metric,
+                    case 'RT',
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'equations','control'}, 'subset',A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'equations','control'}, 'subset',A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==1);
+                        fprintf('%s-math: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==2);
+                        fprintf('%s-digitJudgement: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
             case 'intervalTiming'
                 A=[];
                 for s=sn,
@@ -3248,21 +3370,27 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<51);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
-                figure(s)
-                subplot(2,1,1);
-                lineplot(A.runNum,A.rt,'split',A.trialType,'leg', {'long', 'short'},'subset',A.respMade==1);
-                xlabel('Run');
-                ylabel('Reaction Time');
                 
-                subplot(2,1,2);
-                lineplot(A.runNum,A.numCorr,'split',A.trialType,'leg',{'long','short'},'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum,A.rt,'split',A.trialType,'leg', {'long', 'short'},'subset',A.respMade==1);
+                        xlabel('Run');
+                        ylabel('Reaction Time');
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum,A.numCorr,'split',A.trialType,'leg',{'long','short'},'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean');
+                        fprintf('%s: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
             case 'motorSequence'
                 A=[];
                 for s=sn,
@@ -3271,22 +3399,39 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<27);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                figure(s)
-                subplot(2,1,1);
-                lineplot(A.runNum,A.rt,'split',A.trialType,'leg',{'control','sequence'});
-                xlabel('Run');
-                ylabel('Reaction Time');
-                
-                subplot(2,1,2);
-                lineplot(A.runNum,A.numCorr,'split', A.trialType,'leg', {'control','sequence'});
-                xlabel('Run')
-                ylabel('Percent Correct')
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum,A.rt,'split',A.trialType,'leg',{'control','sequence'},'CAT',CAT);
+                        xlabel('Run');
+                        ylabel('Reaction Time');
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum,A.numCorr,'split', A.trialType,'leg', {'control','sequence'},'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==1);
+                        fprintf('%s-simple: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==2);
+                        fprintf('%s-seq: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
             case 'CPRO'
                 A=[];
                 for s=sn,
@@ -3294,30 +3439,37 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<20);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                if numel(sn)>1,
-                    main=sprintf('all subjects-%s',type);
-                else
-                    main=sprintf('%s-%s',subj_name{s},type);
+                switch metric,
+                    case 'RT',
+                        figure()
+                        lineplot([A.runNum], A.rt,'subset',A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'accuracy'
+                        figure()
+                        lineplot([A.runNum], A.numCorr,'subset', A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Percent correct')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean');
+                        fprintf('%s-sad: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
                 end
-                
-                figure(s)
-                subplot(2,1,1)
-                lineplot([A.runNum], A.rt,'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                title(main)
-                
-                subplot(2,1,2)
-                lineplot([A.runNum], A.numCorr,'subset', A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent correct')
-                title(main)
             case 'prediction'
                 A=[];
                 for s=sn,
@@ -3326,7 +3478,7 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<51);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
@@ -3338,18 +3490,27 @@ switch(what)
                     main=sprintf('%s-%s',subj_name{s},type);
                 end
                 
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'meaningful','not meaningful'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                title(main)
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'meaningful','not meaningful'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
-                title(main)
+                switch metric,
+                    case 'RT',
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'meaningful','not meaningful'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        title(main)
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'meaningful','not meaningful'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        title(main)
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[~A.numCorr A.runNum],'mean','subset',A.condition==1);
+                        fprintf('%s-predict: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100);
+                        x=pivottable(A.taskName,[],[~A.numCorr A.runNum],'mean','subset',A.condition==2);
+                        fprintf('%s-violated: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100);
+                        x=pivottable(A.taskName,[],[~A.numCorr A.runNum],'mean','subset',A.condition==3);
+                        fprintf('%s-scrambled: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100);
+                end
             case 'spatialMap'
                 A=[];
                 for s=sn,
@@ -3358,30 +3519,41 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>6 & A.runNum<20);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                if numel(sn)>1,
-                    main=sprintf('all subjects-%s',type);
-                else
-                    main=sprintf('%s-%s',subj_name{s},type);
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.condition,'leg', {'easy','med','diff'}, 'subset',A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.condition,'leg', {'easy','med','diff'}, 'subset',A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.condition==1);
+                        fprintf('%s-easy: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.condition==2);
+                        fprintf('%s-med: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.condition==3);
+                        fprintf('%s-hard: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
                 end
-                
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.condition,'leg', {'easy','med','diff'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                title(main)
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.condition,'leg', {'easy','med','diff'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
-                title(main)
             case 'mentalRotation'
                 A=[];
                 for s=sn,
@@ -3390,30 +3562,41 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>8 & A.runNum<20);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                if numel(sn)>1,
-                    main=sprintf('all subjects-%s',type);
-                else
-                    main=sprintf('%s-%s',subj_name{s},type);
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.condition,'leg', {'easy','med','diff'}, 'subset',A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.condition,'leg', {'easy','med','diff'}, 'subset',A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.condition==1);
+                        fprintf('%s-easy: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.condition==2);
+                        fprintf('%s-med: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.condition==3);
+                        fprintf('%s-hard: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
                 end
-                
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.condition,'leg', {'easy','med','diff'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                title(main)
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.condition,'leg', {'easy','med','diff'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
-                title(main)
             case 'emotionProcess'
                 A=[];
                 for s=sn,
@@ -3422,7 +3605,7 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<51);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
@@ -3434,18 +3617,25 @@ switch(what)
                     main=sprintf('%s-%s',subj_name{s},type);
                 end
                 
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.condition,'leg', {'intact','scrambled'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                title(main)
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.condition,'leg', {'intact','scrambled'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
-                title(main)
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.condition,'leg', {'intact','scrambled'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        title(main)
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.condition,'leg', {'intact','scrambled'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        title(main)
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.condition==1);
+                        fprintf('%s-intact: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.condition==2);
+                        fprintf('%s-scrambled: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
             case 'respAlt'
                 A=[];
                 for s=sn,
@@ -3454,30 +3644,41 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>10 & A.runNum<28);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                if numel(sn)>1,
-                    main=sprintf('all subjects-%s',type);
-                else
-                    main=sprintf('%s-%s',subj_name{s},type);
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.condition,'leg', {'easy','med','diff'}, 'subset',A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.condition,'leg', {'easy','med','diff'}, 'subset',A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.condition==1);
+                        fprintf('%s-easy: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.condition==2);
+                        fprintf('%s-med: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.condition==3);
+                        fprintf('%s-hard: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
                 end
-                
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.condition,'leg', {'easy','med','diff'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                title(main)
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.condition,'leg', {'easy','med','diff'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
-                title(main)
             case 'visualSearch2'
                 A=[];
                 for s=sn,
@@ -3486,42 +3687,52 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>5 & A.runNum<20);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
                 end
                 
-                if numel(sn)>1,
-                    main=sprintf('all subjects-%s',type);
-                else
-                    main=sprintf('%s-%s',subj_name{s},type);
+                switch metric,
+                    case 'RT'
+                        %                         figure()
+                        %                         lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'absent','present'}, 'subset',A.respMade==1,'CAT',CAT);
+                        %                         xlabel('Run')
+                        %                         ylabel('Reaction Time')
+                        
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.condition,'leg', {'4','8','12'}, 'subset',A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'accuracy'
+                        
+                        %                         figure()
+                        %                         lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'absent','present'}, 'subset',A.respMade==1,'CAT',CAT);
+                        %                         xlabel('Run')
+                        %                         ylabel('Percent Correct')
+                        
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.condition,'leg', {'4','8','12'}, 'subset',A.respMade==1,'CAT',CAT);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        if strcmp(sess,'scanning'),
+                            set(gca,'FontSize',12,'xticklabel',{'1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'});
+                        else
+                            set(gca,'FontSize',12)
+                        end
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==4);
+                        fprintf('%s-easy: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==8);
+                        fprintf('%s-med: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==12);
+                        fprintf('%s-hard: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
                 end
-                
-                figure(s)
-                subplot(4,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'absent','present'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                title(main)
-                
-                subplot(4,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.trialType,'leg', {'absent','present'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
-                title(main)
-                
-                subplot(4,1,3)
-                lineplot(A.runNum, A.rt, 'split', A.condition,'leg', {'4','8','12'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                title(main)
-                
-                subplot(4,1,4)
-                lineplot(A.runNum, A.numCorr, 'split', A.condition,'leg', {'4','8','12'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
-                title(main)
             case 'nBackPic2'
                 A=[];
                 for s=sn,
@@ -3530,7 +3741,7 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<51);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
@@ -3542,18 +3753,20 @@ switch(what)
                     main=sprintf('%s-%s',subj_name{s},type);
                 end
                 
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt, 'split', A.condition,'leg', {'response','no response'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                title(main)
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr, 'split', A.condition,'leg', {'response','no response'}, 'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
-                title(main)
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum, A.rt, 'split', A.condition,'leg', {'response','no response'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        title(main)
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr, 'split', A.condition,'leg', {'response','no response'}, 'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        title(main)
+                end
             case 'ToM2'
                 A=[];
                 for s=sn,
@@ -3562,7 +3775,7 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<51);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
@@ -3574,18 +3787,23 @@ switch(what)
                     main=sprintf('%s-%s',subj_name{s},type);
                 end
                 
-                figure(s)
-                subplot(2,1,1)
-                lineplot(A.runNum, A.rt,'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Reaction Time')
-                title(main)
-                
-                subplot(2,1,2)
-                lineplot(A.runNum, A.numCorr,'subset',A.respMade==1);
-                xlabel('Run')
-                ylabel('Percent Correct')
-                title(main)
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum, A.rt,'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Reaction Time')
+                        title(main)
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum, A.numCorr,'subset',A.respMade==1);
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        title(main)
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[~A.numCorr A.runNum],'mean');
+                        fprintf('%s: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
             case 'motorSequence2'
                 A=[];
                 for s=sn,
@@ -3594,7 +3812,7 @@ switch(what)
                     A = addstruct(A,D);
                     switch sess,
                         case 'behavioural'
-                            A = getrow(A,A.runNum>=1 & A.runNum<=51);
+                            A = getrow(A,A.runNum>1 & A.runNum<51);
                         case 'scanning'
                             A = getrow(A,A.runNum>=funcRunNum(1) & A.runNum<=funcRunNum(2));
                     end
@@ -3606,18 +3824,25 @@ switch(what)
                     main=sprintf('%s-%s',subj_name{s},type);
                 end
                 
-                figure(s)
-                subplot(2,1,1);
-                lineplot(A.runNum,A.rt,'split',A.condition,'leg',{'control','sequence'});
-                xlabel('Run');
-                ylabel('Reaction Time');
-                title(main)
-                
-                subplot(2,1,2);
-                lineplot(A.runNum,A.numCorr,'split', A.condition,'leg', {'control','sequence'});
-                xlabel('Run')
-                ylabel('Percent Correct')
-                title(main)
+                switch metric,
+                    case 'RT'
+                        figure()
+                        lineplot(A.runNum,A.rt,'split',A.condition,'leg',{'control','sequence'});
+                        xlabel('Run');
+                        ylabel('Reaction Time');
+                        title(main)
+                    case 'accuracy'
+                        figure()
+                        lineplot(A.runNum,A.numCorr,'split', A.condition,'leg', {'control','sequence'});
+                        xlabel('Run')
+                        ylabel('Percent Correct')
+                        title(main)
+                    case 'errors'
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==1);
+                        fprintf('%s-simple: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                        x=pivottable(A.taskName,[],[A.numErr A.runNum],'mean','subset',A.trialType==2);
+                        fprintf('%s-seq: mean number of errors is %2.3f \n',char(unique(A.taskName)),x*100)
+                end
         end
     case 'CHECK:designMatrix'                % CHECK: Visually inspect design matrix
         % example: sc1_sc2_imana('CHECK:designMatrix',2,1,4)

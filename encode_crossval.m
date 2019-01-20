@@ -23,11 +23,8 @@ function [R2_vox,R_vox,Ypred,varargout]=encode_crossval(Y,X,partition,method,var
 [N,P] = size(Y);
 [N,Q] = size(X);
 lambda=0;
-<<<<<<< HEAD
 y=[];
-=======
 C=[];
->>>>>>> e63178d691078ec65a55edaa0221b60335df8b4a
 features=[1:Q];
 
 vararginoptions(varargin,{'lambda'});
@@ -131,23 +128,17 @@ for i=1:length(part)
             u=exp(theta);
         case 'winnerTakeAll'
             % get correlation for each network
-            for q=1:Q,
-                C(q,:)=corr(trainX(:,q),trainY);
-            end
-            % get model feature weights
-            u=(trainX'*trainX)\trainX'*trainY;
+            yy=sum(trainY.*trainY,1);
+            xx=sum(trainX.*trainX,1);
+            C=(X'*Y)./sqrt(bsxfun(@times,yy,xx'));
+            % get model feature weights for winning network only
+            u=zeros(Q,P);
             % limit model feature weights to "winner" network
             for p=1:P,
-<<<<<<< HEAD
-                [x,y]=max(C,[],1);
-                u=zeros(size(u,1),size(u,2)); 
-                u(y)=x;
-=======
-                I=find(C(:,p)==max(C(:,p)));
-                other=find(features~=I);
-                u(other,p)=1e-5;
->>>>>>> e63178d691078ec65a55edaa0221b60335df8b4a
+                [~,I]=max(abs(C(:,p)));
+                u(I,p)=X(:,I)'*X(:,I)\X(:,I)'*Y(:,p);
             end
+            [~,y]=max(C,[],1);
         case 'winnerTakeAll_nonNeg'
             trainX(trainX<0)=1e-5;
             % get correlation for each network
@@ -189,11 +180,8 @@ SPP = nansum(Ypred.*Ypred);
 R_vox(1,:) = SYP./sqrt(SST.*SPP);
 R          = nansum(SYP)./sqrt(nansum(SST).*nansum(SPP));
 
-<<<<<<< HEAD
 varargout={R2,R,y};
-=======
 varargout={R2,R,C};
->>>>>>> e63178d691078ec65a55edaa0221b60335df8b4a
 
 % Derivative functions for models
 % Basic non-negative regression without a prior
