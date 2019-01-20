@@ -1849,12 +1849,12 @@ switch what
         
     case 'CORTEX:makeModel'
         study=varargin{1};
-        sn=varargin{2};
+        s=varargin{2};
         
         load(fullfile(studyDir{2},encodeDir,'glm4','groupEval_SC12_10cluster','SNN.mat'));
         
         % load cerebellar betas
-        encodeSubjDir = fullfile(studyDir{study},encodeDir,'glm4',subj_name{sn}); % set directory
+        encodeSubjDir = fullfile(studyDir{study},encodeDir,'glm4',subj_name{s}); % set directory
         load(fullfile(encodeSubjDir,sprintf('Y_info_glm4_grey_nan.mat')));
         Yp=getrow(Y,Y.cond~=0);
         
