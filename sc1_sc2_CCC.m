@@ -34,8 +34,8 @@ returnSubjs=[2,3,4,6,8,9,10,12,14,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31];
 
 hem       = {'lh','rh'};
 hemName   = {'LeftHem','RightHem'};
-exper = {'sc1','sc2'};
-glm   = 4;
+exper     = {'sc1','sc2'};
+glm       = 4;
 
 %==========================================================================
 
@@ -1453,7 +1453,269 @@ switch(what)
         set(gcf,'paperposition',[10 10 7 7])
         wysiwyg
         
-    case 'CONNECTIVITY:runModel'
+    case 'HYPERPARAMS:lambda'
+        method=varargin{1}; % 'l1' 'l2' 'l1l2'
+        
+        switch method, 
+            case 'l1'
+            case 'ridgeFixed'
+                n=20;
+                lambdas=exp(linspace(log(10),log(1000),n)); % 20 log spaced values from 10 to 1000
+                lambdas=lambdas(1:5); 
+            case 'l1l2'
+        end
+
+         varargout={lambdas};     
+    case 'HYPERPARAMS:run'
+        step=varargin{1}; % 'weights' or 'eval' ?
+        method=varargin{2}; % 'l1' 'l2' 'l1l2'
+        
+        lambdas=sc1_sc2_CCC('HYPERPARAMS:lambda',method);
+        
+        switch step,
+            case 'weights'
+                %                 for i=1:2,
+                for l=1:length(lambdas),
+                    sc1_sc2_CCC('HYPERPARAMS:weights',returnSubjs,'ridgeFixed',2,'l2',lambdas(l))
+                end
+                %                 end
+            case 'eval'
+                for l=1:length(lambdas),
+                    sc1_sc2_CCC('HYPERPARAMS:eval',returnSubjs,'ridgeFixed',2,'l2',lambdas(l))
+                    sc1_sc2_CCC('HYPERPARAMS:eval',returnSubjs,'ridgeFixed',1,'l2',lambdas(l))
+                end
+        end
+    case 'HYPERPARAMS:weights' % Determine optimal lambdas for subsequent modelling
+        sn=varargin{1}; % subjNum
+        method=varargin{2}; % 'ridgeFixed', other options: nonNegative etc
+        study=varargin{3}; % building on which study ? 1 or 2 [1]
+        
+        % vararginoptions
+        meanSub=1;      % Mean Pattern Subtract?
+        incInstr=0;     % Include instruction ?
+        l1=0;
+        l2=0;
+        signal='fitted';
+        model='162_tessellation_hem';
+        data='Cerebellum_grey';
+        trainMode='crossed';
+        
+        vararginoptions(varargin(4:end),{'l1','l2','signal','model','data','trainMode'});
+        
+        % how many samples for bootstrap
+        numSamples=50;
+        
+        T=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        
+        % which study are we taking ?
+        subset = T.StudyNum==study; % Indices of the experiments / conditions that we want to use
+        subset = [subset;subset]; % Make the subset out onto both session
+        
+        % get X and Y data
+        [X,Y,S]=sc1_sc2_CCC('STRUCTURE:meanBeta',model,data,incInstr);
+        
+        % 'weights' fileName
+        fileName=sprintf('%s_%s_%s_sc%d_l1_%d_l2_%d.mat',model,signal,method,study,round(l1),round(l2));
+        
+        % loop over # of subjects
+        for s=1:length(sn),
+            RR=[];
+            
+            hyperParamDir=fullfile(studyDir{2},connDir,'glm4','weights_hyperParams',subj_name{sn(s)});dircheck(hyperParamDir);
+            
+            if(meanSub)
+                for sess=1:2
+                    indx=find(subset & S.sess==sess);
+                    X{s}(indx,:)=bsxfun(@minus,X{s}(indx,:),mean(X{s}(indx,:)));
+                    Y{s}(indx,:)=bsxfun(@minus,Y{s}(indx,:),mean(Y{s}(indx,:)));
+                end;
+            end;
+            
+            % crossed or uncrossed across sessions ?
+            trainXindx=[find(subset & S.sess==1);find(subset & S.sess==2)];
+            switch (trainMode)
+                case 'crossed'
+                    trainYindx=[find(subset & S.sess==2);find(subset & S.sess==1)];
+                case 'uncrossed'
+                    trainYindx=[find(subset & S.sess==1);find(subset & S.sess==2)];
+            end;
+            
+            xx = X{s}(trainXindx,:);
+            yy = Y{s}(trainYindx,:);
+            
+            % loop over # of bootstraps
+            for b=1:numSamples,
+                
+                % resample the y data
+                yy_boot=datasample(yy,size(yy,1));
+                
+                R.SN=sn(s);
+                W=sc_connect_fit(yy_boot,xx,method,'lambda',[l1 l2]);
+                R.W={W};
+                R.lambda=[l1 l2];
+                R.model={model};
+                R.signal={signal};
+                R.trainMode={trainMode};
+                R.study=study;
+                R.method={method};
+                R.boot=b;
+                RR=addstruct(RR,R);
+                clear W yy_boot
+                fprintf('subj%d-bootstrap%d-lambda%2.2d %2.2d \n',sn(s),b,[l1 l2]);
+            end
+            % save connectivity weights
+            save(fullfile(hyperParamDir,fileName),'-struct','RR')
+            clear RR R
+        end
+    case 'HYPERPARAMS:eval'    % Evaluates predictive performance of connectivity model
+        %  M: is the model structure with the connectivity weights in it (M.W)
+        % 'subset': what data should the evaluation be based upon?
+        % 'splitby': by which variable should the evaluation be split?
+        % 'meanSub': Mean pattern subtraction before evaluation?
+        sn=varargin{1}; % subjNum
+        method=varargin{2}; % 'ridgeFixed' or 'nonNegative'
+        study=varargin{3}; % evaluating on which study, 1 or 2 ? [1,2]
+        % example:
+        % sc1_sc2_CCC('CONNECTIVITY:evaluate','162_tessellation_hem','Cerebellum_grey','fitted','ridgeFixed')
+        
+        % if the connectivity weights are built on sc1, then evaluate on
+        % sc2
+        if study==1,
+            studyModel=2; % connectivity weights: which study ?
+        elseif  study==2,
+            studyModel=1;
+        end
+        
+        l1=0;
+        l2=0;
+        signal='fitted';
+        model='162_tessellation_hem';
+        data='Cerebellum_grey';
+        trainMode='crossed';
+        condType='unique';
+        incInstr=0;
+        meanSub = 0; % Mean pattern subtraction before prediction?
+        
+        T = dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        
+        vararginoptions(varargin(4:end),{'l1','l2','subset','meanSub','incInstr','data','trainMode','model','signal','condType'}); % 'condType' is either 'unique or 'all'
+        
+        % Get all the mean betas and prepare the evaluation data (Y)
+        [X,Y,S]=sc1_sc2_CCC('STRUCTURE:meanBeta',model,data,incInstr);
+        
+        % what are we evaluating ?
+        subset = T.StudyNum==study;
+        switch condType,
+            case 'unique'
+                splitby = (T.condNum & T.overlap==0).*T.condNum;
+            case 'all'
+                splitby = T.condNum;
+            case 'shared'
+                splitby = (T.condNum & T.overlap==1).*T.condNum;
+        end
+        S.subset= [subset;subset];
+        if (isempty(splitby))
+            splitby = ones(length(T.StudyNum),1);
+        end;
+        S.splitby=[splitby;splitby];  % Double for the two conditions
+        sS = getrow(S,S.subset);
+        splits = unique(sS.splitby); % related to one task set
+        splits(splits==0)=[]; % remove zero
+        
+        % loop over subjects
+        for s=1:length(sn) % subjects
+            
+            RR=[];
+            
+            hyperParamWeightDir=fullfile(studyDir{2},connDir,'glm4','weights_hyperParams',subj_name{sn(s)});dircheck(hyperParamWeightDir);
+            hyperParamEvalDir=fullfile(studyDir{2},connDir,'glm4','eval_hyperParams',subj_name{sn(s)});dircheck(hyperParamEvalDir);
+            
+            % load in the connectivity weights (X): option to load in multiple
+            % models (each can have different methods, trainings etc)
+            % M=sc1_sc2_CCC('CONNECTIVITY:runModel',returnSubjs,model,data,signal,method,'trainMode',trainMode,studyModel,'lambdaL1',lambdaL1,'lambdaL2',lambdaL2);
+            M=load(fullfile(hyperParamWeightDir,sprintf('%s_%s_%s_sc%d_l1_%d_l2_%d.mat',model,signal,method,studyModel,round(l1),round(l2))));
+            
+            % calculate predictions for each bootstrap
+            numSamples=length(unique(M.boot));
+            for b=1:1:numSamples,
+                
+                Mm=getrow(M,M.boot==b & strcmp(M.trainMode,trainMode));
+                
+                indx = sum(abs(Y{s}(:,:)))>0 & ~isnan(sum(Y{s}(:,:))) & ~isnan(sum(Mm.W{1})); % why is the absolute value being taken ?
+                %                     indx = ~isnan(sum(Y{s}(:,:))) & ~isnan(sum(Mm.W{s}));
+                for sp=1:length(splits); % task conditions
+                    if(meanSub)
+                        for sess=1:2 % sessions
+                            indx=find(S.subset & S.sess==sess & S.splitby==splits(sp));
+                            X{s}(indx,:)=bsxfun(@minus,X{s}(indx,:),mean(X{s}(indx,:)));
+                            Y{s}(indx,:)=bsxfun(@minus,Y{s}(indx,:),mean(Y{s}(indx,:)));
+                        end;
+                    end;
+                    testAindx=[find(S.subset & S.sess==1 & S.splitby==splits(sp));...
+                        find(S.subset & S.sess==2 & S.splitby==splits(sp))];
+                    testBindx=[find(S.subset & S.sess==2 & S.splitby==splits(sp));...
+                        find(S.subset & S.sess==1 & S.splitby==splits(sp))];
+                    predY   = X{s}(testAindx,:)*Mm.W{1};                    % Predicted Y using crossvalidation
+                    predYnc = X{s}(testBindx,:)*Mm.W{1};                    % Predicted Y not crossvalidated
+                    SSP   = sum(sum(predY(:,indx).^2));             % Sum of square of predictions
+                    SSY   = sum(sum(Y{s}(testBindx,indx).^2));               % Sum of squares of data
+                    SSCp  = sum(sum(predY(:,indx).*predYnc(:,indx))); % Covariance of Predictions
+                    SSCy  = sum(sum(Y{s}(testAindx,indx).*Y{s}(testBindx,indx)));  % Covariance of Y's
+                    SSCn  = sum(sum(predYnc(:,indx).*Y{s}(testBindx,indx)));   % Covariance of non-cross prediction and data
+                    SSCc  = sum(sum(predY(:,indx).*Y{s}(testBindx,indx)));   % Covariance of cross prediction and data
+                    R.SN    = Mm.SN;
+                    R.lambda = Mm.lambda(:,:);
+                    R.method = Mm.method;
+                    R.trainMode = Mm.trainMode;
+                    R.model = Mm.model;
+                    R.Rcv   = SSCc ./ sqrt(SSY.*SSP); % Double-Crossvalidated predictive correlation
+                    R.Rnc   = SSCn ./ sqrt(SSY.*SSP); % Not double-crossvalidated predictive correlation
+                    R.Ry    = SSCy ./ SSY;            % Reliability of data: noise ceiling
+                    R.Rp    = SSCp ./ SSP;            % Reliability of prediction
+                    R.splitby = splits(sp);
+                    R.split = {condType};
+                    R.boot  = b;
+                    RR = addstruct(RR,R);
+                end;
+                fprintf('pred done for %s-boot%d \n',subj_name{sn(s)},b)
+            end;
+            save(fullfile(hyperParamEvalDir,sprintf('%s_%s_%s_sc%d_l1_%d_l2_%d_%s.mat',model,signal,method,study,round(l1),round(l2),condType)),'-struct','RR')
+            clear RR Mm
+        end
+    case 'HYPERPARAMS:plot'    % Plots reg-perf curve for each subject
+        sn=varargin{1}; 
+        model=varargin{2}; 
+        signal=varargin{3};
+        method=varargin{4}; 
+        study=varargin{5}; 
+        l1=varargin{6}; 
+        l2=varargin{7}; 
+        condType=varargin{8}; 
+        
+        vararginoptions({varargin{9:end}},{'CAT'}); % option if doing individual map analysis
+        
+        % 
+        l2=round(l2);
+        l1=round(l1); 
+        
+        TT=[];
+        for s=1:length(sn),
+            for i=1:length(l1),
+                for ii=1:length(l2),
+                    T=load(fullfile(studyDir{2},connDir,'glm4','eval_hyperParams',subj_name{sn(s)},...
+                        sprintf('%s_%s_%s_sc%d_l1_%d_l2_%d_%s.mat',model,signal,method,study,l1(i),l2(ii),condType)));
+                    TT=addstruct(TT,T);
+                end
+            end
+        end
+        
+        if exist('CAT'),
+            xyplot(TT.lambda(:,2),TT.Rcv,TT.lambda(:,2),'split',TT.lambda(:,2),'CAT',CAT);
+        else
+            xyplot(TT.lambda(:,2),TT.Rcv,TT.lambda(:,2),'split',TT.lambda(:,2),'style_thickline');
+        end
+
+    case 'CONNECTIVITY:weights'
         sn=varargin{1}; % subjNum
         model=varargin{2}; % '162_tessellation_hem'
         data=varargin{3}; % 'Cerebellum_grey'
@@ -1552,7 +1814,7 @@ switch(what)
             fprintf('%d\n',sn(s));
         end
         % save connectivity weights
-        save(fullfile(studyDir{2},connDir,'glm4','weights',sprintf('%s_%s_%s_sc%d.mat',model,signal,method,study)),'-struct','RR','-v7.3')
+        save(fullfile(studyDir{2},connDir,'glm4','weights_best',sprintf('%s_%s_%s_sc%d.mat',model,signal,method,study)),'-struct','RR','-v7.3')
     case 'CONNECTIVITY:evaluate' % Evaluates predictive performance of connectivity model
         % M: is the model structure with the connectivity weights in it (M.W)
         % 'subset': what data should the evaluation be based upon?
@@ -1585,7 +1847,7 @@ switch(what)
         % load in the connectivity weights (X): option to load in multiple
         % models (each can have different methods, trainings etc)
         %         M=sc1_sc2_CCC('CONNECTIVITY:runModel',returnSubjs,model,data,signal,method,'trainMode',trainMode,studyModel,'lambdaL1',lambdaL1,'lambdaL2',lambdaL2);
-        M=load(fullfile(studyDir{2},connDir,'glm4','weights',sprintf('%s_%s_%s_sc%d.mat',model,signal,method,studyModel)));
+        M=load(fullfile(studyDir{2},connDir,'glm4','weights_best',sprintf('%s_%s_%s_sc%d.mat',model,signal,method,studyModel)));
         
         % Get all the mean betas and prepare the evaulation data (Y)
         [X,Y,S]=sc1_sc2_CCC('STRUCTURE:meanBeta',model,data,incInstr);
@@ -1597,6 +1859,9 @@ switch(what)
                 splitby = (T.condNum & T.overlap==0).*T.condNum;
             case 'all'
                 splitby = T.condNum;
+            case 'shared'
+                splitby = (T.condNum & T.overlap==1).*T.condNum;
+                
         end
         S.subset= [subset;subset];
         if (isempty(splitby))
@@ -1663,14 +1928,14 @@ switch(what)
                 end;
             end;
         end;
-        save(fullfile(studyDir{2},connDir,'glm4','eval',sprintf('%s_%s_%s_sc%d_%s.mat',model,signal,method,study,condType)),'-struct','RR','-v7.3')
+        save(fullfile(studyDir{2},connDir,'glm4','eval_best',sprintf('%s_%s_%s_sc%d_%s.mat',model,signal,method,study,condType)),'-struct','RR','-v7.3')
     case 'CONNECTIVITY:plot' % loads in multiple methods and compares them
         model=varargin{1}; % '162_tessellation_hem' or 'yeo_17' etc
         signal=varargin{2}; % 'fitted' or 'residual'
         method=varargin{3}; % {'ridgeFixed','cplexqp_L2'}
         study=varargin{4}; % evaluating on which study, 1 or 2 ? [1,2]
-        condType=varargin{5}; % {'unique','all'} taskConds
-        whatToPlot=varargin{6}; % what are we plotting ? 'AllUnique','CrossUncross','taskConds', 'RcvRnc'
+        condType=varargin{5}; % {'unique','all','shared'} taskConds
+        whatToPlot=varargin{6}; % what are we plotting ? 'condType','CrossUncross','taskConds', 'RcvRnc'
         
         RR=[];
         S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
@@ -1678,25 +1943,26 @@ switch(what)
         % Aesthetics
         CAT.markertype='none';
         CAT.errorwidth=1;
-        CAT.linecolor={'r','k','b'};
-        CAT.errorcolor={'r','k','b'};
-        CAT.linewidth={3, 3, 3};
-        CAT.linestyle={'-','-','-'};
+        CAT.linecolor={'r','k','b','g'};
+        CAT.errorcolor={'r','k','b','g'};
+        CAT.linewidth={3, 3, 3, 3};
+        CAT.linestyle={'-','-','-','-'};
         
         for m=1:length(method),
             for c=1:length(condType),
                 T=load(fullfile(studyDir{2},connDir,'glm4','eval',sprintf('%s_%s_%s_sc%d_%s.mat',model,signal,method{m},study,condType{c})));
+                T.methodNum=repmat(m,size(T.SN,1),1);
                 RR=addstruct(RR,T);
             end
             switch whatToPlot,
-                case 'allUnique'
+                case 'condType'
                     % 'unique' versus 'all'
                     figure(1)
-                    lineplot(RR.lambda(:,2),RR.Rcv,'split',RR.split,'leg','auto','CAT',CAT,'subset',strcmp(RR.method,method{m}) & strcmp(RR.trainMode,'crossed'))
+                    lineplot(RR.lambda(:,2),RR.Rcv,'split',RR.split,'leg','auto','CAT',CAT,'subset',strcmp(RR.method,method{m}) & strcmp(RR.trainMode,'crossed'),'subset', RR.lambda(:,2)<1000)
                     ylabel('R')
                     xlabel('lambda')
                     title(sprintf('%s-%s',signal,method{m}))
-                    set(gca,'YLim',[.1 0.3],'FontSize',14,'ytick',[.1,.15,.2,.25,.3]);
+                    set(gca,'YLim',[.1 0.4],'FontSize',14,'ytick',[.1,.15,.2,.25,.3, .35,.4]);
                 case 'crossUncross'
                     % 'crossed' versus 'uncrossed'
                     figure(1)
@@ -1712,15 +1978,23 @@ switch(what)
                     figure(1)
                     barplot(RR.splitby,RR.Rcv,'subset',strcmp(RR.method,method{m}) & strcmp(RR.split,'unique') & strcmp(RR.trainMode,'crossed'))
                     ylabel('R')
-                    title(sprintf('%s-%s',signal,method{m}))
+                    title(sprintf('%s-%s-unique',signal,method{m}))
                     set(gca,'YLim',[0 0.4],'FontSize',8,'XTickLabel',condNames);
                     
                     % split by taskConds (all)
                     condNames=S.condNames(S.StudyNum==study);
                     figure(2)
-                    barplot(RR.splitby,RR.Rcv,'subset',strcmp(RR.method,method{m}) & strcmp(RR.split,'all') & strcmp(RR.trainMode,'crossed'))
+                    barplot(RR.splitby,RR.Rcv,'subset',strcmp(RR.method,method{m}) & strcmp(RR.split,'all') & strcmp(RR.trainMode,'crossed') & strcmp(RR.trainMode,'crossed'))
                     ylabel('R')
-                    title(sprintf('%s-%s',signal))
+                    title(sprintf('%s-%s-all',signal,method{m}))
+                    set(gca,'YLim',[0 0.55],'FontSize',8,'XTickLabel',condNames);
+                    
+                    % split by taskConds (shared)
+                    condNames=S.condNames(S.StudyNum==study);
+                    figure(3)
+                    barplot(RR.splitby,RR.Rcv,'subset',strcmp(RR.method,method{m}) & strcmp(RR.split,'shared') & strcmp(RR.trainMode,'crossed') & strcmp(RR.trainMode,'crossed'))
+                    ylabel('R')
+                    title(sprintf('%s-%s-shared',signal,method{m}))
                     set(gca,'YLim',[0 0.55],'FontSize',8,'XTickLabel',condNames);
                 case 'RcvRnc'
                     % split Rcv versus Rnc
@@ -1735,15 +2009,15 @@ switch(what)
                     xlabel('lambda')
                     title(sprintf('%s-%s',signal,method{m}))
                     set(gca,'YLim',[.1 0.3],'FontSize',14,'ytick',[.1,.15,.2,.25,.3]);
-                case 'bestMethod'
-                    figure(1)
-                    lineplot(RR.lambda(:,2),RR.Rcv,'split',RR.method,'leg','auto','subset',strcmp(RR.split,'unique') & strcmp(RR.trainMode,'crossed'),'CAT',CAT)
-                    ylabel('R')
-                    xlabel('lambda')
-                    set(gca,'YLim',[.1 0.3],'FontSize',14,'ytick',[.1,.15,.2,.25,.3]);
             end
         end
         keyboard;
+        
+        % bestMethod
+        xyplot(RR.methodNum,RR.Rcv,[RR.lambda],'split',[RR.method],'style_thickline','markersize',10,'leg','auto','markersize',10,'subset',strcmp(RR.split,'unique') & strcmp(RR.trainMode,'crossed'));
+        ylabel('R')
+        xlabel('methods')
+        set(gca,'FontSize',14,'xtick',[]);
         
     case 'MAP:cortex'              % Map of where projections come from
         sn=varargin{1};        % [2:22]
@@ -1853,6 +2127,39 @@ switch(what)
         % Now map to surface-based representation
         D = suit_map2surf(Vres,'stats','mean');
         varargout={D,Vres};
+        
+    case 'AXES:reg-perf-curve' % make separate graphs for 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_10cluster'
+        sn=varargin{1}; 
+        study=varargin{2}; 
+
+        % set options
+        model='162_tessellation_hem';
+        signal='fitted'; 
+        method='ridgeFixed';
+        condType='unique'; 
+        
+        l1=0;
+        l2=sc1_sc2_CCC('HYPERPARAMS:lambda',method);
+        
+        % Aesthetics
+        CAT.markertype='none';
+        CAT.errorwidth=.5;
+        CAT.linecolor={'r','k'};
+        CAT.errorcolor={'r','k'};
+        CAT.linewidth={2, 2};
+        CAT.linestyle={'-','-'};
+
+        sc1_sc2_CCC('HYPERPARAMS:plot',sn,model,signal,method,study,l1,l2,condType)
+
+        % Labelling
+        set(gca,'YLim',[0 0.55],'XLim',[0 35],'FontSize',14,'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'}); %
+        xlabel('Spatial Distances (mm)');
+        ylabel('Activity Correlation (R)');
+        %         title(plotName);
+        set(gcf,'units','centimeters','position',[5,5,15,15])
+        %         axis('auto')
+        % do stats
+        %         sc1_sc2_ICB('EVAL:STATS:CURVES',toPlot)
         
     otherwise
         disp('there is no such case.')
