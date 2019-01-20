@@ -141,7 +141,7 @@ switch(what)
         if glm == 6;     % Select the right directory for GLMs different from GLM4
             imagingDir=[imagingDir '_aggr'];
         end
-            
+        
         B = [];
         glmDir =fullfile(rootDir,exper,sprintf('/GLM_firstlevel_%d',glm));
         subjs=length(sn);
@@ -156,7 +156,7 @@ switch(what)
             tic;
             load(fullfile(sc1Dir,regDir,'data',subj_name{sn(s)},sprintf('regions_%s.mat',type))); % 'regions' are defined in 'ROI_define'
             SPM=spmj_move_rawdata(SPM,fullfile(rootDir,'sc1',imagingDir,subj_name{sn(s)}));
-
+            
             % Get the raw data files
             V=SPM.xY.VY;
             VresMS = spm_vol(fullfile(glmDirSubj,'ResMS.nii'));
@@ -215,7 +215,7 @@ switch(what)
             tic;
             load(fullfile(sc1Dir,regDir,'data',subj_name{sn(s)},sprintf('regions_%s.mat',type))); % 'regions' are defined in 'ROI_define'
             SPM=spmj_move_rawdata(SPM,fullfile(rootDir,'sc1',imagingDir,subj_name{sn(s)}));
-
+            
             % Get the raw data files
             V=SPM.xY.VY;
             VresMS = spm_vol(fullfile(glmDirSubj,'ResMS.nii'));
@@ -288,14 +288,14 @@ switch(what)
         end;
     case 'get_meanBeta'         % Take the time series structure and extract mean beta for cross-session modeling
         % In the new version, this always stores the betas like the occurr
-        % in the GLM 
+        % in the GLM
         type    = '162_tessellation_hem';  % 'Cerebellum_grey';
         exper   = {'sc1','sc2'};
         sn      = goodsubj;
         glm     = 4;
         vararginoptions(varargin,{'sn','glm','type'});
-
-        % Loop over experiments 
+        
+        % Loop over experiments
         for e=1:2
             myRegDir = fullfile(rootDir,exper{e},regDir);
             for s=1:length(sn);
@@ -313,25 +313,25 @@ switch(what)
                 end;
                 
                 % Now generate mean estimates per session
-                % Note that in the new SPM_info Instruction is coded as cond =0 
-                T.cond=T.cond+1;            % This is only for generating the avergaging matrix 
+                % Note that in the new SPM_info Instruction is coded as cond =0
+                T.cond=T.cond+1;            % This is only for generating the avergaging matrix
                 for se=1:2
                     X=indicatorMatrix('identity_p',T.cond.*(T.sess==se));
-                    B{s,se}=pinv(X)*D.B(1:size(X,1),:);  % This calculates average beta across runs, skipping intercepts 
-                    ResMS{s,1} = sum(D.Yres.^2)./size(D.Yres,1); % Residual mean square for this voxel/region 
-                 end;
+                    B{s,se}=pinv(X)*D.B(1:size(X,1),:);  % This calculates average beta across runs, skipping intercepts
+                    ResMS{s,1} = sum(D.Yres.^2)./size(D.Yres,1); % Residual mean square for this voxel/region
+                end;
             end;
             save(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',type)),'B','ResMS');
         end;
-    case 'sample_DesignMatrix' 
-        exper=varargin{1}; 
-        glm = varargin{2}; 
-        wdir = fullfile(rootDir,expStr{exper},sprintf('GLM_firstlevel_%d',glm)); 
-        load(fullfile(wdir,'s02','SPM_light.mat')); 
-        Sess = SPM.Sess;    % Session Structure 
-        X = SPM.xX.X;      % Design matrix 
-        wX = SPM.xX.xKXs.X; % Filtered design matrix 
-        save(fullfile(wdir,'SampleDesignMatrix.mat'),'Sess','X','wX'); 
+    case 'sample_DesignMatrix'
+        exper=varargin{1};
+        glm = varargin{2};
+        wdir = fullfile(rootDir,expStr{exper},sprintf('GLM_firstlevel_%d',glm));
+        load(fullfile(wdir,'s02','SPM_light.mat'));
+        Sess = SPM.Sess;    % Session Structure
+        X = SPM.xX.X;      % Design matrix
+        wX = SPM.xX.xKXs.X; % Filtered design matrix
+        save(fullfile(wdir,'SampleDesignMatrix.mat'),'Sess','X','wX');
         
     case 'cortical_covariances'                 % Covariances between cortical areas in predicted time series
         sn = goodsubj;
@@ -343,7 +343,7 @@ switch(what)
         X=load(fullfile(sc1Dir,regDir,'data','162_reorder.mat'));
         Xx=getrow(X,X.newIndx);
         Xx=getrow(Xx,Xx.good==1);
-   
+        
         % Calculate correlations
         for s=1:length(sn)
             % load Individual data
@@ -360,7 +360,7 @@ switch(what)
             % Variance inflation factor for each
             T.SN(s,1)=s;
             T.VAR(s,:)=diag(COV(:,:,s)); % Variance of the task-related betas: How much activity could we induce?
-            T.VIF(s,:)=diag(inv(COR(:,:,s)))'; % Variance inflation factor: How much does the region suffer from co-linearity? 
+            T.VIF(s,:)=diag(inv(COR(:,:,s)))'; % Variance inflation factor: How much does the region suffer from co-linearity?
             T.VARB(s,:)=diag(inv(COV(:,:,s))); % Combination of the last two: How well would we estimate connectivity weights from this region?
         end;
         
@@ -393,10 +393,10 @@ switch(what)
             ppos=ppos+1;
             colorbar;
         end
-
+        
         set(gcf,'paperposition',[10 10 7 7])
         wysiwyg
-
+        
     case 'cortical_pattern_consistency_all'     % Consistency based on betas
         T=load(fullfile(regDir,'glm4','ts_162_tessellation_hem_all.mat'));
         X=load(fullfile(regDir,'data','162_reorder.mat'));
@@ -575,13 +575,13 @@ switch(what)
         %  save(fullfile(regDir,'glm4','Covariance_by_session.mat'),...
         %     'C','R','Xx');
         varargout={DD,meanSD};
-   
-    case 'get_mbeta_all'           %  Gets the mean betas for each session and experiment 
+        
+    case 'get_mbeta_all'           %  Gets the mean betas for each session and experiment
         exper = {'sc1','sc2'};
         glm   = 4;
         yname = 'Cerebellum_grey';
         xname = '162_tessellation_hem';
-        incInstr = 0;                           % Include instruction?  
+        incInstr = 0;                           % Include instruction?
         vararginoptions(varargin,{'exper','glm','yname','xname','incInstr'});
         
         % Load the betas for all the tasks
@@ -590,14 +590,14 @@ switch(what)
             YD{e}=load(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',yname)));
             XD{e}=load(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',xname)));
         end;
-                    
+        
         % Make an integrated structure, either including instruction or
-        % rest 
-        if (incInstr) 
+        % rest
+        if (incInstr)
             T=dload(fullfile(rootDir,'sc1_sc2_taskConds_GLM.txt'));
-        else 
+        else
             T=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
-        end; 
+        end;
         
         % Make an integrated Structure
         T1=T;
@@ -609,13 +609,13 @@ switch(what)
             X{s}=[];
             Y{s}=[];
             for se=1:2
-                if (incInstr==0)  % If no instruction, add rest and center within session 
-                     for e=1:2 
-                         YD{e}.B{s,se}=[YD{e}.B{s,se}(2:end,:);zeros(1,size(YD{e}.B{s,se},2))]; 
-                         XD{e}.B{s,se}=[XD{e}.B{s,se}(2:end,:);zeros(1,size(XD{e}.B{s,se},2))]; 
-                         YD{e}.B{s,se}=bsxfun(@minus,YD{e}.B{s,se},mean(YD{e}.B{s,se})); 
-                         XD{e}.B{s,se}=bsxfun(@minus,XD{e}.B{s,se},mean(XD{e}.B{s,se})); 
-                     end; 
+                if (incInstr==0)  % If no instruction, add rest and center within session
+                    for e=1:2
+                        YD{e}.B{s,se}=[YD{e}.B{s,se}(2:end,:);zeros(1,size(YD{e}.B{s,se},2))];
+                        XD{e}.B{s,se}=[XD{e}.B{s,se}(2:end,:);zeros(1,size(XD{e}.B{s,se},2))];
+                        YD{e}.B{s,se}=bsxfun(@minus,YD{e}.B{s,se},mean(YD{e}.B{s,se}));
+                        XD{e}.B{s,se}=bsxfun(@minus,XD{e}.B{s,se},mean(XD{e}.B{s,se}));
+                    end;
                 end;
                 Y{s}=[Y{s};YD{1}.B{s,se};YD{2}.B{s,se}];
                 X{s}=[X{s};XD{1}.B{s,se};XD{2}.B{s,se}];
@@ -623,7 +623,7 @@ switch(what)
         end;
         varargout = {X,Y,T};
     case 'mbeta_reliability' % Get beta reliability only on common task conditions
-        % In the cerebellum (Y) 
+        % In the cerebellum (Y)
         glm =4;
         vararginoptions(varargin,{'glm'});
         [X,Y,T]=sc1sc2_connectivity('get_mbeta_all','glm',glm);
@@ -663,40 +663,40 @@ switch(what)
         set(gca,'XTickLabel',condNames,'XTickLabelRotation',60);
         varargout={RR,T};
     case 'conn_mbeta'              % Estimate connectivty model on the meanbetas
-        % L2=[100 500 1000 2000 3000 4000]; 
-        % sc1sc2_connectivity('conn_mbeta','method','ridgeFixed','lambdaL1',L2*0,'lambdaL2',L2,'name','mb4_162_ridge','exper',1);        
+        % L2=[100 500 1000 2000 3000 4000];
+        % sc1sc2_connectivity('conn_mbeta','method','ridgeFixed','lambdaL1',L2*0,'lambdaL2',L2,'name','mb4_162_ridge','exper',1);
         % sc1sc2_connectivity('conn_mbeta','method','ridgeFixed','lambdaL1',L2*0,'lambdaL2',L2,'name','mb4_162_ridge','exper',2);
-        % L2=[100 1000 2000]; 
+        % L2=[100 1000 2000];
         % sc1sc2_connectivity('conn_mbeta','method','cplexqpL1L2','lambdaL1',L2*0,'lambdaL2',L2,'name','mb4_162_nn','exper',1);
-  
+        
         T=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
         
         sn=goodsubj;
         RR= [];
         method= 'ridgeFixed';  % linRegress, ridgeFixed, nonNegExp, cplexqp, lasso, winnerTakeAll
-        yname = 'Cerebellum_grey';   
+        yname = 'Cerebellum_grey';
         xname = '162_tessellation_hem';
-        name  = 'mb4_162_ridge';  % mb4_162_ridge or ts4_yeo_nneg or mb5_162_lasso 
-        trainMode = 'crossed';    % training can be done in a crossed or uncrossed fashion 
+        name  = 'mb4_162_ridge';  % mb4_162_ridge or ts4_yeo_nneg or mb5_162_lasso
+        trainMode = 'crossed';    % training can be done in a crossed or uncrossed fashion
         lambdaL1 = 2500;
         lambdaL2 = 2500;
         overwrite = 0;  % Overwrite old results or add to existing structure?
-        exper  = 1;     % Task set to train 
-        incInstr = 0;   % For future use: include Instruction 
+        exper  = 1;     % Task set to train
+        incInstr = 0;   % For future use: include Instruction
         vararginoptions(varargin,{'sn','xname','type','exper','method','glm',...
-             'name','trainMode','lambdaL1','lambdaL2','incInstr','overwrite'});
-
-        % Get data 
+            'name','trainMode','lambdaL1','lambdaL2','incInstr','overwrite'});
+        
+        % Get data
         [X,Y,S]=sc1sc2_connectivity('get_mbeta_all','incInstr',incInstr);
-
-        % Save the fit 
+        
+        % Save the fit
         outDir = fullfile(rootDir,expStr{exper},connDir,name);
         dircheck(outDir);
-
+        
         % Find the data that we want to use for fitting the connectivity
-        % model 
-        SI1 = find(ismember(S.StudyNum,exper) & S.sess==1); 
-        SI2 = find(ismember(S.StudyNum,exper) & S.sess==2); 
+        % model
+        SI1 = find(ismember(S.StudyNum,exper) & S.sess==1);
+        SI2 = find(ismember(S.StudyNum,exper) & S.sess==2);
         trainXindx=[SI1;SI2];
         switch (trainMode)
             case 'crossed'
@@ -705,48 +705,48 @@ switch(what)
                 trainYindx=[SI1;SI2];
         end;
         
-        % Estimate the model and store the information attached to it 
+        % Estimate the model and store the information attached to it
         for s=1:length(sn)
-            % Find relevant file 
+            % Find relevant file
             fprintf('%d\n',sn(s));
             outName=fullfile(outDir,sprintf('%s_%s.mat',name,subj_name{sn(s)}));
-            if (exist(outName) && overwrite==0); 
-                RR=load(outName); 
-            else 
-                RR=[]; 
-            end; 
-
-            % Get data 
-            subjn=find(goodsubj==sn(s));    
+            if (exist(outName) && overwrite==0);
+                RR=load(outName);
+            else
+                RR=[];
+            end;
+            
+            % Get data
+            subjn=find(goodsubj==sn(s));
             xx = X{subjn}(trainXindx,:);
             yy = Y{subjn}(trainYindx,:);
             
-            % Run for all regularisation parameters 
+            % Run for all regularisation parameters
             for l=1:length(lambdaL1)
                 R.SN = sn(s);
                 [W,R.fR2m,R.fRm] = sc_connect_fit(yy,xx,method,'lambda',[lambdaL1(l) lambdaL2(l)]);
                 R.W={W};
                 R.lambda = [lambdaL1(l) lambdaL2(l)];
                 R.method   = {method};
-                R.incInstr = incInstr; 
-                R.trainMode = {trainMode}; 
-                R.xname  = {xname}; 
+                R.incInstr = incInstr;
+                R.trainMode = {trainMode};
+                R.xname  = {xname};
                 RR=addstruct(RR,R);
-            end; 
+            end;
             save(outName,'-struct','RR');
-        end;        
+        end;
     case 'conn_ts'                 % Run encoding model on time series
         % sc1_connectivity('conn_ts',[2:22],'method','winnerTakeAll_nonNeg','name','glm4_162_nnWTA','lambdaL1',0,'lambdaL2',0);
         % sc1_connectivity('conn_ts',goodsubj,'method','winnerTakeAll','name','glm4_162_WTA','lambdaL1',0,'lambdaL2',0);
         % sc1_connectivity('conn_ts',[2:22],'method','ridgeFixed','name','glm4_162_ridge','lambdaL1',[0 0 0 0 0 0],'lambdaL2',[0 500 1000 2500 5000 7500]);
         % sc1_connectivity('conn_ts',[2:22],'method','cplexqpL1L2','name','glm4_162_L1L2c','lambdaL1',[2500 7500 7500],'lambdaL2',[2500 7500 2500]);
-        sn=goodsubj;%varargin{1};  
+        sn=goodsubj;%varargin{1};
         glm=4;                          % usually 4
         method= 'ridgeFixed';           % cplexqpL1L2, linRegress, nonNegExp, cplexqp, lasso, winnerTakeAll
         yname = 'cerebellum_grey';
         xname = '162_tessellation_hem';
         name  = 'glm4_162_ridgeFixed';  % Name of the output
-        type  = {'Y','Yhat'};           % Run with three Y 
+        type  = {'Y','Yhat'};           % Run with three Y
         exper   = 'sc1';
         lambdaL1 = 0;                   %[2500 7500 7500];    % Initially set to 0
         lambdaL2 = 2500;                %[2500 7500 2500];    % Inititally select one value
@@ -767,10 +767,10 @@ switch(what)
             TT=[];
             T=[];
             
-            % Load X 
+            % Load X
             file = fullfile(myRegDir,sprintf('glm%d',glm),subj_name{s},sprintf('ts_%s.mat',xname));
             XX=load(file);
-
+            
             if (strcmp(xname,'162_tessellation_hem'))
                 Tcort=load(fullfile(myRegDir,'data','162_reorder.mat'));
                 Tcort=getrow(Tcort,Tcort.good==1);
@@ -778,23 +778,23 @@ switch(what)
                 XX.Yhatr = XX.Yhatr(:,Tcort.regIndx,:);
                 XX.Yres =  XX.Yres(:,Tcort.regIndx,:);
             end;
-
+            
             if (strcmp(xname,'yeo'))
                 XX.Yhatm = XX.Yhatm(:,2:18,:);
                 XX.Yhatr = XX.Yhatr(:,2:18,:);
                 XX.Yres =  XX.Yres(:,2:18,:);
             end;
-
+            
             XX.Yhat = XX.Yhatm + XX.Yhatr;
             XX.Y    = XX.Yres + XX.Yhat;
-
-
+            
+            
             if (~isempty(partial))
                 PP=load(fullfile(rootDir,exper,regDir,regDir,'glm4',subj_name{sn(s)},sprintf('ts_%s.mat',partial)));
                 PP.Yhat = PP.Yhatm + PP.Yhatr;
                 PP.Y = PP.Yhat + PP.Yres;
             end;
-
+            
             % Load Y
             Y=load(fullfile(myRegDir,'glm4',subj_name{s},sprintf('ts_%s.mat',yname)));
             Y.Yhat = Y.Yhatm + Y.Yhatr;
@@ -984,11 +984,11 @@ switch(what)
         % Now map to surface-based representation
         D = suit_map2surf(Vres,'stats','mean');
         varargout={D,Vres};
-    case 'evaluate' % Evaluates predictive performance of connectivity model 
+    case 'evaluate' % Evaluates predictive performance of connectivity model
         % M: is the model structure with the connectivity weights in it (M.W)
-        % 'subset': what data should the evaluation be based upon? 
-        % 'splitby': by which variable should the evaluation be split? 
-        % 'meanSub': Mean pattern subtraction before evaluation? 
+        % 'subset': what data should the evaluation be based upon?
+        % 'splitby': by which variable should the evaluation be split?
+        % 'meanSub': Mean pattern subtraction before evaluation?
         M = varargin{1};        % This is a structure with the fitted data
         T = dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
         subset = T.StudyNum==2;
@@ -997,8 +997,8 @@ switch(what)
         xname = '162_tessellation_hem';
         meanSub = 0; % Mean pattern subtraction before prediction?
         vararginoptions(varargin(2:end),{'subset','splitby','meanSub','xname','yname'});
-
-        % Get all the mean betas and prepare the evaulation data 
+        
+        % Get all the mean betas and prepare the evaulation data
         [X,Y,S]=sc1sc2_connectivity('get_mbeta_all','xname',xname,'yname',yname,'incInstr',0);
         S.subset= [subset;subset];
         if (isempty(splitby))
@@ -1008,7 +1008,7 @@ switch(what)
         sS = getrow(S,S.subset);
         splits = unique(sS.splitby);
         
-        % Loop over models and evaulate 
+        % Loop over models and evaulate
         RR=[];
         numModels = size(M.SN,1);
         for m=1:numModels
@@ -1041,23 +1041,23 @@ switch(what)
                 R.xname = M.xname(m);
                 R.Rcv   = SSCc ./ sqrt(SSY.*SSP); % Double-Crossvalidated predictive correlation
                 R.Rnc   = SSCn ./ sqrt(SSY.*SSP); % Not double-crossvalidated predictive correlation
-                R.Ry    = SSCy ./ SSY;            % Reliability of data: noise ceiling 
+                R.Ry    = SSCy ./ SSY;            % Reliability of data: noise ceiling
                 R.Rp    = SSCp ./ SSP;            % Reliability of prediction
                 R.split = splits(sp);
-                % Calucate Sparseness measures 
-                Ws = sort(abs(M.W{m})); 
+                % Calucate Sparseness measures
+                Ws = sort(abs(M.W{m}));
                 Wss= bsxfun(@rdivide,Ws,sum(Ws));% standardized coefficients (to the sum overall
-                R.spIdx = nanmean(Wss(end,:)); % Largest over the sum of the others 
+                R.spIdx = nanmean(Wss(end,:)); % Largest over the sum of the others
                 N=size(Wss,1);
                 w=(N-[1:N]'+0.5)/N;
                 ginni = 1-2*sum(bsxfun(@times,Wss,w));
-                R.ginni = nanmean(ginni); % Ginni index: mean over voxels 
+                R.ginni = nanmean(ginni); % Ginni index: mean over voxels
                 RR = addstruct(RR,R);
             end;
         end;
         varargout={RR,Y{s}(testBindx,:),predY};
     case 'evaluate_all'                     % Evaluates different sets of Connnectivity models
-        whatAna=varargin{1};                % Which particular models / experiments / modes do you want to compare 
+        whatAna=varargin{1};                % Which particular models / experiments / modes do you want to compare
         outname = whatAna;
         xnames = {'162_tessellation_hem'};
         D=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
@@ -1066,27 +1066,27 @@ switch(what)
             case 'mb4_162_ridge'
                 name   = {'mb4_162_ridge';'mb4_162_ridge'};
                 traindata = [1 2];
-                subset    = [D.StudyNum==2 D.StudyNum==1]; % Evaluate on the other experiment  
-                xnIn      = [1 1]; % use always 162 tesselation 
-                ysplit    = ones(length(D.StudyNum),1); % No splitting  
-            case 'mb4_162_all' 
+                subset    = [D.StudyNum==2 D.StudyNum==1]; % Evaluate on the other experiment
+                xnIn      = [1 1]; % use always 162 tesselation
+                ysplit    = ones(length(D.StudyNum),1); % No splitting
+            case 'mb4_162_all'
                 name   = {'mb4_162_ridge';'mb4_162_ridge';'mb4_162_wtan';'mb4_162_wtan';'mb4_162_nn';'mb4_162_nn'};
                 traindata = [1 2 1 2 1 2]';
-                subset    = [D.StudyNum==2 D.StudyNum==1 D.StudyNum==2 D.StudyNum==1 D.StudyNum==2 D.StudyNum==1]; % Evaluate on the other experiment  
-                xnIn      = [1 1 1 1 1 1]; % use always 162 tesselation 
-                ysplit    = ones(length(D.StudyNum),1); % No splitting  
+                subset    = [D.StudyNum==2 D.StudyNum==1 D.StudyNum==2 D.StudyNum==1 D.StudyNum==2 D.StudyNum==1]; % Evaluate on the other experiment
+                xnIn      = [1 1 1 1 1 1]; % use always 162 tesselation
+                ysplit    = ones(length(D.StudyNum),1); % No splitting
         end;
         RR=[];
         for i=1:length(name)
-            sn=goodsubj;        % Restrict to good subjects 
+            sn=goodsubj;        % Restrict to good subjects
             for s=sn
                 fprintf('%d\n',s);
                 
                 % Load the connectivity weights
                 M = load(fullfile(rootDir,expStr{traindata(i)},'connectivity_cerebellum',name{i},sprintf('%s_%s.mat',name{i},subj_name{s})));
                 R=  sc1sc2_connectivity('evaluate',M,'xname',xnames{xnIn(i)},'subset',subset(:,i),'splitby',ysplit);
-                n = length(R.SN); 
-                R.traindata = ones(n,1)*traindata(i); 
+                n = length(R.SN);
+                R.traindata = ones(n,1)*traindata(i);
                 RR=addstruct(RR,R);
             end;
         end;
@@ -1174,28 +1174,28 @@ switch(what)
         wysiwyg;
         
     case 'evaluate_plot_method'   % Does sc1 and sc2 with BM or not
-        name = {'eval_mb4_162_all.mat'}; 
-        yfield = 'Rcv'; 
-        xfield = 'ginni'; 
+        name = {'eval_mb4_162_all.mat'};
+        yfield = 'Rcv';
+        xfield = 'ginni';
         
-        T=[]; 
+        T=[];
         for n=1:length(name)   % Loop over files
             TT=load(fullfile(sc1Dir,'connectivity_cerebellum','evaluation',name{n}));
-            T=addstruct(T,TT); 
-        end; 
+            T=addstruct(T,TT);
+        end;
         
-        [methStr,~,T.methNum] = unique(T.method); 
+        [methStr,~,T.methNum] = unique(T.method);
         [lambda,b,T.lamCat]=unique([T.lambda],'rows');
         % Do an xyplot normalized to an upper noise ceiling, which only is
-        % determined by the relability of the data 
-        xyplot(T.(xfield),T.(yfield)./sqrt(T.Ry),T.lamCat,'split',T.methNum,'style_thickline','leg',methStr,'subset',T.traindata==2); 
+        % determined by the relability of the data
+        xyplot(T.(xfield),T.(yfield)./sqrt(T.Ry),T.lamCat,'split',T.methNum,'style_thickline','leg',methStr,'subset',T.traindata==2);
         
         % Now determine a lower noise ceiling.... This is determined by the
         % reliability of the prediction, which is model dependent. We here
-        % use the average across models 
-        noiseCeil = mean(T.Rp); 
-        drawline(noiseCeil,'dir','horz'); 
-        set(gca,'YLim',[0.3 1]); 
+        % use the average across models
+        noiseCeil = mean(T.Rp);
+        drawline(noiseCeil,'dir','horz');
+        set(gca,'YLim',[0.3 1]);
         set(gcf,'PaperPosition',[2 2 6 6]);
         % wysiwyg;
     case 'TS_subspace_overlap'   % Determine relative eigenvalues after projection
