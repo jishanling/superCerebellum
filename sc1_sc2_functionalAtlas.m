@@ -2,7 +2,7 @@ function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 atlasDir='/Users/maedbhking/Documents/Atlas_templates/';
@@ -1948,8 +1948,8 @@ switch what
         sn=varargin{1}; % Subj numbers to include or 'group'
         study=varargin{2}; % 1 or 2 or [1,2]
         type=varargin{3}; % 'build' or 'eval'. For build - we get group data. For eval - we get indiv data
-        
-        vararginoptions({varargin{4:end}},{'sess'}); % fracture further into sessions [either 1 or 2]
+        smooth = []; % 
+        vararginoptions({varargin{4:end}},{'sess','smooth'}); % fracture further into sessions [either 1 or 2]
         
         D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         
@@ -2003,6 +2003,23 @@ switch what
         
         % center the data (remove overall mean)
         X_C=bsxfun(@minus,UFullAvrgAll,mean(UFullAvrgAll));
+        
+        % Implement smoothing on functional profiles if required 
+        if (~isempty(smooth))
+            fprintf('Smoothing data\n'); 
+            clear UFull UFullAvrg UFullAvrgAll UFullAvrg_C; % Free unnecessary things in memory 
+            % Get voxel coordinates 
+            [i,j,k]=ind2sub(V.dim,volIndx);
+            [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
+            XYZ= [x;y;z]; 
+            W=surfing_eucldist(XYZ,XYZ);        % Euclidean distance 
+            W=exp(-0.5*W.^2/smooth.^2);         % Gaussian smooth kernel on this
+            X_C(isnan(X_C))=0; 
+            ignore = sum(abs(X_C),1)==0; % Ignore voxels without data or with nans in the smoothing operations 
+            W(ignore,:)=0; % Set all the weights on empty voxels to zero 
+            W=bsxfun(@rdivide,W,sum(W,1)); % Make the overall kernel sum to 1 
+            X_C=X_C*W; % Smooth the data
+        end;
         varargout={X_C,volIndx,V,sn};
     case 'EVAL:crossval'% Evaluate group Map
         sn=varargin{1}; % 'group' or <subjNum>
