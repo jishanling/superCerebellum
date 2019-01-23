@@ -1463,7 +1463,9 @@ switch what
         algorithmString = {'snn','cnvf','ica'}; % Semi-nonengative matrix factorization
         algorithm = 2;
         K=10; % number of regions
-        vararginoptions({varargin{4:end}},{'sess','numCount','tol_rand','maxIter','algorithm','K'}); % option if doing individual sessions
+        smooth = []; 
+        G0 = [];          % Starting value for weights 
+        vararginoptions({varargin{3:end}},{'sess','numCount','tol_rand','maxIter','algorithm','K','smooth'}); % options
         
         tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
         maxIter=100; % if it's not finding a similar solution - force stop at 100 iters
@@ -1478,7 +1480,15 @@ switch what
         % Set output filename: group or indiv ?
         if strcmp(sn,'group'), % group
             sn=returnSubjs;
-            outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K));
+            if (~isempty(smooth)) 
+                % Load the unsmoothed version as a starting value
+                prevSol=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K),...
+                    sprintf('%s.mat',algorithmString{algorithm})));
+                G0=prevSol.bestG; 
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d_s%2.1f',studyStr,algorithmString{algorithm},K,smooth));
+            else
+                outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K));
+            end; 
             dircheck(outDir);
             outName=fullfile(outDir,sprintf('%s.mat',algorithmString{algorithm}));
         else % indiv
@@ -1487,7 +1497,7 @@ switch what
         end
         
         % get data
-        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build');
+        [X_C,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',sn,study,'build','smooth',smooth);
         
         % Intialize iterations[G
         bestErr = inf;
@@ -1499,7 +1509,7 @@ switch what
                 case 1
                     [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get a segmentation using
                 case 2 % convec
-                    [F,G,Info]=cnvSemiNonNegMatFac(X_C,K,'threshold',0.01,'maxiter',500); % get a segmentation using
+                    [F,G,Info]=cnvSemiNonNegMatFac(X_C,K,'threshold',0.01,'maxIter',200,'G0',G0); % get a segmentation using
             end;
             errors(iter)=Info.error;    % record error
             randInd(iter)=RandIndex(bestSol,winner); %
