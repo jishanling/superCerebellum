@@ -1674,36 +1674,17 @@ switch what
         save(outName,'A_PW','S_PW','W_PW','volIndx','V');
     case 'MAP:visualise'
         sn=varargin{1}; % [2] or 'group'
-        study=varargin{2}; % 1 or 2 or [1,2]
+        mapType=varargin{2}; % Full map name - 'lob10','Buckner_17','SC12_cnvf_10'
         anaType=varargin{3}; % 'SNN' or 'ICAs' or 'cnvf'
-        K=varargin{4}; % for SNN - number of clusters (i.e. 5), for ica - thresh (i.e. 90)
-        
-        
-        vararginoptions({varargin{5:end}},{'sess'}); % option if doing individual map analysis
-        
-        % figure out if ICA or SNN
-        if strcmp(anaType,'SNN'),
-            anaName='cluster';
-        elseif strcmp(anaType,'ICA'),
-            anaName='POV';
-        else
-            anaName='cnvf';
-        end
-        
-        % Set the String correctly
-        studyStr = sprintf('SC%d',study);
-        if length(study)>1
-            studyStr='SC12'; % both studies combined
-        end
-        
+                
         % figure out if individual or group
         if strcmp(sn,'group'),
-            outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%d%s',studyStr,K,anaName),'map.nii');
-            load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%d%s',studyStr,K,anaName),sprintf('%s.mat',anaType)));
+            outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
+            load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('%s.mat',anaType)));
             % individual analysis
         else
-            outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_%s_%d%s.nii',studyStr,K,anaName));
-            load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_%s_%d%s.mat',anaType,studyStr,K,anaName)));
+%             outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_%s_%d%s.nii',));
+%             load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_%s_%d%s.mat',anaType,studyStr,K,anaName)));
         end
         
         % transpose matrix from ICA

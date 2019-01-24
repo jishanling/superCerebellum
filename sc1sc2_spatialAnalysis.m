@@ -549,7 +549,7 @@ switch(what)
                 end;
         end;
         
-        % save out vol of ICA feats
+        % map the data and display on flatmap
         data=suit_map2surf(V,'space','SUIT','stats',stats);
         suit_plotflatmap(data,'type',type,'cmap',cmap,'cscale',cscale);
         
