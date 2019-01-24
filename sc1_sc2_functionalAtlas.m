@@ -1501,7 +1501,7 @@ switch what
         
         % Intialize iterations[G
         bestErr = inf;
-        bestSol = ones(size(X_C,1),1);
+        bestSol = ones(size(X_C,2),1);
         iter=1; % How many iterations
         count=0;
         while iter<maxIter,
@@ -1512,6 +1512,7 @@ switch what
                     [F,G,Info]=cnvSemiNonNegMatFac(X_C,K,'threshold',0.01,'maxIter',200,'G0',G0); % get a segmentation using
             end;
             errors(iter)=Info.error;    % record error
+            [~,winner]=max(G,[],2);     % determine the highest loading cluster for each voxel  
             randInd(iter)=RandIndex(bestSol,winner); %
             
             % Check if we have a similar solution
