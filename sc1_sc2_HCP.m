@@ -6,25 +6,16 @@ baseDir          = '/Volumes/Seagate Backup Plus Drive';
 % baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
-<<<<<<< HEAD
 % atlasDir='/Users/maedbhking/Documents/Atlas_templates/';
-=======
 atlasDir='/Users/maedbhking/Documents/Atlas_templates/';
->>>>>>> b59eb197fba4166de28734ba6da7640df273ff17
-
 studyDir{1}     =fullfile(baseDir_orig,'sc1');
 studyDir{2}     =fullfile(baseDir_orig,'sc2');
 HCPDir          =fullfile(baseDir,'hcp');
-<<<<<<< HEAD
-suitDir         ='/suit';
 caretDir        ='/surfaceCaret';
-=======
 studyStr        = {'SC1','SC2','SC12'};
 behavDir        ='/data';
 suitDir         ='/suit';
-caretDir        ='/surfaceCaret';
 regDir          ='/RegionOfInterest/';
->>>>>>> b59eb197fba4166de28734ba6da7640df273ff17
 encodeDir       ='/encoding';
 contrastDir     ='/contrasts';
 anatDir         ='/anatomicals';
@@ -145,86 +136,13 @@ taskNames={'EM_FACES','EM_SHAPES','GA_PUNISH','GA_REWARD','LA_MATH','LA_STORY','
 
 switch what
     
-    case 'ANAT:load_files'
-        anatRawDir=fullfile(HCPDir,'anatomicals_raw'); % where orig. HCP data are stored
-        anats=dir(fullfile(anatRawDir,sprintf('*.zip*')));
+    case 'TEMP:loadANAT'
+        % get subjs
+         conName=dir(fullfile(HCPDir,'*Structural_preproc*'));
         
-        cd(anatRawDir);
-        for i=1:length(anats),
-            
-            HCP_subjs=str2double(anats(i).name(1:6)); % subjNum
-            
-            if exist(fullfile(anatRawDir,sprintf('%s',anats(i).name)))
-                % unzip
-                unzip(fullfile(anatRawDir,sprintf('%s',anats(i).name)))
-                outName1=sprintf('%d_3T_T1w_MPR1.nii.gz',HCP_subjs); opt1=fullfile(anatRawDir,'scans','103_T1w','NIFTI',outName1);
-                opt2=fullfile(anatRawDir,'scans','105_T1w','NIFTI',outName1);
-                outName2=sprintf('%d_3T_T1w_MPR2.nii.gz',HCP_subjs); opt3=fullfile(anatRawDir,'scans','105_T1w','NIFTI',outName2);
-                opt4=fullfile(anatRawDir,'scans','107_T1w','NIFTI',outName1);
-                opt5=fullfile(anatRawDir,'scans','106_T1w','NIFTI',outName1);
-                opt6=fullfile(anatRawDir,'scans','505_T1w','NIFTI',outName1);
-                opt7=fullfile(anatRawDir,'scans','104_T1w','NIFTI',outName1);
-                opt8=fullfile(anatRawDir,'scans','503_T1w','NIFTI',outName1);
-                opt9=fullfile(anatRawDir,'scans','110_T1w','NIFTI',outName1);
-                
-                tmp=strfind(outName1,'.gz');
-                % get .nii file and move
-                if exist(opt1),
-                    gunzip(opt1)
-                    niiFile=outName1(1:tmp-1);
-                    mkdir(fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs)));
-                    movefile(fullfile(anatRawDir,'scans','103_T1w','NIFTI',niiFile),fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs),'anatomical_raw.nii'))
-                elseif exist(opt2)
-                    gunzip(opt2)
-                    niiFile=outName1(1:tmp-1);
-                    mkdir(fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs)));
-                    movefile(fullfile(anatRawDir,'scans','105_T1w','NIFTI',niiFile),fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs),'anatomical_raw.nii'))
-                elseif exist(opt3)
-                    gunzip(opt3)
-                    niiFile=outName2(1:tmp-1);
-                    mkdir(fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs)));
-                    movefile(fullfile(anatRawDir,'scans','105_T1w','NIFTI',niiFile),fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs),'anatomical_raw.nii'))
-                elseif exist(opt4),
-                    gunzip(opt4)
-                    niiFile=outName1(1:tmp-1);
-                    mkdir(fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs)));
-                    movefile(fullfile(anatRawDir,'scans','107_T1w','NIFTI',niiFile),fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs),'anatomical_raw.nii'))
-                elseif exist(opt5),
-                    gunzip(opt5)
-                    niiFile=outName1(1:tmp-1);
-                    mkdir(fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs)));
-                    movefile(fullfile(anatRawDir,'scans','106_T1w','NIFTI',niiFile),fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs),'anatomical_raw.nii'))
-                elseif exist(opt6),
-                    gunzip(opt6)
-                    niiFile=outName1(1:tmp-1);
-                    mkdir(fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs)));
-                    movefile(fullfile(anatRawDir,'scans','505_T1w','NIFTI',niiFile),fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs),'anatomical_raw.nii'))
-                elseif exist(opt7),
-                    gunzip(opt7)
-                    niiFile=outName1(1:tmp-1);
-                    mkdir(fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs)));
-                    movefile(fullfile(anatRawDir,'scans','104_T1w','NIFTI',niiFile),fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs),'anatomical_raw.nii'))
-                elseif exist(opt8),
-                    gunzip(opt8)
-                    niiFile=outName1(1:tmp-1);
-                    mkdir(fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs)));
-                    movefile(fullfile(anatRawDir,'scans','503_T1w','NIFTI',niiFile),fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs),'anatomical_raw.nii'))
-                elseif exist(opt9),
-                    gunzip(opt9)
-                    niiFile=outName1(1:tmp-1);
-                    mkdir(fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs)));
-                    movefile(fullfile(anatRawDir,'scans','110_T1w','NIFTI',niiFile),fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs),'anatomical_raw.nii'))
-                else
-                    fprintf('subj %d not found \n',HCP_subjs)
-                end
-                if exist(fullfile(anatRawDir,'scans')),
-                    rmdir(fullfile(anatRawDir,'scans'),'s')
-                    fprintf('subj %d done \n',HCP_subjs)
-                end
-            else
-                fprintf('subj %d not found \n',HCP_subjs)
-            end
-        end
+        % load in anat files from HCP
+        unzip(fullfile(baseDir,HCPDir,anatName))
+
     case 'ANAT:resample'
         HCP_subjs=sc1_sc2_HCP('PREP:HCP_subjs');
         
@@ -272,8 +190,6 @@ switch what
             spm_write_vol(V,dat);
             fprintf('Done for s%d \n',HCP_subjs(s))
         end
-        
-<<<<<<< HEAD
     case 'FUNC:load_files'
         % unzip files
         fileNames=dir(fullfile(HCPDir,'*zip'));
@@ -282,9 +198,6 @@ switch what
             unzip(fullfile(HCPDir,fileNames(i).name))
             fprintf('%s unzipped \n',fileNames(i).name)
         end
-        
-=======
->>>>>>> b59eb197fba4166de28734ba6da7640df273ff17
     case 'SUIT:run_all'
         sn=varargin{1};
         
@@ -676,77 +589,10 @@ switch what
     case 'EVAL:HCP'       % evaluate group map on individual HCP data
         mapType=varargin{1}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks', 'Cole_10Networks'
         condType=varargin{2}; % which subset of tasks are we choosing 'subset1', 'subset2' ...
-<<<<<<< HEAD
-        groupSize=varargin{3}; % how many subjs are we grouping together ? 10,25,50,100 etc
-        
-        % load in func data to test 
-=======
-        
-        % load in func data to test (e.g. if map is sc1; func data should
-        % be sc2)
-        load(fullfile(HCPDir,'suit','contrasts','cereb_avrgDataStruct.mat'));
-        
-        CN=unique(T.condNum(T.condNum~=0));
-        condNames=T.condName(CN);
-        SN=unique(T.SN(T.SN~=0));
-        P=size(T.data,2);
-        
-        switch condType,
-            case 'subset1' % includes all taskConds
-                idx=CN';
-            case 'subset2' % doesn't include cue, lf, rf, tongue, la-story
-                idx=[1:5,9,11,13,14,16:23];
-            case 'subset3' % doesn't include cue, lf, rf, tongue
-                idx=[1:6,9,11,13,14,16:23];
-        end
-        
-        % do normalisation (subtract avrg taskCond)
-        for c=1:length(idx),
-            A=getrow(T,T.condNum==idx(c));
-            B(c,:,:)=A.data;
-        end
-        % subtract baseline (avrg of all taskConds from each task)
-        B_avrg=nanmean(B,1);
-        Bb=bsxfun(@minus,B,B_avrg);
-        
-        % load in group map
-        mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
-        outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s.mat',condType));
-        
-        volIndx=volIndx';
-        
-        % Now get the parcellation sampled into the same space
-        [i,j,k]=ind2sub(V.dim,volIndx);
-        [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
-        VA= spm_vol(mapName);
-        [i1,j1,k1]=spmj_affine_transform(x,y,z,inv(VA.mat));
-        Parcel = spm_sample_vol(VA,i1,j1,k1,0);
-        % Divide the voxel pairs into all the spatial bins that we want
-        fprintf('parcels\n');
-        voxIn = Parcel>0;
-        XYZ= [x;y;z];
-        RR=[];
-        [BIN,R]=mva_spatialCorrBin(XYZ(:,voxIn),'Parcel',Parcel(1,voxIn));
-        clear XYZ i k l x y z i1 j1 k1 VA Parcel; % Free memory
-        % Now calculate the estimation of the correlation for each subject
-        for s=1:length(SN),
-            D=Bb(:,s,voxIn);
-            D=permute(D,[1,3,2]); % conditions x voxels
-            fprintf('%d cross\n',s);
-            R.SN = ones(length(R.N),1)*s;
-            R.corr=mva_spatialCorr(D,BIN);
-            R.crossval = zeros(length(R.corr),1);
-            RR = addstruct(RR,R);
-        end;
-        save(outName,'-struct','RR');
-    case 'EVAL:HCP_groupSubj'       % evaluate group map on individual HCP data
-        mapType=varargin{1}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks', 'Cole_10Networks'
-        condType=varargin{2}; % which subset of tasks are we choosing 'subset1', 'subset2' ...
         groupSize=varargin{3}; % how many subjs are we grouping together ? 10,25,50,100 etc
         
         % load in func data to test (e.g. if map is sc1; func data should
         % be sc2)
->>>>>>> b59eb197fba4166de28734ba6da7640df273ff17
         load(fullfile(HCPDir,'suit','contrasts','cereb_avrgDataStruct.mat'));
         
         CN=unique(T.condNum(T.condNum~=0));
@@ -891,20 +737,11 @@ switch what
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
         condType=varargin{2}; % 'subset3_groupSize25'
         crossval=0;
-<<<<<<< HEAD
-        
-=======
 
->>>>>>> b59eb197fba4166de28734ba6da7640df273ff17
         % do stats
         P=[];
         for m=1:length(mapType),
             T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc_HCP_%s.mat',condType)));
-<<<<<<< HEAD
-            
-=======
-        
->>>>>>> b59eb197fba4166de28734ba6da7640df273ff17
             A=getrow(T,T.crossval==crossval);
             A.type=repmat({sprintf('%d.%s',m,mapType{m})},length(A.bin),1);
             A.m=repmat(m,length(A.bin),1);
@@ -949,15 +786,14 @@ switch what
             fprintf('Effect size between %s and %s is %2.2f when denom is pooled std  \n',mapType{1},mapType{2},ES_pooled);
             
         end
-<<<<<<< HEAD
-
+        
     case 'STRENGTH:eval_bound'
         mapType = varargin{1}; % 'SC12_10cluster','Buckner_7Networks'
         condType = varargin{2}; % 'subset1' etc
         groupSize=varargin{3}; % 1,10,25 etc
         
         spatialBins = [0:3:35];
-
+        
         EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
         
         % load boundaries
@@ -1027,7 +863,7 @@ switch what
         mapType = varargin{1}; % 'SC12_10cluster','Buckner_7Networks'
         condType = varargin{2}; % 'subset1' etc
         groupSize=varargin{3}; % 1,10,25 etc
-
+        
         bcolor ='k';
         opacacy = 0.5;
         bscale = 600;
@@ -1078,7 +914,7 @@ switch what
                     COORD.vertices(Tedges(indxEdge(e),2),:))/2; % Average of coordinates
             end;
         end;
-
+        
         for  i=1:size(Edge,1)
             % Make sure that the bin is calculated both for within and
             % between
@@ -1109,16 +945,14 @@ switch what
                 set(p,'MarkerSize',LineWeight(b));
                 weights(b)=EdgeWeight(b);
                 % plot DCBC of each functional boundary ?
-%                                 p=text(double(Border(b).data(1,1)),double(Border(b).data(1,2)),sprintf('%2.3f',weights(b)));
-%                                 set(p,'FontSize',20);
+                %                                 p=text(double(Border(b).data(1,1)),double(Border(b).data(1,2)),sprintf('%2.3f',weights(b)));
+                %                                 set(p,'FontSize',20);
             end;
         end
         hold off;
         tmp=weights(weights~=0);
         
         fprintf('min diff is %2.5f and max diff is %2.2f \n', min(tmp),max(tmp));
-=======
->>>>>>> b59eb197fba4166de28734ba6da7640df273ff17
         
     case 'AXES:group_curves' % make separate graphs for 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_10cluster'
         toPlot=varargin{1}; % 'SC12_10cluster'
@@ -1153,13 +987,9 @@ switch what
         CAT.linewidth=3;
         CAT.linestyle={'-','-','-','-','-','-'};
         CAT.linewidth={2, 2, 2, 2, 2, 2};
-<<<<<<< HEAD
-        errorcolor={'w','r','b','g','r','r'};
-        linecolor={'w','r','b','g','r','r'};
-=======
+
         errorcolor={'k','r','b','g','r','r'};
         linecolor={'k','r','b','g','r','r'};
->>>>>>> b59eb197fba4166de28734ba6da7640df273ff17
         
         %         errorcolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
         %         linecolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
