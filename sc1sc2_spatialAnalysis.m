@@ -305,23 +305,25 @@ switch(what)
         type = 'oldF';      % {'oldF','newF'}: Estimate a new F every bootstrap interation?
         study=[1 2];        % Study 1 or 2 or [1,2]
         K=10;               % K=numClusters (i.e. 5);
-        numBSIter = 1000;     % Number of Bootstrap iterations
-        algorithmString = {'Eval','Cnvf'}; % Semi-nonengative mare
-        algorithm = 2; 
-        vararginoptions(varargin,{'type','study','K','numBSIter','algorithm'});
+        numBSIter = 100;     % Number of Bootstrap iterations
+        algorithm = 'cnvf'; % Semi-nonengative mare
+        smooth = [];  % Any postfix to the file name? (smoothing, etc) 
+        vararginoptions(varargin,{'type','study','K','numBSIter','algorithm','smooth'});
         
         % Set the String correctly
         studyStr = sprintf('SC%d',study);
         if length(study)>1
             studyStr='SC12'; % both studies combined
         end        
-        outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('group%s_%s_%dcluster',algorithmString{algorithm},studyStr,K));
+        outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithm,K));
+        if ~isempty(smooth)
+            outDir=strcat(outDir,sprintf('_s%2.1f',smooth)); 
+        end; 
 
-        S = load(fullfile(outDir,'SNN.mat')); 
+        S = load(fullfile(outDir,sprintf('%s.mat',algorithm))); 
         N =length(returnSubjs);
         
-        
-        
+
         for i=1:numBSIter
             % sample with replacement 
             if (i==1)
@@ -329,13 +331,13 @@ switch(what)
             else 
                 T.samp(i,:)=returnSubjs(unidrnd(N,1,N));
             end; 
-            [X,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',T.samp(i,:),study,'build');
+            [X,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',T.samp(i,:),study,'build','smooth',smooth);
             switch (type)
                 case 'newF'
                     switch (algorithm)
-                        case 1
+                        case 'snn'
                             [F,G,Info]=semiNonNegMatFac(X,K,'G0',S.bestG,'threshold',0.001); % get a segmentation using 
-                        case 2 % convec
+                        case 'cnvf'
                             [F,G,Info]=cnvSemiNonNegMatFac(X,K,'G0',S.bestG,'threshold',0.01,'maxIter',100); % get a segmentation using 
                     end; 
                     keyboard; 
@@ -369,12 +371,12 @@ switch(what)
         
         
         % This is the histogram of Rand coefficients
-        figure(1); 
+        figure; 
         histplot(T.RandIndx(2:end),'numcat',10); 
         set(gcf,'PaperPosition',[2 2 5 3]); 
         wysiwyg; 
         
-        figure(2); 
+        figure; 
         % If cmap is file, load and normalize 
         cmap=dlmread('colourMap.txt');
         cmap = cmap(:,2:end); 
@@ -388,15 +390,15 @@ switch(what)
         wysiwyg; 
 
         % Figure 3: Consistency 
-        figure(3);
-        CO=sc1sc2_spatialAnalysis('visualise_map',con',volIndx,V,'type','func');
+        figure;
+        CO=sc1sc2_spatialAnalysis('visualise_map',con',volIndx,V,'type','func','cscale',[0.4 1]);
         % title('Consistency of assignment'); 
         axis off; 
         set(gcf,'PaperPosition',mapsize); 
         wysiwyg; 
   
         % Figure 4: Certainty is expressed as a morph to gray (saturation) 
-        figure(4);
+        figure;
         i = ~isnan(LA.data); 
         RGB = nan(size(LA.data,1),3);
         HSV = nan(size(LA.data,1),3);
