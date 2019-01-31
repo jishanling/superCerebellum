@@ -125,6 +125,8 @@ loc_AC = {[-94,-131,-114],... %s100307
     [-99,-130,-108],... %s899885
     };
 
+taskNames_all={'EMOTION','GAMBLING','LANGUAGE','MOTOR','RELATIONAL','SOCIAL','WM'};
+
 taskNames_new = {'EM_FACES','EM_SHAPES','GA_PUNISH','GA_REWARD','LA_MATH','LA_STORY','MO_CUE',...
     'MO_LF','MO_LH','MO_RF','MO_RH','MO_T','WM_TOOL','WM_PLACE','WM_0BK','WM_2BK',...
     'WM_BODY','WM_FACE','RE_MATCH','RE_REL','SO_RANDOM','SO_TOM','rest'};
@@ -133,16 +135,114 @@ taskNames={'EM_FACES','EM_SHAPES','GA_PUNISH','GA_REWARD','LA_MATH','LA_STORY','
     'MO_LF','MO_LH','MO_RF','MO_RH','MO_T','WM_TOOL','WM_PLACE','WM_0BK','WM_2BK',...
     'WM_BODY','WM_FACE','RE_MATCH','RE_REL','SO_RANDOM','SO_TOM'};
 
+wbDir='/Users/maedbhking/Documents/MATLAB/workbench/bin_macosx64/wb_command';
 
 switch what
     
-    case 'TEMP:loadANAT'
-        % get subjs
-         conName=dir(fullfile(HCPDir,'*Structural_preproc*'));
+    case 'TEMP:getSubjs'
+        subjIDFile=dir(fullfile(HCPDir,'*Structural*'));
         
-        % load in anat files from HCP
-        unzip(fullfile(baseDir,HCPDir,anatName))
-
+        for s=1:length(subjIDFile),
+            HCP_subjs{s}=str2double(subjIDFile(s).name(1:6)); % assuming that the subjID is always 6 digits
+            %             dircheck(fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs))); % make new folder
+        end
+        
+        varargout={HCP_subjs};
+    case 'TEMP:CIFTI2NIFTI'
+        image=varargin{1};
+        
+        % Read CIFTI
+        cii=ft_read_cifti(image);
+        
+        % get images
+        names=fieldnames(cii);
+        idx=1;
+        for n=1:length(names),
+            if sum(strfind(names{n},'emotion'))>0;
+                conNames=names{n};
+                idx=idx+1;
+                weights(:,idx)=cii.sprintf('%s',conNames);
+            else
+            end
+        end
+        
+        
+        %         if isfield(cii,'indexmax'),
+        %             labels=cii.indexmax;
+        %         else % this includes cortical labels, which need to be removed
+        %             labels=cii.x1;
+        %             cii.pos(cii.brainstructure==1 | cii.brainstructure==2,:,:)=[];
+        %             labels(cii.brainstructure==1 | cii.brainstructure==2)=[];
+        %         end
+        
+        numVox=size(labels,1);
+        
+        % Conversion from mm to vox
+        for v=1:numVox,
+            tmp=inv(cii.transform)*[cii.pos(v,:),1]';
+            vox(v,:)=tmp';
+        end
+        
+        % Write Labels
+        DATA=zeros(cii.dim);
+        for i=1:numVox,
+            DATA(vox(i,1),vox(i,2),vox(i,3))=labels(i);
+        end
+        
+        % MNI 2mm data structure
+        V = struct('fname',[dir 'C2N_' name{1} '.nii'],...
+            'dim',cii.dim,...
+            'dt',[4 0],...
+            'mat',[-2 0 0 92;0 2 0 -128;0 0 2 -74;0 0 0 1],...
+            'pinfo',[1;0;352],...
+            'descrip','MNI_2mm');
+        V = spm_create_vol(V);
+        spm_write_vol(V,DATA);
+    case 'TEMP:formatFiles'
+        % get subj ID
+        HCP_subjs=sc1_sc2_HCP('TEMP:getSubjs');
+        
+        % loop over subjs
+        for ii=1:length(HCP_subjs),
+            %             unzip(fullfile(HCPDir,sprintf('%d_3T_Structural_preproc.zip',sprintf('%d',HCP_subjs{ii}))))
+            %
+            %             % get nifti anat
+            %             cd(fullfile(HCPDir,sprintf('%d',HCP_subjs{ii}),'MNINonLinear'));
+            %             gunzip('T1w.nii.gz')
+            %
+            %             % move to anat folder
+            %             movefile('T1w.nii',fullfile('anatomicals',sprintf('s%d',sprintf('%d',HCP_subjs{ii}))))
+            %
+            % delete unzipped folder
+            %             delete(fullfile(HCPDir,sprintf('%d',HCP_subjs{ii})))
+            
+            % move zipped folder to anat_raw
+            %             movefile(fullfile(HCPDir,sprintf('%d_3T_Structural_preproc.zip',sprintf('%d',HCP_subjs{ii}))),...
+            %                 fullfile(HCPDir,'anatomicals_raw'))
+            
+            % unzip and move task folders
+            for c=1:length(taskNames_all),
+                
+                % unzip folder
+                %                 unzip(fullfile(HCPDir,sprintf('%d_3T_tfMRI_%s_analysis_s2.zip',sprintf('%d',HCP_subjs{ii}),taskNames_all{c})))
+                
+                % get directory to cifti file
+                taskDir=fullfile(HCPDir,sprintf('%d',HCP_subjs{ii}),'MNINonLinear','Results',sprintf('tfMRI_%s',taskNames_all{c}),...
+                    sprintf('tfMRI_%s_hp200_s2_level2.feat',taskNames_all{c}));
+                
+                % get name of file to convert
+                fileToConvert=fullfile(taskDir,sprintf('%d_tfMRI_%s_level2_hp200_s2.dscalar.nii',HCP_subjs{ii},taskNames_all{c}));
+                
+                % convert cifti file to nifti file
+                sc1_sc2_HCP('TEMP:CIFTI2NIFTI',fileToConvert)
+                
+                % move nifti file to contrasts folder
+                %                 movefile()
+                
+            end
+            
+        end
+        
     case 'ANAT:resample'
         HCP_subjs=sc1_sc2_HCP('PREP:HCP_subjs');
         
@@ -734,10 +834,10 @@ switch what
             lineplot(W.dist,W.diff,'subset',W.dist<=35);
         end
     case 'EVAL:STATS:DIFF'
-        mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
+        mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<algorithm>_<numCluster>'
         condType=varargin{2}; % 'subset3_groupSize25'
         crossval=0;
-
+        
         % do stats
         P=[];
         for m=1:length(mapType),
@@ -987,7 +1087,7 @@ switch what
         CAT.linewidth=3;
         CAT.linestyle={'-','-','-','-','-','-'};
         CAT.linewidth={2, 2, 2, 2, 2, 2};
-
+        
         errorcolor={'k','r','b','g','r','r'};
         linecolor={'k','r','b','g','r','r'};
         
