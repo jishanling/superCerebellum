@@ -305,233 +305,246 @@ switch(what)
         type = 'oldF';      % {'oldF','newF'}: Estimate a new F every bootstrap interation?
         study=[1 2];        % Study 1 or 2 or [1,2]
         K=10;               % K=numClusters (i.e. 5);
-        numBSIter = 1000;     % Number of Bootstrap iterations
-        algorithmString = {'Eval','Cnvf'}; % Semi-nonengative mare
-        algorithm = 2; 
-        vararginoptions(varargin,{'type','study','K','numBSIter','algorithm'});
+        numBSIter = 100;     % Number of Bootstrap iterations
+        algorithm = 'cnvf'; % Semi-nonengative mare
+        smooth = [];  % Any postfix to the file name? (smoothing, etc)
+        vararginoptions(varargin,{'type','study','K','numBSIter','algorithm','smooth'});
         
         % Set the String correctly
         studyStr = sprintf('SC%d',study);
         if length(study)>1
             studyStr='SC12'; % both studies combined
-        end        
-        outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('group%s_%s_%dcluster',algorithmString{algorithm},studyStr,K));
-
-        S = load(fullfile(outDir,'SNN.mat')); 
+        end
+        outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithm,K));
+        if ~isempty(smooth)
+            outDir=strcat(outDir,sprintf('_s%2.1f',smooth));
+        end;
+        
+        S = load(fullfile(outDir,sprintf('%s.mat',algorithm)));
         N =length(returnSubjs);
         
         
-        
         for i=1:numBSIter
-            % sample with replacement 
+            % sample with replacement
             if (i==1)
-                T.samp(i,:)=returnSubjs; 
-            else 
+                T.samp(i,:)=returnSubjs;
+            else
                 T.samp(i,:)=returnSubjs(unidrnd(N,1,N));
-            end; 
-            [X,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',T.samp(i,:),study,'build');
+            end;
+            [X,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',T.samp(i,:),study,'build','smooth',smooth);
             switch (type)
                 case 'newF'
                     switch (algorithm)
-                        case 1
-                            [F,G,Info]=semiNonNegMatFac(X,K,'G0',S.bestG,'threshold',0.001); % get a segmentation using 
-                        case 2 % convec
-                            [F,G,Info]=cnvSemiNonNegMatFac(X,K,'G0',S.bestG,'threshold',0.01,'maxIter',100); % get a segmentation using 
-                    end; 
-                    keyboard; 
+                        case 'snn'
+                            [F,G,Info]=semiNonNegMatFac(X,K,'G0',S.bestG,'threshold',0.001); % get a segmentation using
+                        case 'cnvf'
+                            [F,G,Info]=cnvSemiNonNegMatFac(X,K,'G0',S.bestG,'threshold',0.01,'maxIter',100); % get a segmentation using
+                    end;
+                    keyboard;
                 case 'oldF'
-                    [M,P]=size(X); 
+                    [M,P]=size(X);
                     G=zeros(P,K);
                     for p=1:P
                         G(p,:) = lsqnonneg(double(S.bestF),X(:,p));
                     end;
-                    R = X-double(S.bestF)*G'; 
-                    T.Error(i,1)=sum(sum(R.*R)); 
-                    [~,g]=max(G,[],2); 
+                    R = X-double(S.bestF)*G';
+                    T.Error(i,1)=sum(sum(R.*R));
+                    [~,g]=max(G,[],2);
                     T.assign(i,:)=g';
-                    fprintf('.'); 
+                    fprintf('.');
             end;
         end;
-        fprintf('\n'); 
+        fprintf('\n');
         save(fullfile(outDir,'bootstrap_oldF.mat'),'-struct','T');
         varargout={T};
-    case 'SNN:bootstrap_eval' 
-        mapsize = [ 2 2 5 4]; % For paper size 
-        T=load('bootstrap_oldF.mat');  
-        [~,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',2,1,'build'); % Get V and volindx 
-        N=size(T.Error,1); 
-        for n=2:N 
-            T.RandIndx(n,1)=RandIndex(T.assign(1,:)',T.assign(n,:)'); 
-        end; 
-        % Generate map of assignments 
-        CON=bsxfun(@eq,T.assign(2:N,:),T.assign(1,:)); % Consistency of assignment 
-        con = mean(CON); 
+    case 'SNN:bootstrap_eval'
+        mapsize = [ 2 2 5 4]; % For paper size
+        T=load('bootstrap_oldF.mat');
+        [~,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',2,1,'build'); % Get V and volindx
+        N=size(T.Error,1);
+        for n=2:N
+            T.RandIndx(n,1)=RandIndex(T.assign(1,:)',T.assign(n,:)');
+        end;
+        % Generate map of assignments
+        CON=bsxfun(@eq,T.assign(2:N,:),T.assign(1,:)); % Consistency of assignment
+        con = mean(CON);
         
         
         % This is the histogram of Rand coefficients
-        figure(1); 
-        histplot(T.RandIndx(2:end),'numcat',10); 
-        set(gcf,'PaperPosition',[2 2 5 3]); 
-        wysiwyg; 
+        figure;
+        histplot(T.RandIndx(2:end),'numcat',10);
+        set(gcf,'PaperPosition',[2 2 5 3]);
+        wysiwyg;
         
-        figure(2); 
-        % If cmap is file, load and normalize 
+        figure;
+        % If cmap is file, load and normalize
         cmap=dlmread('colourMap.txt');
-        cmap = cmap(:,2:end); 
-        cmap = bsxfun(@rdivide,cmap,max(cmap)); 
+        cmap = cmap(:,2:end);
+        cmap = bsxfun(@rdivide,cmap,max(cmap));
         
         % Figure 2: Normal hard assignment
-        LA=sc1sc2_spatialAnalysis('visualise_map',T.assign(1,:)',volIndx,V,'type','label','cmap',cmap); 
-        % title('Hard assignment'); 
-        axis off; 
-        set(gcf,'PaperPosition',mapsize); 
-        wysiwyg; 
-
-        % Figure 3: Consistency 
-        figure(3);
-        CO=sc1sc2_spatialAnalysis('visualise_map',con',volIndx,V,'type','func');
-        % title('Consistency of assignment'); 
-        axis off; 
-        set(gcf,'PaperPosition',mapsize); 
-        wysiwyg; 
-  
-        % Figure 4: Certainty is expressed as a morph to gray (saturation) 
-        figure(4);
-        i = ~isnan(LA.data); 
+        LA=sc1sc2_spatialAnalysis('visualise_map',T.assign(1,:)',volIndx,V,'type','label','cmap',cmap);
+        % title('Hard assignment');
+        axis off;
+        set(gcf,'PaperPosition',mapsize);
+        wysiwyg;
+        
+        % Figure 3: Consistency
+        figure;
+        CO=sc1sc2_spatialAnalysis('visualise_map',con',volIndx,V,'type','func','cscale',[0.4 1]);
+        % title('Consistency of assignment');
+        axis off;
+        set(gcf,'PaperPosition',mapsize);
+        wysiwyg;
+        
+        % Figure 4: Certainty is expressed as a morph to gray (saturation)
+        figure;
+        i = ~isnan(LA.data);
         RGB = nan(size(LA.data,1),3);
         HSV = nan(size(LA.data,1),3);
         
-        RGB(i,:)=cmap(LA.data(i),:); % color data 
-        HSV(i,:) = rgb2hsv(RGB(i,:)); % color data 
+        RGB(i,:)=cmap(LA.data(i),:); % color data
+        HSV(i,:) = rgb2hsv(RGB(i,:)); % color data
         minCO = 0.5; % Setting the lower bound of consistency that will be totally gray
-        scaleC = (CO.data(i,1)-minCO)./(1-minCO);  % 
-        scaleC(scaleC<0)=0;     % scaling factor between gray and color 
-        HSV(i,2) = HSV(i,2).*scaleC;                % Scale Saturation 
-        HSV(i,3) = (1-scaleC).*0.85+scaleC.*HSV(i,3); % Change towards a light gray 
-        mRGB(i,:) = hsv2rgb(HSV(i,:)); % color data 
+        scaleC = (CO.data(i,1)-minCO)./(1-minCO);  %
+        scaleC(scaleC<0)=0;     % scaling factor between gray and color
+        HSV(i,2) = HSV(i,2).*scaleC;                % Scale Saturation
+        HSV(i,3) = (1-scaleC).*0.85+scaleC.*HSV(i,3); % Change towards a light gray
+        mRGB(i,:) = hsv2rgb(HSV(i,:)); % color data
         suit_plotflatmap(mRGB,'type','rgb');
         % title('Weighted color map');
-        axis off; 
-        set(gcf,'PaperPosition',mapsize); 
-        wysiwyg; 
-
+        axis off;
+        set(gcf,'PaperPosition',mapsize);
+        wysiwyg;
+        
         
         % figure(5); % Different Alphas: We decided that this did not look
-        % as good. 
-        % scaleA=nan(size(RGB,1),1); 
-        % scaleA(i,1)=scaleC; 
+        % as good.
+        % scaleA=nan(size(RGB,1),1);
+        % scaleA(i,1)=scaleC;
         % suit_plotflatmap(RGB,'type','rgb','alpha',scaleA);
-        
-        
-    case 'Cluster:GlobalRand' 
-        compare={'groupEval_SC12_10cnvf','groupEval_SC1_10cluster','groupEval_SC2_10cluster'};
-        compare={'groupEval_SC12_10cluster','groupEval_SC1_10cluster','groupEval_SC2_10cluster'};
-        compare={'groupEval_SC12_7cnvf','groupEval_SC1_7cnvf','groupEvals=_SC2_7cnvf'};
-        compare={'groupEval_SC12_7cluster','groupEval_SC1_7cluster','groupEval_SC2_7cluster'};
-        numMaps = length(compare);
-        for i=1:numMaps
-            T=load(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'SNN.mat'));
-            [~,c(:,i)]=max(T.bestG,[],2);
-        end;
-
-        for i=1:numMaps-1
-            for j=i+1:numMaps
-                AR(i,j)=RandIndex(c(:,i),c(:,j));
-                AR(j,i)=AR(i,j); 
-            end;
-        end;
-        varargout={AR}; 
-        
-    case 'CLUSTER:LocalRand'
-        type = 'searchlight'; % 'voxelwise','searchlight', or 'searchlightvoxel'
-        compare={'groupEval_SC12_7cnvf','groupEval_SC12_10cnvf',...
-            'groupEval_Buckner_7Networks','groupEval_Buckner_17Networks',...
-            'groupEval_Cole_10Networks'...
-            
-            % ,'groupEval_SC12_9cluster',...
-           % 'groupEval_SC12_10cluster','groupEval_SC12_11cluster','groupEval_SC12_12cluster',...
-           % 'groupEval_SC1_7cluster','groupEval_SC1_8cluster','groupEval_SC1_9cluster',...
-           % 'groupEval_SC1_10cluster','groupEval_SC1_11cluster','groupEval_SC1_12cluster',...
-           % 'groupEval_SC2_7cluster','groupEval_SC2_8cluster','groupEval_SC2_9cluster',...
-           % 'groupEval_SC2_10cluster','groupEval_SC2_11cluster','groupEval_SC2_12cluster',...
-           };
-        split = [1 1 2 2 2]; 
-        radius = 10; 
-        vararginoptions(varargin,{'radius','compare','type','split'}); 
+     
+    case 'CLUSTER:GlobalRand'
+        compare={'groupEval_SC12_cnvf_7','groupEval_SC12_cnvf_10','groupEval_SC12_cnvf_17',...
+            'groupEval_Buckner_7Networks','groupEval_Cole_10Networks','groupEval_Buckner_17Networks'};
         numMaps = length(compare);
         load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));  % Just to get V and volIndex
-        clear T; 
-         
+        clear T;
         for i=1:numMaps
-            try 
-                T=load(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'SNN.mat'));
+            try
+                T=load(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'cnvf.mat'));
                 [~,c(:,i)]=max(T.bestG,[],2);
-            catch 
+            catch
                 Vi=spm_vol(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'map.nii'));
                 [i1,j1,k1]=ind2sub(V.dim,volIndx');
                 [x,y,z]=spmj_affine_transform(i1,j1,k1,V.mat);
                 [i2,j2,k2]=spmj_affine_transform(x,y,z,inv(Vi.mat));
                 c(:,i)=spm_sample_vol(Vi,i2,j2,k2,0);
-            end; 
+            end;
+        end;
+        for i=1:numMaps-1
+            for j=i+1:numMaps
+                AR(i,j)=RandIndex(c(:,i),c(:,j));
+                AR(j,i)=AR(i,j);
+            end;
+        end;
+        varargout={AR};
+        colormap(hot);
+        imagesc(AR,[0 0.8]);
+        colorbar;
+        set(gca,'XTickLabel',{'C7','C10','C17','R7','R10','R17'},'YTickLabel',{'C7','C10','C17','R7','R10','R17'}); 
+    case 'CLUSTER:LocalRand'
+        type = 'searchlight'; % 'voxelwise','searchlight', or 'searchlightvoxel'
+        compare={'groupEval_SC12_cnvf_7','groupEval_SC12_cnvf_10','groupEval_SC12_cnvf_17',...
+            'groupEval_Buckner_7Networks','groupEval_Cole_10Networks','groupEval_Buckner_17Networks'...
+            
+            % ,'groupEval_SC12_9cluster',...
+            % 'groupEval_SC12_10cluster','groupEval_SC12_11cluster','groupEval_SC12_12cluster',...
+            % 'groupEval_SC1_7cluster','groupEval_SC1_8cluster','groupEval_SC1_9cluster',...
+            % 'groupEval_SC1_10cluster','groupEval_SC1_11cluster','groupEval_SC1_12cluster',...
+            % 'groupEval_SC2_7cluster','groupEval_SC2_8cluster','groupEval_SC2_9cluster',...
+            % 'groupEval_SC2_10cluster','groupEval_SC2_11cluster','groupEval_SC2_12cluster',...
+            };
+        split = [1 1 1 2 2 2];
+        radius = 10;
+        vararginoptions(varargin,{'radius','compare','type','split'});
+        numMaps = length(compare);
+        load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));  % Just to get V and volIndex
+        clear T;
+        
+        for i=1:numMaps
+            try
+                T=load(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'cnvf.mat'));
+                [~,c(:,i)]=max(T.bestG,[],2);
+            catch
+                Vi=spm_vol(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'map.nii'));
+                [i1,j1,k1]=ind2sub(V.dim,volIndx');
+                [x,y,z]=spmj_affine_transform(i1,j1,k1,V.mat);
+                [i2,j2,k2]=spmj_affine_transform(x,y,z,inv(Vi.mat));
+                c(:,i)=spm_sample_vol(Vi,i2,j2,k2,0);
+            end;
         end;
         ar=[];
         [x,y,z]=ind2sub(T.V.dim,T.volIndx);
         [x,y,z]=spmj_affine_transform(x,y,z,T.V.mat);
         xyz=[x;y;z];
         D=surfing_eucldist(xyz,xyz);        % Eucledian distance
-        pair = []; 
+        pair = [];
         for i=1:numMaps-1
             for j=i+1:numMaps
-                ar(:,end+1)=RandIndexLocal(type,c(:,i),c(:,j),D,radius); 
-                if (~isempty(split)) 
+                ar(:,end+1)=RandIndexLocal(type,c(:,i),c(:,j),D,radius);
+                if (~isempty(split))
                     if (split(i)==split(j) && split(i)==1)
-                        pair(end+1)=1; 
+                        pair(end+1)=1;
                     elseif (split(i)==split(j) && split(i)==2)
                         pair(end+1)=2;
                     elseif (split(i)~=split(j))
-                        pair(end+1)=3; 
-                    else 
-                        pair(end+1)=0; 
+                        pair(end+1)=3;
+                    else
+                        pair(end+1)=0;
                     end;
-                end; 
+                end;
             end;
         end;
-        numPlots = length(unique(pair)); 
-        for i=1:numPlots 
-            subplot(1,numPlots,i); 
+        numPlots = length(unique(pair));
+        for i=1:numPlots
+            subplot(1,numPlots,i);
             sc1sc2_spatialAnalysis('visualise_map',mean(ar(:,pair==i),2),T.volIndx,T.V,'type','func');
-        end; 
-        Output.type= type; 
-        Output.compare= compare; 
-        Output.split= split; 
-        Output.ar= ar; 
-        Output.pair= pair; 
-        varargout = {Output}; 
-    case 'CLUSTER:TaskvsRest'
+        end;
+        Output.type= type;
+        Output.compare= compare;
+        Output.split= split;
+        Output.ar= ar;
+        Output.pair= pair;
+        varargout = {Output};
+    case 'CLUSTER:FigureRand' % Figure of the Rand index
         %Out=sc1sc2_spatialAnalysis('CLUSTER:LocalRand');
         % save(fullfile(studyDir{2},encodeDir,'glm4','LocalRand_TaskRest.mat'),'-struct','Out');
-        load(fullfile(studyDir{2},encodeDir,'glm4','LocalRand_TaskRest.mat')); 
+        set(gcf,'PaperPosition',[2 2 8 6]);
+        wysiwyg;
+        load(fullfile(studyDir{2},encodeDir,'glm4','LocalRand_TaskRest.mat'));
         load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));  % Just to get V and volIndex
-        clear T; 
-        titles = {'Task-Task','Rest-Rest','Task-Rest'}; 
-        set(gcf,'PaperPosition',[2 2 13 4]);
-        wysiwyg; 
+        clear T;
+        subplot(2,2,1);
+        sc1sc2_spatialAnalysis('CLUSTER:GlobalRand');
+        
+        titles = {'Task-Task','Rest-Rest','Task-Rest'};
         for i=1:3
-            subplot(1,3,i); 
+            subplot(2,2,i+1);
             sc1sc2_spatialAnalysis('visualise_map',mean(ar(:,pair==i),2),volIndx,V,'type','func','cscale',[0 0.8]);
-            axis equal; 
-            title(titles{i}); 
-        end; 
+            axis equal;
+            title(titles{i});
+        end;
         
     case 'visualise_map' % Plot any data on the cerebellar flatmap
         data = varargin{1};     % Data to plot
         volIndx = varargin{2};  % Indices into the volume (mask)
         V = varargin{3};        % Cerebellar suit volume
         cmap = [];
-        cscale = []; 
+        cscale = [];
         type = 'label';     % func / label
         vararginoptions(varargin(4:end),{'cmap','type','cscale'});
-                    
+        
         % map features on group
         V.dat=zeros([V.dim(1) V.dim(2) V.dim(3)]);
         V.dat(volIndx)=data;
@@ -800,7 +813,7 @@ switch(what)
             RR = addstruct(RR,R);
             fprintf('uncrossval eval done for subj %d \n',sn(s));
         end;
-        save(outDir,'-struct','RR');      
+        save(outDir,'-struct','RR');
     case 'EVALBOUND:Figure'
         set(gcf,'position',[10 10 1600 800]);
         
