@@ -2165,12 +2165,69 @@ switch what
             subsetIdx(ii,:)=datasample(uniqueIdx',numTasks,'Replace',false);
         end
         keyboard;
+    case 'EVAL:RDM_subsets'
+        step=varargin{1}; % what do you want ? 'visualise' or 'getSubset'
+        
+        % load in RDM
+        [fullRDM,condNames,X,taskType]=sc1_sc2_functionalAtlas('REPRESENTATION:get_distances','cerebellum','all','all');
+        
+        % load in task indices
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        
+        % get avrg RDM
+        fullRDM_avrg=nanmean(fullRDM,3);
+        
+        switch step,
+            case 'visualise'
+                % get condNum
+                condNum=1:length(condNames);
+                
+                % loop over sc<taskNum> taskConds
+                for c=1:length(condNum),
+                    [x(c,:) y(c,:)]=sort(fullRDM_avrg(condNum(c),condNum));
+                    
+                end
+                
+                figure();imagesc_rectangle(x,'YDir','reverse')
+                caxis([0 1]);
+                g=set(gca,'Ytick',condNum','YTickLabel',condNames,'FontSize',7);
+                g.Color='white';
+                colorbar   
+            case 'getSubset'
+                % now figure out task subsets (min and max)
+                sessN=[2 1];
+                RR=[];
+                for ss=1:2,
+                    taskB=sum(D.StudyNum==ss); 
+                    taskE=sessN(ss);
+                    for c=1:taskB,
+                        [x y]=sort(fullRDM_avrg(D.StudyNum==ss & D.condNum==c,D.StudyNum==taskE));
+                        R.nameT=D.condNames(D.StudyNum==ss & D.condNum==c); 
+                        nameB=D.condNames(D.StudyNum==taskE); 
+                        R.minT=nameB(y(1)); % min task
+                        R.maxT=nameB(y(end)); % max task
+                        R.minD=x(1);
+                        R.maxD=x(end);
+                        R.studyNum=ss;
+                        RR=addstruct(RR,R);
+                    end
+                end
+                
+                % find most dissimilar tasks in set B for set A (and vice
+                % versa)
+                for i=1:2,
+                    [RR.nameT(RR.studyNum==i) RR.maxT(RR.studyNum==i)]
+                end
+        end
+        
+        
+        keyboard;
     case 'EVAL:subsets'
         mapType=varargin{1}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks','Cole_10Networks','SC<studyNum>_<num>cluster'
         data=varargin{2}; % evaluating data from study [1] or [2] ?
-        subsetType=varargin{3}; % 'random' or 'movies'
+        subsetType=varargin{3}; % 'random' or 'movies' or 'dissimilar'
         numTasks=varargin{4}; % # of random tasks to choose.
-
+        
         % example: sc1_sc2_functionalAtlas('EVAL:crossval',2,'SC12_10cluster_group',1,'unique')
         
         % load in func data to test (e.g. if map is sc1; func data should
@@ -2181,7 +2238,7 @@ switch what
         % load in map
         mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
         sn=unique(T.SN)';
-
+        
         % eval on set of n tasks
         D=load(fullfile(studyDir{2},'encoding','glm4',sprintf('subsets_SC%d_%d%s.txt',data,numTasks,subsetType)));
         D=D(:,2:end);
@@ -2232,7 +2289,7 @@ switch what
         save(outName,'-struct','RR');
     case 'EVAL:average' % make new 'spatialBoundfunc4.mat' struct. [4] - average eval corr across studies
         mapType=varargin{1}; % either 'cnvf_10' or 'Buckner_17Networks'
-        condType=varargin{2}; % evaluating on 'unique' or 'all' taskConds ?
+        condType=varargin{2}; % evaluating on 'unique','all','subsets_random7' etc
         level=varargin{3}; % 'group' or 'indiv' ?
         
         studyType=[1,2]; % test on one dataset
@@ -2241,8 +2298,6 @@ switch what
         
         % *** FIX INDIV ***
         
-        %         str=strfind(mapType,'_');
-        
         vararginoptions({varargin{4:end}},{'sn'}); % option if doing individual map analysis
         
         encodeGLM=fullfile(studyDir{2},'encoding','glm4');
@@ -2250,7 +2305,7 @@ switch what
         switch level,
             case 'group'
                 for i=1:2,
-                    if strfind(mapType,'cnvf') || strfind(mapType,'snn'),
+                    if ~isempty(strfind(mapType,'cnvf')) || ~isempty(strfind(mapType,'snn')),
                         T=load(fullfile(encodeGLM,sprintf('groupEval_SC%d_%s',studyType(i),mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
                         outDir=fullfile(encodeGLM,sprintf('groupEval_SC2_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
                     else
@@ -2273,9 +2328,17 @@ switch what
                     R=addstruct(R,T);
                 end
         end
-        R=rmfield(R,{'distmin','distmax','N'});
-        % get average of both structures here
-        A=tapply(R,{'bin','SN','bwParcel','crossval'},{'corr'});
+        
+        % remove subsets if 'random'
+        if strfind(condType,'subsets'),
+            R=rmfield(R,{'distmin','distmax','N','subset'});
+            % get average of both structures here
+            A=tapply(R,{'bin','SN','bwParcel','crossval','numSets'},{'corr'});
+        else
+            R=rmfield(R,{'distmin','distmax','N'});
+            % get average of both structures here
+            A=tapply(R,{'bin','SN','bwParcel','crossval'},{'corr'});
+        end
         
         % distances are diff across evals so need to get dist per bin:
         for b=1:length(unique(R.bin)),
@@ -2312,37 +2375,75 @@ switch what
     case 'EVAL:PLOT:SUBSETS'
         mapType=varargin{1}; % 'SC2_cnvf_10' or 'SC2_snn_10'
         data=varargin{2}; % 1, 2, 4 . [1: eval on sc1; 2: eval on sc2; 4: eval on sc1+sc2]
-        subset=varargin{3}; % 'random7', 'random5' etc. which kind of subsets ?
-        crossval=varargin{4}; % 0 or 1
+        subset=varargin{3}; % 'random' or 'movies' or 'dissimilar'
+        numTasks=varargin{4}; % how many random tasks are we taking ? 7,5,3 ?
+        crossval=varargin{5}; % 0 or 1
         
-        vararginoptions({varargin{5:end}},{'CAT'}); % option if doing individual map analysis
+        vararginoptions({varargin{6:end}},{'CAT'}); % option if doing individual map analysis
         
-        T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_subsets_%s.mat',data,subset)));
-        P=getrow(T,T.crossval==crossval);
-        
-        % plot boxplot of different clusters
-        W=getrow(P,P.bwParcel==0); % within
-        B=getrow(P,P.bwParcel==1); % between
-        W.diff=W.corr-B.corr;
-        W=rmfield(W,{'bwParcel','crossval','corr'});
-        
-        % figure out plotting here
-        if data==4,
-            if exist('CAT'),
-                lineplot(W.dist,W.diff,'subset',W.dist<=35,'CAT',CAT,'leg','auto');
-            else
-                lineplot(W.dist,W.diff,'subset',W.dist<=35,'leg','auto');
+        TT=[];
+        % how many maps are we dealing with ?
+        if size(mapType,2)>1,
+            for m=1:size(mapType,2),
+                T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d_subsets_%s%d.mat',data,subset,numTasks)));
+                T.mapType=repmat(mapType(m),length(T.SN),1);
+                T.mapNum=repmat(m,length(T.SN),1);
+                TT=addstruct(TT,T);
             end
         else
-            % find max and min diff
-            for ii=1:length(unique(W.numSets)),
-                numSet(ii)=sort(nanmean(W.diff(W.numSets==ii)));
-            end
-            [x y]=sort(numSet);
-            lineplot(W.dist,W.diff,'subset',W.dist<=35 & W.numSets==y(end),'CAT',CAT,'leg','auto');
-            CAT.linestyle='--';
-            hold on
-            lineplot(W.dist,W.diff,'subset',W.dist<=35 & W.numSets==y(1),'CAT',CAT,'leg','auto');
+            TT=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType{1}),sprintf('spatialBoundfunc%d_subsets_%s%d.mat',data,subset,numTasks)));
+        end
+        
+        switch subset,
+            case 'movies'
+                P=getrow(TT,TT.crossval==crossval);
+                % plot boxplot of different clusters
+                W=getrow(P,P.bwParcel==0); % within
+                B=getrow(P,P.bwParcel==1); % between
+                W.diff=W.corr-B.corr;
+                W=rmfield(W,{'bwParcel','crossval','corr'});
+                
+                % figure out plotting here
+                if exist('CAT'),
+                    lineplot(W.dist,W.diff,'subset',W.dist<=35,'CAT',CAT);
+                else
+                    lineplot(W.dist,W.diff,'subset',W.dist<=35);
+                end 
+            case 'dissimilar'
+                P=getrow(TT,TT.crossval==crossval);
+                % plot boxplot of different clusters
+                W=getrow(P,P.bwParcel==0); % within
+                B=getrow(P,P.bwParcel==1); % between
+                W.diff=W.corr-B.corr;
+                W=rmfield(W,{'bwParcel','crossval','corr'});
+                
+                % figure out plotting here
+                if exist('CAT'),
+                    lineplot(W.dist,W.diff,'subset',W.dist<=35,'CAT',CAT);
+                else
+                    lineplot(W.dist,W.diff,'subset',W.dist<=35);
+                end
+            case 'random'
+                P=getrow(TT,TT.crossval==crossval);
+                mapN=unique(TT.mapNum);
+                
+                for ii=1:length(mapN),
+                    A=getrow(P,P.mapNum==ii);
+                    % plot boxplot of different clusters
+                    W{ii}=getrow(A,A.bwParcel==0); % within
+                    B=getrow(A,A.bwParcel==1); % between
+                    W{ii}.diff=W{ii}.corr-B.corr;
+                    W{ii}=rmfield(W{ii},{'bwParcel','crossval','corr'});
+                end
+                W{1}=addstruct(W{1},W{2});
+                
+                % plot diff between maps for each subset
+                lineplot(W{1}.numSets,W{1}.diff,'subset',W{1}.dist<=35,'split',W{1}.mapNum,'CAT',CAT);
+
+%                  results=anovaMixed(W{1}.diff,W{1}.SN,'between',X,'betweenNames',{'a','b','c','d','e','f','g','h','i','j','k','l',...
+%                     'm','n','o','p','q','r','s','t'});
+            otherwise
+                disp('You need to give two maps as input to compare random task subsets \n')
         end
     case 'EVAL:STATS:CURVES'
         mapType=varargin{1}; % options <
@@ -2431,11 +2532,13 @@ switch what
             lineplot(W.dist,W.diff,'subset',W.dist<=35);
         end
     case 'EVAL:STATS:DIFF'
-        mapType=varargin{1}; % {'lob10','bucknerRest','atlasFinal9'}
+        mapType=varargin{1}; % {'lob10','bucknerRest','SC2_<algorithm>_<numCluster>'}
         data=varargin{2}; % evaluating data from study [1] or [2] or [4]?
         type=varargin{3}; % 'group' or 'indiv'
         crossval=varargin{4}; % [0]-no crossval; [1]-crossval
         condType=varargin{5}; % evaluating on 'unique' or 'all' taskConds ??
+        
+        % example: sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',{'SC1_cnvf_10','Buckner_17Networks'},[2 2],'group',1,'subsets_movies3')
         
         % do stats
         P=[];
@@ -3261,11 +3364,12 @@ switch what
         
         % do stats
         %         sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',toPlot,evalNums,'group',1,'unique'); % always take crossval + unique
-    case 'AXES:subsets'
+    case 'AXES:subsets_dissimilar'
         mapType=varargin{1};
-        data=varargin{2}; % 1, 2, 4 . [1: eval on sc1; 2: eval on sc2; 4: eval on sc1+sc2]
-        subset=varargin{3}; % {'random7','random5'} etc. which kind of subsets ?
+        subset=varargin{2}; % 'movies' or 'dissimilar'
         
+        data=2;
+        numTasks=3;
         crossval=1;
         
         % aesthetics
@@ -3279,21 +3383,13 @@ switch what
         
         idx=1;
         for m=1:length(mapType),
-            for ss=1:length(subset),
-                CAT.errorcolor=errorcolor{idx};
-                CAT.linecolor=linecolor{idx};
-                CAT.linestyle=linestyle{idx};
-                sc1_sc2_functionalAtlas('EVAL:PLOT:SUBSETS',mapType{m},data,subset{ss},crossval,'CAT',CAT); % always take crossval + unique
-                hold on
-                fprintf('%s:%s colour is %s and linestyle is %s \n',mapType{m},subset{ss},linecolor{idx},linestyle{idx});
-                idx=idx+1;
-            end
-        end
-        
-        if strcmp(subset,'movies'),
-            CAT.errorcolor='r';
-            CAT.linecolor='r';
-            sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF','SC1_cnvf_10',2,'group',1,'unique','CAT',CAT)
+            CAT.errorcolor=errorcolor{idx};
+            CAT.linecolor=linecolor{idx};
+            CAT.linestyle=linestyle{idx};
+            sc1_sc2_functionalAtlas('EVAL:PLOT:SUBSETS',{mapType{m}},data,subset,numTasks,crossval,'CAT',CAT); % always take crossval + unique
+            hold on
+            fprintf('%s:%s colour is %s and linestyle is %s \n',mapType{m},subset,numTasks,linecolor{idx},linestyle{idx});
+            idx=idx+1;
         end
         
         % Labelling
@@ -3305,6 +3401,33 @@ switch what
         
         % do stats
         %         sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',toPlot,evalNums,'group',1,'unique'); % always take crossval + unique
+    case 'AXES:subsets_random'
+        mapType=varargin{1};
+        data=varargin{2}; % 1, 2, 4 . [1: eval on sc1; 2: eval on sc2; 4: eval on sc1+sc2]
+        subset=varargin{3}; % {'random','movies'} etc. which kind of subsets ?
+        numTasks=varargin{4}; % [7 3] how many tasks are we taking ?
+        
+        crossval=1;
+        
+        % aesthetics
+        CAT.errorwidth=.5;
+        CAT.markertype='none';
+        CAT.linewidth=3;
+        CAT.linewidth={2, 2, 2, 2, 2, 2};
+        linestyle={'-','-','-','-','-','-'};
+        errorcolor={'k','b','g','m','y','g'};
+        linecolor={'k','b','g','m','y','g'};
+        
+        CAT.errorcolor=errorcolor;
+        CAT.linecolor=linecolor;
+        CAT.linestyle=linestyle;
+        sc1_sc2_functionalAtlas('EVAL:PLOT:SUBSETS',mapType,data,subset,numTasks,crossval,'CAT',CAT); % always take crossval + unique
+        
+        % Labelling
+        set(gca,'YLim',[0.05 0.15],'FontSize',12);
+        xlabel(sprintf('Random Task Subsets (%d)',numTasks));
+        ylabel('Difference');
+        %         set(gcf,'units','centimeters','position',[5,5,9,12])
     case 'AXES:indiv_diff' % make summary graph for diff curves for indiv maps
         toPlot=varargin{1};% {'SC2_10cluster','SC2_10cluster'}
         evalNums=varargin{2}; % repmat([4],length(plotName),1)
@@ -3527,6 +3650,141 @@ switch what
     case 'SUPP5'   % Feature & Task Loading Matrices
         sc1_sc2_functionalAtlas('AXES:featSpace','featList_all')
         
+    case 'WEBSITE:contrasts'
+        sn=varargin{1}; % 'group' or 'individual'
+        norm=varargin{2}; % 'MNI' or 'SUIT'
+        
+        map='contrasts';
+        
+        F=dload(fullfile(baseDir,'website_taskNames.txt'));
+        
+        lambda=.01;
+        study=[1,2];
+        
+        % load in activity patterns
+        [data,volIndx,V]=sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,study,'eval');
+        
+        % get feature model
+        [X,~,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:make_model',study,'no'); % load in model
+        
+        % rest
+        if length(study)>1,
+            rest=[29,61];
+        else
+            rest=numConds;
+        end
+        
+        % set up volume info
+        numFeat=size(X,2)-numConds;
+        Yy=zeros(numConds+numFeat,length(returnSubjs),V.dim(1)*V.dim(2)*V.dim(3));
+        C{1}.dim=V.dim;
+        C{1}.mat=V.mat;
+        
+        % we're not regressing out motor features against rest
+        X(rest,numConds+1:numConds+3)=X(rest,numConds+1:numConds+3)*-1;
+        
+        % regress out motor features
+        for s=1:length(returnSubjs),
+            B(:,s,:)=(X'*X+eye(numConds+numFeat)*lambda)\(X'*data(:,:,s)); % was subjs(s) for some reason ?
+            fprintf('ridge regress done for subj%d done \n',returnSubjs(s))
+        end;
+        clear data
+        
+        % subtract baseline
+        baseline=nanmean(B,1);
+        B=bsxfun(@minus,B,baseline);
+        
+        % z score the activity patterns
+        B=zscore(B);
+        
+        % make volume
+        Yy(:,:,volIndx)=B;
+        Yy=permute(Yy,[2 1 3]);
+        
+        % save out vol of group contrasts (all 61)
+        exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii');
+        X=spm_vol(exampleVol);
+        X.private.dat.fname=V.fname;
+        
+        switch sn,
+            case 'group'
+                outDir=fullfile(baseDir,'website_maps',sprintf('%s_%s_%s',norm,sn,map));
+                indices=nanmean(Yy,1);
+                indices=reshape(indices,[size(indices,2) size(indices,3)]);
+                
+                % map vol2surf
+                indices=reshape(indices,[size(indices,1) V.dim(1),V.dim(2),V.dim(3)]);
+                for i=1:size(indices,1),
+                    data=reshape(indices(i,:,:,:),[C{1}.dim]);
+                    C{i}.dat=data;
+                end
+                
+                % save out vol of group contrasts (all 61)
+                exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii');
+                X=spm_vol(exampleVol);
+                X.private.dat.fname=V.fname;
+                % loop over task conditions
+                for c=1:length(C),
+                    X.fname=fullfile(outDir,sprintf('%s.nii',F.condNames{c}));
+                    X.private.dat.fname=fullfile(outDir,sprintf('%s.nii',F.condNames{c}));
+                    % MNI or SUIT ?
+                    switch norm,
+                        case 'SUIT'
+                            spm_write_vol(X,C{c}.dat);
+                            fprintf('save out vol in SUIT %s \n',F.condNames{c})
+                        case 'MNI'
+                            suitDir=fullfile(baseDir,'website_maps',sprintf('SUIT_%s_%s',sn,map));
+                            if isdir(fullfile(suitDir,sprintf('%s.nii',F.condNames{c})))
+                                disp('normalise to SUIT first, then to MNI \n')
+                            else
+                                cd(suitDir)
+                                suit_mni2suit(sprintf('%s.nii',F.condNames{c}),'def','suit2mni');
+                                fprintf('save out vol in MNI %s \n',F.condNames{c})
+                                movefile(sprintf('Ws2m_%s.nii',F.condNames{c}),fullfile(outDir,sprintf('%s.nii',F.condNames{c})))
+                                delete(fullfile(suitDir,sprintf('Ws2m_%s.nii',F.condNames{c})));
+                            end
+                    end
+                end
+            case 'individual'
+                indices=reshape(Yy,[size(Yy,1) size(Yy,2),size(Yy,3)]);
+                
+                % map vol2surf
+                weights=reshape(indices,[size(indices,1) size(indices,2) V.dim(1),V.dim(2),V.dim(3)]);
+                
+                % loop over subjects
+                for s=1:length(returnSubjs),
+                    outDir=fullfile(baseDir,'website_maps',sprintf('%s_%s_%s',norm,sn,map),subj_name{returnSubjs(s)}); dircheck(outDir);
+                    for i=1:size(weights,2),
+                        data=reshape(weights(s,i,:,:,:),[C{1}.dim]);
+                        C{i}.dat=data;
+                    end
+                    
+                    % loop over task conditions
+                    for c=1:length(C),
+                        X.fname=fullfile(outDir,sprintf('%s.nii',F.condNames{c}));
+                        X.private.dat.fname=fullfile(outDir,sprintf('%s.nii',F.condNames{c}));
+                        
+                        % MNI or SUIT ?
+                        switch norm,
+                            case 'SUIT'
+                                spm_write_vol(X,C{c}.dat);
+                                 fprintf('save out vol in SUIT %s:%s \n',subj_name{returnSubjs(s)},F.condNames{c})
+                            case 'MNI'
+                                suitDir=fullfile(baseDir,'website_maps',sprintf('SUIT_%s_%s',sn,map),subj_name{returnSubjs(s)});
+                                if isdir(fullfile(suitDir,sprintf('%s.nii',F.condNames{c})))
+                                    disp('normalise to SUIT first, then to MNI')
+                                else
+                                    cd(suitDir)
+                                    suit_mni2suit(sprintf('%s.nii',F.condNames{c}),'def','suit2mni');
+                                    fprintf('save out vol in MNI %s:%s \n',subj_name{returnSubjs(s)},F.condNames{c})
+                                    movefile(sprintf('Ws2m_%s.nii',F.condNames{c}),fullfile(outDir,sprintf('%s.nii',F.condNames{c})))
+                                    delete(fullfile(suitDir,sprintf('Ws2m_%s.nii',F.condNames{c})));
+                                end
+                        end
+                    end
+                    clear data
+                end
+        end
 end
 
 % Local functions
