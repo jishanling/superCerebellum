@@ -426,7 +426,8 @@ switch(what)
      
     case 'CLUSTER:GlobalRand'
         compare={'groupEval_SC12_cnvf_7','groupEval_SC12_cnvf_10','groupEval_SC12_cnvf_17',...
-            'groupEval_Buckner_7Networks','groupEval_Cole_10Networks','groupEval_Buckner_17Networks'};
+            'groupEval_Buckner_7Networks','groupEval_Cole_10Networks','groupEval_Buckner_17Networks',...
+            'groupEval_lob10'};
         numMaps = length(compare);
         load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));  % Just to get V and volIndex
         clear T;
@@ -453,6 +454,9 @@ switch(what)
         imagesc(AR,[0 0.8]);
         colorbar;
         set(gca,'XTickLabel',{'C7','C10','C17','R7','R10','R17'},'YTickLabel',{'C7','C10','C17','R7','R10','R17'}); 
+        %set(gcf,'PaperPosition',[2 2 4.7 3.8]);
+        % wysiwyg;
+        % axis equal
     case 'CLUSTER:LocalRand'
         type = 'searchlight'; % 'voxelwise','searchlight', or 'searchlightvoxel'
         compare={'groupEval_SC12_cnvf_7','groupEval_SC12_cnvf_10','groupEval_SC12_cnvf_17',...
@@ -520,22 +524,32 @@ switch(what)
     case 'CLUSTER:FigureRand' % Figure of the Rand index
         %Out=sc1sc2_spatialAnalysis('CLUSTER:LocalRand');
         % save(fullfile(studyDir{2},encodeDir,'glm4','LocalRand_TaskRest.mat'),'-struct','Out');
-        set(gcf,'PaperPosition',[2 2 8 6]);
+        set(gcf,'PaperPosition',[2 3 14 8]);
         wysiwyg;
+        xlims = [-100 100]; 
+        ylims = [-85 85];
         load(fullfile(studyDir{2},encodeDir,'glm4','LocalRand_TaskRest.mat'));
         load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));  % Just to get V and volIndex
         clear T;
-        subplot(2,2,1);
+        subplot(2,3,1);
         sc1sc2_spatialAnalysis('CLUSTER:GlobalRand');
         
         titles = {'Task-Task','Rest-Rest','Task-Rest'};
         for i=1:3
-            subplot(2,2,i+1);
-            sc1sc2_spatialAnalysis('visualise_map',mean(ar(:,pair==i),2),volIndx,V,'type','func','cscale',[0 0.8]);
-            axis equal;
-            title(titles{i});
+            subplot(2,3,i+3);
+            M(i)=sc1sc2_spatialAnalysis('visualise_map',mean(ar(:,pair==i),2),volIndx,V,'type','func',...
+                'cscale',[0 0.8]);
+            % title(titles{i});
         end;
-        
+        subplot(2,3,2); 
+        suit_plotflatmap(M(3).data./M(1).data,'type','func','cmap',parula,...
+            'cscale',[0 1.2],'xlims',xlims,'ylims',ylims);
+        subplot(2,3,3); 
+        C=permute(parula,[1 3 2]);
+        N=size(C,1); 
+        y=linspace(0,1.2,N);
+        x=ones(N,1); 
+        image(x,y,C);
     case 'visualise_map' % Plot any data on the cerebellar flatmap
         data = varargin{1};     % Data to plot
         volIndx = varargin{2};  % Indices into the volume (mask)
@@ -543,7 +557,9 @@ switch(what)
         cmap = [];
         cscale = [];
         type = 'label';     % func / label
-        vararginoptions(varargin(4:end),{'cmap','type','cscale'});
+        xlims = [-100  100]; 
+        ylims = [-85 85]; 
+        vararginoptions(varargin(4:end),{'cmap','type','cscale','xlims','ylims'});
         
         % map features on group
         V.dat=zeros([V.dim(1) V.dim(2) V.dim(3)]);
@@ -555,18 +571,22 @@ switch(what)
                 if (isempty(cmap))
                     cmap = colorcube(max(data));
                 end;
+                outputtype = 'paint'; 
             case {'func','rgb'}
                 stats = 'nanmean';
                 if (isempty(cmap))
                     cmap = hot;
                 end;
+                outputtype = 'metric'; 
         end;
         
         % map the data and display on flatmap
         data=suit_map2surf(V,'space','SUIT','stats',stats);
-        suit_plotflatmap(data,'type',type,'cmap',cmap,'cscale',cscale);
+        suit_plotflatmap(data,'type',type,'cmap',cmap,...
+            'cscale',cscale,'xlims',xlims,'ylims',ylims);
         
-        P=caret_struct('paint','data',data);
+        
+        P=caret_struct(outputtype,'data',data);
         varargout={P};
     case 'EVALBOUND:getBoundaries'
         % This goes from a group parcellation map and generates a
