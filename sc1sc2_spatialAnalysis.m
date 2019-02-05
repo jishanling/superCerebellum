@@ -357,6 +357,58 @@ switch(what)
         fprintf('\n');
         save(fullfile(outDir,'bootstrap_oldF.mat'),'-struct','T');
         varargout={T};
+    case 'SNN:bootstrap_tasks'
+        type = 'newF';      % {'oldF','newF'}: Estimate a new F every bootstrap interation?
+        study=[1 2];        % Study 1 or 2 or [1,2]
+        K=10;               % K=numClusters (i.e. 5);
+        numBSIter = 100;     % Number of Bootstrap iterations
+        algorithm = 'cnvf'; % Semi-nonengative mare
+        smooth = [];  % Any postfix to the file name? (smoothing, etc)
+        vararginoptions(varargin,{'type','study','K','numBSIter','algorithm','smooth'});
+        
+        % Set the String correctly
+        studyStr = sprintf('SC%d',study);
+        if length(study)>1
+            studyStr='SC12'; % both studies combined
+        end
+        outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithm,K));
+        if ~isempty(smooth)
+            outDir=strcat(outDir,sprintf('_s%2.1f',smooth));
+        end;
+        
+        S = load(fullfile(outDir,sprintf('%s.mat',algorithm)));
+        [X,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,study,'build','smooth',smooth);
+        TT = dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        TT = getrow(TT,ismember(TT.StudyNum,study)); % Pick the right experiment 
+        N=length(TT.condNumUni); 
+        
+        for i=1:numBSIter
+            % sample with replacement
+            if (i==1)
+                T.samp(i,:)=[1:N];
+            else
+                T.samp(i,:)=unidrnd(N,1,N);
+            end;
+            Xs = X(T.samp(i,:),:); 
+            Xs = bsxfun(@minus,Xs,mean(Xs,1)); 
+            switch (type)
+                case 'newF'
+                    switch (algorithm)
+                        case 'snn'
+                            [F,G,Info]=semiNonNegMatFac(Xs,K,'G0',S.bestG,'threshold',0.001); % get a segmentation using
+                        case 'cnvf'
+                            [F,G,Info]=cnvSemiNonNegMatFac(Xs,K,'G0',S.bestG,'threshold',0.01,'maxIter',250); % get a segmentation using
+                    end;
+            end;
+            [~,g]=max(G,[],2);
+            T.assign(i,:)=g';
+            T.numIter(i,1)=Info.numiter; 
+            T.error(i,1)=Info.error; 
+            fprintf('%d\n',i);
+        end;
+        fprintf('\n');
+        save(fullfile(outDir,'bootstrap_tasks.mat'),'-struct','T');
+        varargout={T};
     case 'SNN:bootstrap_eval'
         mapsize = [ 2 2 5 4]; % For paper size
         T=load('bootstrap_oldF.mat');
