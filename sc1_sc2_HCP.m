@@ -123,9 +123,13 @@ loc_AC = {[-94,-131,-114],... %s100307
     [-102,-130,-113],... %s856766
     [-100,-127,-111],... %s857263
     [-99,-130,-108],... %s899885
+    [],... %
     };
 
+loc_AC_newSubj={[-94 -129 -67]};
+
 taskNames_all={'EMOTION','GAMBLING','LANGUAGE','MOTOR','RELATIONAL','SOCIAL','WM'};
+taskNames_all_abbrev={'EM','GA','LA','MO','RE','SO','WM'};
 
 taskNames_new = {'EM_FACES','EM_SHAPES','GA_PUNISH','GA_REWARD','LA_MATH','LA_STORY','MO_CUE',...
     'MO_LF','MO_LH','MO_RF','MO_RH','MO_T','WM_TOOL','WM_PLACE','WM_0BK','WM_2BK',...
@@ -139,124 +143,169 @@ wbDir='/Users/maedbhking/Documents/MATLAB/workbench/bin_macosx64/wb_command';
 
 switch what
     
-    case 'TEMP:getSubjs'
-        subjIDFile=dir(fullfile(HCPDir,'*Structural*'));
+    case 'LOAD:formatFiles'
+        whichT=varargin{1}; % 'anat' or 'task'
         
-        for s=1:length(subjIDFile),
-            HCP_subjs{s}=str2double(subjIDFile(s).name(1:6)); % assuming that the subjID is always 6 digits
-            %             dircheck(fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs))); % make new folder
+        % get subj ID
+        HCP_subjs=load(fullfile(HCPDir,'HCP_subjs_new'));
+        
+        % loop over subjs
+        for ii=1:length(HCP_subjs),
+            
+            switch whichT,
+                case 'anat'
+                    fprintf('%d:grabbing anatomical \n',HCP_subjs(ii))
+                    
+                    cd(fullfile(HCPDir,'new_subjects'))
+                    %********* DO ANATOMICAL FIRST **********
+                    % check if folder exists and unzip
+                    if exist(sprintf('%d_3T_Structural_preproc.zip',HCP_subjs(ii)))>0,
+                        unzip(sprintf('%d_3T_Structural_preproc.zip',HCP_subjs(ii)))
+                        
+                        % get nifti anat
+                        cd(fullfile(sprintf('%d',HCP_subjs(ii)),'MNINonLinear'));
+                        gunzip('T1w.nii.gz')
+                        
+                        % move to anat folder (new name)
+                        movefile('T1w.nii',fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs(ii)),'anatomical_raw.nii'))
+                        
+                        % delete unzipped folder
+                        rmdir(fullfile(HCPDir,'new_subjects',sprintf('%d',HCP_subjs(ii))),'s')
+                        
+                    else
+                        fprintf('ANATOMICAL missing for %d \n',HCP_subjs(ii))
+                    end
+                case 'task'
+                    cd(fullfile(HCPDir,'new_subjects'))
+                    %********** NOW DO TASKS *****************
+                    % loop through all task names
+                    for c=1:length(taskNames_all),
+                        
+                        fprintf('%d:grabbing %s \n',HCP_subjs(ii),taskNames_all{c})
+                        
+                        % check if folder exists and unzip folder
+                        if exist(sprintf('%d_3T_tfMRI_%s_analysis_s2.zip',HCP_subjs(ii),taskNames_all{c}))>0,
+                            unzip(fullfile(sprintf('%d_3T_tfMRI_%s_analysis_s2.zip',HCP_subjs(ii),taskNames_all{c})))
+                            
+                            % get directory to cifti file
+                            taskDir=fullfile(sprintf('%d',HCP_subjs(ii)),'MNINonLinear','Results',sprintf('tfMRI_%s',taskNames_all{c}),...
+                                sprintf('tfMRI_%s_hp200_s2_level2.feat',taskNames_all{c}));
+                            
+                            % get name of file to convert
+                            fileToConvert=fullfile(taskDir,sprintf('%d_tfMRI_%s_level2_hp200_s2.dscalar.nii',HCP_subjs(ii),taskNames_all{c}));
+                            if exist(fileToConvert)>0,
+                                
+                                % convert cifti file to nifti file
+                                [oldName,newName]=sc1_sc2_HCP('LOAD:CIFTI2NIFTI',fullfile(HCPDir,'new_subjects',fileToConvert));
+                                
+                                % move nifti file to contrasts folder
+                                for i=1:length(oldName),
+                                    movefile(fullfile(HCPDir,'new_subjects',taskDir,sprintf('/%s.nii',oldName{i})),...
+                                        fullfile(HCPDir,'contrasts',sprintf('%s_%d.nii',newName{i},HCP_subjs(ii))))
+                                end
+                            end
+                            % delete unzipped folder
+                            rmdir(fullfile(HCPDir,'new_subjects',sprintf('%d',HCP_subjs(ii))),'s')
+                            
+                        else
+                            fprintf('%s missing for %d \n',taskNames_all{c},HCP_subjs(ii))
+                        end
+                    end
+            end
         end
-        
-        varargout={HCP_subjs};
-    case 'TEMP:CIFTI2NIFTI'
+    case 'LOAD:CIFTI2NIFTI'
         image=varargin{1};
         
-        % Read CIFTI
-        cii=ft_read_cifti(image);
-        
-        % get images
-        names=fieldnames(cii);
-        idx=1;
-        for n=1:length(names),
-            if sum(strfind(names{n},'emotion'))>0;
-                conNames=names{n};
-                idx=idx+1;
-                weights(:,idx)=cii.sprintf('%s',conNames);
+        % find taskName
+        for tn=1:length(taskNames_all),
+            if sum(strfind(image,taskNames_all(tn)))>0,
+                taskN=lower(taskNames_all{tn});
+                taskNum=tn;
             else
             end
         end
         
+        % Read CIFTI
+        cii=ft_read_cifti(image);
         
-        %         if isfield(cii,'indexmax'),
-        %             labels=cii.indexmax;
-        %         else % this includes cortical labels, which need to be removed
-        %             labels=cii.x1;
-        %             cii.pos(cii.brainstructure==1 | cii.brainstructure==2,:,:)=[];
-        %             labels(cii.brainstructure==1 | cii.brainstructure==2)=[];
-        %         end
+        % get images (in fieldnames)
+        names=fieldnames(cii);
         
-        numVox=size(labels,1);
+        % find directory
+        [dirN,~]=spm_fileparts(image);
         
-        % Conversion from mm to vox
-        for v=1:numVox,
-            tmp=inv(cii.transform)*[cii.pos(v,:),1]';
-            vox(v,:)=tmp';
-        end
-        
-        % Write Labels
-        DATA=zeros(cii.dim);
-        for i=1:numVox,
-            DATA(vox(i,1),vox(i,2),vox(i,3))=labels(i);
-        end
-        
-        % MNI 2mm data structure
-        V = struct('fname',[dir 'C2N_' name{1} '.nii'],...
-            'dim',cii.dim,...
-            'dt',[4 0],...
-            'mat',[-2 0 0 92;0 2 0 -128;0 0 2 -74;0 0 0 1],...
-            'pinfo',[1;0;352],...
-            'descrip','MNI_2mm');
-        V = spm_create_vol(V);
-        spm_write_vol(V,DATA);
-    case 'TEMP:formatFiles'
-        % get subj ID
-        HCP_subjs=sc1_sc2_HCP('TEMP:getSubjs');
-        
-        % loop over subjs
-        for ii=1:length(HCP_subjs),
-            %             unzip(fullfile(HCPDir,sprintf('%d_3T_Structural_preproc.zip',sprintf('%d',HCP_subjs{ii}))))
-            %
-            %             % get nifti anat
-            %             cd(fullfile(HCPDir,sprintf('%d',HCP_subjs{ii}),'MNINonLinear'));
-            %             gunzip('T1w.nii.gz')
-            %
-            %             % move to anat folder
-            %             movefile('T1w.nii',fullfile('anatomicals',sprintf('s%d',sprintf('%d',HCP_subjs{ii}))))
-            %
-            % delete unzipped folder
-            %             delete(fullfile(HCPDir,sprintf('%d',HCP_subjs{ii})))
-            
-            % move zipped folder to anat_raw
-            %             movefile(fullfile(HCPDir,sprintf('%d_3T_Structural_preproc.zip',sprintf('%d',HCP_subjs{ii}))),...
-            %                 fullfile(HCPDir,'anatomicals_raw'))
-            
-            % unzip and move task folders
-            for c=1:length(taskNames_all),
+        indx=1;
+        % loop over images and save out as MNI
+        for n=1:length(names),
+            % only grab the relevant functional images
+            if sum(strfind(names{n},taskN))>0;
                 
-                % unzip folder
-                %                 unzip(fullfile(HCPDir,sprintf('%d_3T_tfMRI_%s_analysis_s2.zip',sprintf('%d',HCP_subjs{ii}),taskNames_all{c})))
+                conName{1}=names{n};
+                weights=cii.(conName{1});
                 
-                % get directory to cifti file
-                taskDir=fullfile(HCPDir,sprintf('%d',HCP_subjs{ii}),'MNINonLinear','Results',sprintf('tfMRI_%s',taskNames_all{c}),...
-                    sprintf('tfMRI_%s_hp200_s2_level2.feat',taskNames_all{c}));
+                condIndx=strfind(conName{1},'_'); % find condN
+                taskName{1}=conName{1}(condIndx(2)+1:condIndx(end-1)-1);
                 
-                % get name of file to convert
-                fileToConvert=fullfile(taskDir,sprintf('%d_tfMRI_%s_level2_hp200_s2.dscalar.nii',HCP_subjs{ii},taskNames_all{c}));
+                % get rid of cortex
+                pos=cii.pos;
+                pos(cii.brainstructure==1 | cii.brainstructure==2,:,:)=[];
+                weights(cii.brainstructure==1 | cii.brainstructure==2)=[];
                 
-                % convert cifti file to nifti file
-                sc1_sc2_HCP('TEMP:CIFTI2NIFTI',fileToConvert)
+                numVox=size(weights,1);
                 
-                % move nifti file to contrasts folder
-                %                 movefile()
+                % Conversion from mm to vox
+                for v=1:numVox,
+                    tmp=inv(cii.transform)*[pos(v,:),1]';
+                    vox(v,:)=tmp';
+                end
                 
+                % Write Labels
+                DATA=zeros(cii.dim);
+                for i=1:numVox,
+                    DATA(vox(i,1),vox(i,2),vox(i,3))=weights(i);
+                end
+                
+                % MNI 2mm data structure
+                V = struct('fname',[dirN '/' taskName{1} '.nii'],...
+                    'dim',cii.dim,...
+                    'dt',[4 0],...
+                    'mat',[-2 0 0 92;0 2 0 -128;0 0 2 -74;0 0 0 1],...
+                    'descrip','MNI_2mm');
+                V=spm_create_vol(V);
+                spm_write_vol(V,DATA);
+                clear V DATA
+                
+                % rename
+                oldName{indx}=taskName{1};
+                tmp=char(taskName);
+                a=strfind(tmp,'level2'); % taskCond always comes after 'level2'
+                newName{indx}=sprintf('%s_%s',taskNames_all_abbrev{taskNum},upper(tmp(a+7:end)));
+                indx=indx+1;
+            else
+                % do nothing
             end
-            
         end
+        varargout={oldName,newName};
         
     case 'ANAT:resample'
-        HCP_subjs=sc1_sc2_HCP('PREP:HCP_subjs');
+        subjs=varargin{1}; % 'old' or 'new' ?
+        
+        HCP_subjs=load(fullfile(HCPDir,sprintf('HCP_subjs_%s',subjs)));
         
         subjs=length(HCP_subjs);
         
         for s=1:subjs,
-            
-            % Downsample anat images to 1 mm ^3
-            source    = fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs(s)),['anatomical_raw','.nii']);
-            newFile   = fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs(s)),['anatomical_resample_raw','.nii']);
-            spmj_resample(source,newFile,.7);
+            if exist(fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs(s)),['anatomical_raw','.nii']))>0,
+                % Downsample anat images to 1 mm ^3
+                source    = fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs(s)),['anatomical_raw','.nii']);
+                newFile   = fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs(s)),['anatomical_resample_raw','.nii']);
+                spmj_resample(source,newFile,.7);
+            end
         end
     case 'ANAT:reslice_LPI'                  % STEP 1.2: Reslice anatomical image within LPI coordinate systems
-        HCP_subjs=sc1_sc2_HCP('PREP:HCP_subjs');
+        subjs=varargin{1}; % 'old' or 'new' ?
+        
+        HCP_subjs=load(fullfile(HCPDir,sprintf('HCP_subjs_%s',subjs)));
         
         subjs=length(HCP_subjs);
         
@@ -265,100 +314,97 @@ switch what
             % (1) Reslice anatomical image to set it within LPI co-ordinate frames
             source  = fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs(s)),['anatomical_resample_raw','.nii']);
             dest    = fullfile(HCPDir,'anatomicals',sprintf('s%d',HCP_subjs(s)),['anatomical','.nii']);
-            spmj_reslice_LPI(source,'name', dest);
             
-            % (2) In the resliced image, set translation to zero
-            V               = spm_vol(dest);
-            dat             = spm_read_vols(V);
-            V.mat(1:3,4)    = [0 0 0];
-            spm_write_vol(V,dat);
-            display 'Manually retrieve the location of the anterior commissure (x,y,z) before continuing'
+            if exist(source)>0,
+                spmj_reslice_LPI(source,'name', dest);
+                
+                % (2) In the resliced image, set translation to zero
+                V               = spm_vol(dest);
+                dat             = spm_read_vols(V);
+                V.mat(1:3,4)    = [0 0 0];
+                spm_write_vol(V,dat);
+                display 'Manually retrieve the location of the anterior commissure (x,y,z) before continuing'
+            end
         end
     case 'ANAT:centre_AC'                    % STEP 1.3: Re-centre AC
         % Set origin of anatomical to anterior commissure (must provide
         % coordinates in section (4)).
         % example: sc1_imana('ANAT:centre_AC',1)
-        HCP_subjs=sc1_sc2_HCP('PREP:HCP_subjs');
+        subjs=varargin{1}; % 'old' or 'new' ?
         
-        subjs=length(HCP_subjs);
+        HCP_subjs=load(fullfile(HCPDir,sprintf('HCP_subjs_%s',subjs)));
         
-        for s=1:subjs,
+        for s=1:length(HCP_subjs),
             img    = fullfile(HCPDir,anatDir,sprintf('s%d',HCP_subjs(s)),['anatomical','.nii']);
-            V               = spm_vol(img);
-            dat             = spm_read_vols(V);
-            V.mat(1:3,4)    = loc_AC{s};
-            spm_write_vol(V,dat);
-            fprintf('Done for s%d \n',HCP_subjs(s))
+            if exist(img)>0,
+                V               = spm_vol(img);
+                dat             = spm_read_vols(V);
+                if strcmp(subjs,'new'),
+                    V.mat(1:3,4)=loc_AC_newSubj{1};
+                else
+                    V.mat(1:3,4)    = loc_AC{s};
+                end
+                spm_write_vol(V,dat);
+                fprintf('Done for s%d \n',HCP_subjs(s))
+            end
         end
-    case 'FUNC:load_files'
-        % unzip files
-        fileNames=dir(fullfile(HCPDir,'*zip'));
         
-        for i=1:length(fileNames),
-            unzip(fullfile(HCPDir,fileNames(i).name))
-            fprintf('%s unzipped \n',fileNames(i).name)
-        end
     case 'SUIT:run_all'
-        sn=varargin{1};
+        sn=varargin{1}; % 'new' or 'old'
         
-        sc1_sc2_ICB('SUIT:isolate_segment',sn)
-        sc1_sc2_ICB('SUIT:make_maskImage',sn)
-        sc1_sc2_ICB('SUIT:corr_cereb_cortex_mask',sn)
-        sc1_sc2_ICB('SUIT:normalise_dartel',sn,'grey')
-        sc1_sc2_ICB('SUIT:make_mask',sn,'grey')
-        %         sc1_sc2_ICB('SUIT:reslice',sn)
+        sc1_sc2_HCP('SUIT:isolate_segment',sn)
+        sc1_sc2_HCP('SUIT:make_maskImage',sn)
+        sc1_sc2_HCP('SUIT:corr_cereb_cortex_mask',sn)
+        sc1_sc2_HCP('SUIT:normalise_dartel',sn,'grey')
+        %         sc1_sc2_HCP('SUIT:make_mask',sn,'grey')
+        %         sc1_sc2_HCP('SUIT:reslice',sn)
     case 'SUIT:isolate_segment'              % STEP 9.2:Segment cerebellum into grey and white matter
-        %        spm fmri
+        spm fmri
+        subjs=varargin{1}; % 'old' or 'new' ?
         
-        HCP_subjs=sc1_sc2_HCP('PREP:HCP_subjs');
+        HCP_subjs=load(fullfile(HCPDir,sprintf('HCP_subjs_%s',subjs)));
         
         for s=1:length(HCP_subjs),
-            suitSubjDir = fullfile(HCPDir,suitDir,'anatomicals',sprintf('s%d',HCP_subjs(s)));dircheck(suitSubjDir);
             source=fullfile(HCPDir,anatDir,sprintf('s%d',HCP_subjs(s)),'anatomical.nii');
-            dest=fullfile(suitSubjDir,'anatomical.nii');
-            copyfile(source,dest);
-            cd(fullfile(suitSubjDir));
-            suit_isolate_seg({fullfile(suitSubjDir,'anatomical.nii')},'keeptempfiles',1);
-        end
-    case 'SUIT:make_maskImage'               % STEP 3.7:Make mask images (noskull and grey_only)
-        % Make maskImage meanepi
-        % example: sc1_sc2_imana('FUNC:make_maskImage',1)
-        
-        HCP_subjs=sc1_sc2_HCP('PREP:HCP_subjs');
-        
-        for s=1:length(HCP_subjs),
-            
-            % get example func image and mask
-            nam{1}  = fullfile(HCPDir,'contrasts',sprintf('mask_EM_%d.nii',HCP_subjs(s))); % contrast image
-            spm_imcalc(nam, fullfile(HCPDir,'contrasts',sprintf('mask_gray_%d.nii',HCP_subjs(s))), 'i1~=0')
-            
-            fprintf('subj %d done \n',HCP_subjs(s));
+            if exist(source)>0,
+                suitSubjDir = fullfile(HCPDir,suitDir,'anatomicals',sprintf('s%d',HCP_subjs(s)));dircheck(suitSubjDir);
+                dest=fullfile(suitSubjDir,'anatomical.nii');
+                copyfile(source,dest);
+                cd(fullfile(suitSubjDir));
+                suit_isolate_seg({fullfile(suitSubjDir,'anatomical.nii')},'keeptempfiles',1);
+            end
         end
     case 'SUIT:corr_cereb_cortex_mask'       % STEP 9.4:
-        suitAnatDir=fullfile(HCPDir,'suit','anatomicals');
+        subjs=varargin{1}; % 'old' or 'new' ?
         
-        HCP_subjs=sc1_sc2_HCP('PREP:HCP_subjs');
+        HCP_subjs=load(fullfile(HCPDir,sprintf('HCP_subjs_%s',subjs)));
+        
+        suitAnatDir=fullfile(HCPDir,'suit','anatomicals');
         
         for s=1:length(HCP_subjs),
             
-            cortexGrey= fullfile(suitAnatDir,sprintf('s%d',HCP_subjs(s)),'c3anatomical.nii');
-            cerebGrey = fullfile(suitAnatDir,sprintf('s%d',HCP_subjs(s)),'c1anatomical.nii');
-            bufferVox = fullfile(suitAnatDir,sprintf('s%d',HCP_subjs(s)),'buffer_voxels.nii');
-            
-            % isolate overlapping voxels
-            spm_imcalc({cortexGrey,cerebGrey},bufferVox,'(i1.*i2)')
-            
-            % mask buffer
-            spm_imcalc({bufferVox},bufferVox,'i1>0')
-            
-            cerebGrey2 = fullfile(suitAnatDir,sprintf('s%d',HCP_subjs(s)),'cereb_prob_corr_grey.nii');
-            cortexGrey2= fullfile(suitAnatDir,sprintf('s%d',HCP_subjs(s)),'cortical_mask_grey_corr.nii');
-            
-            % remove buffer from cerebellum
-            spm_imcalc({cerebGrey,bufferVox},cerebGrey2,'i1-i2')
-            
-            % remove buffer from cortex
-            spm_imcalc({cortexGrey,bufferVox},cortexGrey2,'i1-i2')
+            % check if the file exists
+            if exist(fullfile(suitAnatDir,sprintf('s%d',HCP_subjs(s))))>0,
+                
+                cortexGrey= fullfile(suitAnatDir,sprintf('s%d',HCP_subjs(s)),'c3anatomical.nii');
+                cerebGrey = fullfile(suitAnatDir,sprintf('s%d',HCP_subjs(s)),'c1anatomical.nii');
+                bufferVox = fullfile(suitAnatDir,sprintf('s%d',HCP_subjs(s)),'buffer_voxels.nii');
+                
+                % isolate overlapping voxels
+                spm_imcalc({cortexGrey,cerebGrey},bufferVox,'(i1.*i2)')
+                
+                % mask buffer
+                spm_imcalc({bufferVox},bufferVox,'i1>0')
+                
+                cerebGrey2 = fullfile(suitAnatDir,sprintf('s%d',HCP_subjs(s)),'cereb_prob_corr_grey.nii');
+                cortexGrey2= fullfile(suitAnatDir,sprintf('s%d',HCP_subjs(s)),'cortical_mask_grey_corr.nii');
+                
+                % remove buffer from cerebellum
+                spm_imcalc({cerebGrey,bufferVox},cerebGrey2,'i1-i2')
+                
+                % remove buffer from cortex
+                spm_imcalc({cortexGrey,bufferVox},cortexGrey2,'i1-i2')
+            end
         end
     case 'SUIT:normalise_dartel'             % STEP 9.5: Normalise the cerebellum into the SUIT template.
         % Normalise an individual cerebellum into the SUIT atlas template
@@ -368,21 +414,18 @@ switch what
         % (corr OR corr1 OR corr2 etc)!!
         % if you are running multiple subjs - change to 'job.subjND(s)."'
         % example: sc1_sc2_imana('SUIT:normalise_dartel',1,'grey')
-        type=varargin{1}; % 'grey' or 'whole' cerebellar mask
+        subjs=varargin{1}; % 'old' or 'new' ?
         
-        HCP_subjs=sc1_sc2_HCP('PREP:HCP_subjs');
+        HCP_subjs=load(fullfile(HCPDir,sprintf('HCP_subjs_%s',subjs)));
         
         for s=1:length(HCP_subjs),
-            cd(fullfile(HCPDir,'suit','anatomicals',sprintf('s%d',HCP_subjs(s))));
-            job.subjND.gray      = {'c_anatomical_seg1.nii'};
-            job.subjND.white     = {'c_anatomical_seg2.nii'};
-            switch type,
-                case 'grey'
-                    job.subjND.isolation= {'cereb_prob_corr_grey.nii'};
-                case 'whole'
-                    job.subjND.isolation= {'cereb_prob_corr.nii'};
+            if exist(fullfile(HCPDir,'suit','anatomicals',sprintf('s%d',HCP_subjs(s))))>0;
+                cd(fullfile(HCPDir,'suit','anatomicals',sprintf('s%d',HCP_subjs(s))));
+                job.subjND.gray      = {'c_anatomical_seg1.nii'};
+                job.subjND.white     = {'c_anatomical_seg2.nii'};
+                job.subjND.isolation= {'cereb_prob_corr_grey.nii'};
+                suit_normalize_dartel(job);
             end
-            suit_normalize_dartel(job);
         end
         
         % 'spm_dartel_warp' code was changed to look in the working
@@ -390,22 +433,29 @@ switch what
         % was giving a 'file2mat' error because it mistakenly believed that
         % this file had been created
     case 'SUIT:make_mask'                    % STEP 9.7: Make cerebellar mask using SUIT
-        type=varargin{1}; % 'grey' or 'whole'
+        subjs=varargin{1}; % 'old' or 'new' ?
         
-        HCP_subjs=sc1_sc2_HCP('PREP:HCP_subjs');
+        HCP_subjs=load(fullfile(HCPDir,sprintf('HCP_subjs_%s',subjs)));
         
         for s=1:length(HCP_subjs),
-            mask = fullfile(HCPDir,'contrasts',sprintf('mask_EM_%d.nii',HCP_subjs(s))); % mask for functional image
-            switch type
-                case 'grey'
-                    suit  = fullfile(HCPDir,'suit','anatomicals',sprintf('s%d',HCP_subjs(s)),'cereb_prob_corr_grey.nii'); % cerebellar mask grey (corrected)
-                    omask = fullfile(HCPDir,'suit','anatomicals',sprintf('s%d',HCP_subjs(s)),'maskbrainSUITGrey.nii'); % output mask image - grey matter
-                case 'whole'
-                    suit  = fullfile(HCPDir,'suit','anatomicals',sprintf('s%d',HCP_subjs(s)),'cereb_prob_corr.nii'); % cerebellar mask (corrected)
-                    omask = fullfile(HCPDir,'suit','anatomicals',sprintf('s%d',HCP_subjs(s)),'maskbrainSUIT.nii'); % output mask image
+            if exist(fullfile(HCPDir,'suit','anatomicals',sprintf('s%d',HCP_subjs(s))))>0,
+                switch subjs,
+                    case 'old'
+                        mask = fullfile(HCPDir,'contrasts',sprintf('mask_EM_%d.nii',HCP_subjs(s))); % mask for functional image
+                    case 'new'
+                        toMask=fullfile(HCPDir,'contrasts',sprintf('EM_FACES_%d.nii',HCP_subjs(s)));
+                        if exist(toMask)>0,
+                            mask=fullfile(fullfile(HCPDir,'contrasts',sprintf('mask_grey_%d.nii',HCP_subjs(s))));
+                            spm_imcalc(toMask,mask,'i1~=0'); % mask for functional image
+                        end
+                end
+                suit  = fullfile(HCPDir,'suit','anatomicals',sprintf('s%d',HCP_subjs(s)),'cereb_prob_corr_grey.nii'); % cerebellar mask grey (corrected)
+                omask = fullfile(HCPDir,'suit','anatomicals',sprintf('s%d',HCP_subjs(s)),'maskbrainSUITGrey.nii'); % output mask image - grey matter
+                cd(fullfile(HCPDir,'suit','anatomicals',sprintf('s%d',HCP_subjs(s))));
+                if exist(mask)>0,
+                    spm_imcalc({mask,suit},omask,'i1>0 & i2>0.7',{});
+                end
             end
-            cd(fullfile(HCPDir,'suit','anatomicals',sprintf('s%d',HCP_subjs(s))));
-            spm_imcalc({mask,suit},omask,'i1>0 & i2>0.7',{});
         end
     case 'SUIT:reslice'                      % STEP 9.8: Reslice the contrast images from first-level GLM
         % Reslices the functional data (betas, contrast images or ResMS)
@@ -413,8 +463,9 @@ switch what
         % 'suit_normalise_dartel'.
         % example: sc1_sc2_imana('SUIT:reslice',1,1,4,'betas','cereb_prob_corr_grey')
         % make sure that you reslice into 2mm^3 resolution
+        subjs=varargin{1}; % 'old' or 'new' ?
         
-        HCP_subjs=sc1_sc2_HCP('PREP:HCP_subjs');
+        HCP_subjs=load(fullfile(HCPDir,sprintf('HCP_subjs_%s',subjs)));
         
         T=[];
         for s=1:length(HCP_subjs),
@@ -439,7 +490,6 @@ switch what
                     T.subj=HCP_subjs(s);
                     T.missingCon=taskNames{t};
                 end
-                
                 fprintf('%s contrast has been resliced into suit space for %s \n\n',taskNames{t},sprintf('s%d',HCP_subjs(s)))
             end
         end
@@ -447,16 +497,6 @@ switch what
         varargout={T};
         keyboard;
         
-    case 'PREP:HCP_subjs'
-        % get all possible task conditions
-        idx=1;
-        conName=dir(fullfile(HCPDir,'anatomicals'));
-        for c=4:length(conName),
-            HCP_subjs(idx,1)=str2double(conName(c).name(2:end)); % assuming that the subjID is always 6 digits
-            idx=idx+1;
-        end
-        
-        varargout={HCP_subjs};
     case 'PREP:HCP_info'
         sn=varargin{1};
         % organise across subjs
@@ -504,7 +544,9 @@ switch what
                 fprintf('averaged cerebellar grey mask in SUIT space has been computed \n')
         end
     case 'PREP:cereb:voxels'                 % STEP 11.6: Get UW cerebellar data (voxels)
-        HCP_subjs=sc1_sc2_HCP('PREP:HCP_subjs');
+        subjs=varargin{1}; % 'old' or 'new' ?
+        
+        HCP_subjs=load(fullfile(HCPDir,sprintf('HCP_subjs_%s',subjs)));
         
         % Load over all grey matter mask
         V=spm_vol(fullfile(HCPDir,'suit','anatomicals','cerebellarGreySUIT.nii'));
@@ -531,6 +573,11 @@ switch what
                     S.condName{c,1}=taskNames{c};
                     S.condNum(c,1)=c;
                     S.SN(c,1)=HCP_subjs(s);
+                else
+                    S.data(c,:)=nan(1,P);
+                    S.condName{c,1}=taskNames{c};
+                    S.condNum(c,1)=c;
+                    S.SN(c,1)=HCP_subjs(s);
                 end
                 fprintf('subj %d done for %s contrast \n',HCP_subjs(s),taskNames{c})
             end
@@ -542,7 +589,7 @@ switch what
             T=addstruct(T,S);
             clear S
         end
-        outName=fullfile(HCPDir,'suit','contrasts','cereb_avrgDataStruct.mat');
+        outName=fullfile(HCPDir,'suit','contrasts',sprintf('cereb_avrgDataStruct_%sSubjs.mat',subjs));
         save(outName,'T','volIndx','V');
         
     case 'ACTIVITY:SNR'
@@ -689,11 +736,12 @@ switch what
     case 'EVAL:HCP'       % evaluate group map on individual HCP data
         mapType=varargin{1}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks', 'Cole_10Networks'
         condType=varargin{2}; % which subset of tasks are we choosing 'subset1', 'subset2' ...
-        groupSize=varargin{3}; % how many subjs are we grouping together ? 10,25,50,100 etc
+        groupSize=varargin{3}; % how many subjs are we grouping together ? 'old' subjs=100; 'new' subjs=214
+        subjs=varargin{4}; % 'new' or 'old'
         
         % load in func data to test (e.g. if map is sc1; func data should
         % be sc2)
-        load(fullfile(HCPDir,'suit','contrasts','cereb_avrgDataStruct.mat'));
+        load(fullfile(HCPDir,'suit','contrasts',sprintf('cereb_avrgDataStruct_%sSubjs.mat',subjs)));
         
         CN=unique(T.condNum(T.condNum~=0));
         condNames=T.condName(CN);
@@ -718,8 +766,8 @@ switch what
         B_avrg=nanmean(B,1);
         Bb=bsxfun(@minus,B,B_avrg);
         
-        % group subjs into 10
-        groups=[0:groupSize:100];
+        % group subjs into diff groups
+        groups=[0:groupSize:length(SN)];
         for s=1:length(groups)-1,
             tmp=Bb(:,groups(s)+1:groups(s+1),:);
             Bb_group(:,s,:)=nanmean(tmp,2);
@@ -727,7 +775,7 @@ switch what
         
         % load in group map
         mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
-        outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s_groupSize%d.mat',condType,groupSize));
+        outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s_groupSize%d_%sSubjs.mat',condType,groupSize,subjs));
         
         volIndx=volIndx';
         
@@ -811,9 +859,16 @@ switch what
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
         condType=varargin{2}; % 'subset1', 'subset2' etc
         
+        subjs={'old'};
+        
         vararginoptions({varargin{3:end}},{'CAT','sn'}); % option if plotting individual map analysis
         
-        T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s.mat',condType)));  %sprintf('spatialBoundfunc_HCP_%s.mat',condType)
+        T=[];
+        for ss=1:length(subjs),
+            S=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s_%sSubjs.mat',condType,subjs{ss})));  %sprintf('spatialBoundfunc_HCP_%s.mat',condType)
+            T=addstruct(T,S);
+            clear S
+        end
         
         % distances are diff across evals so need to get dist per bin:
         for b=1:length(unique(T.bin)),
@@ -829,9 +884,9 @@ switch what
         W=rmfield(W,{'bwParcel','crossval','corr'});
         
         if exist('CAT'),
-            lineplot(W.dist,W.diff,'subset',W.dist<=35,'CAT',CAT,'leg','auto');
+            lineplot(W.dist,W.diff,'subset',W.dist<=35 & ~isnan(W.diff),'CAT',CAT,'leg','auto');
         else
-            lineplot(W.dist,W.diff,'subset',W.dist<=35);
+            lineplot(W.dist,W.diff,'subset',W.dist<=35 & ~isnan(W.diff));
         end
     case 'EVAL:STATS:DIFF'
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<algorithm>_<numCluster>'
@@ -1088,8 +1143,8 @@ switch what
         CAT.linestyle={'-','-','-','-','-','-'};
         CAT.linewidth={2, 2, 2, 2, 2, 2};
         
-        errorcolor={'k','r','b','g','r','r'};
-        linecolor={'k','r','b','g','r','r'};
+        errorcolor={'g','b','m','g','r','r'};
+        linecolor={'g','b','m','g','r','r'};
         
         %         errorcolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
         %         linecolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
@@ -1103,7 +1158,7 @@ switch what
         hold off
         
         % Labelling
-        set(gca,'YLim',[-0.02 0.08],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
+        set(gca,'YLim',[0 .06],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
         xlabel('Spatial Distances (mm)');
         ylabel('Difference');
         set(gcf,'units','centimeters','position',[5,5,9,12])
