@@ -2,7 +2,8 @@
 function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
-baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+% baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+baseDir          = '/Users/maedbhking/Remote/Documents/Cerebellum_Cognition'; 
 % baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
@@ -1479,7 +1480,7 @@ switch what
         end
         
         % Set output filename: group or indiv ?
-        if strcmp(sn,'group'), % group
+        if strcmp(sn,'group') % group
             sn=returnSubjs;
             if (~isempty(smooth))
                 % Load the unsmoothed version as a starting value
@@ -1675,17 +1676,28 @@ switch what
         save(outName,'A_PW','S_PW','W_PW','volIndx','V');
     case 'MAP:visualise'
         sn=varargin{1}; % [2] or 'group'
-        mapType=varargin{2}; % Full map name - 'lob10','Buckner_17','SC12_cnvf_10'
-        anaType=varargin{3}; % 'SNN' or 'ICAs' or 'cnvf'
+        study=varargin{2};  % 1 or 2 or [1,2]
+        
+        algorithmString = {'snn','cnvf','ica'}; % Semi-nonengative matrix factorization
+        algorithm = 2;
+        K=10; % number of regions
+        
+        % Set the String correctly
+        if length(study)>1
+            studyStr='SC12'; % both studies combined
+        else
+            studyStr = sprintf('SC%d',study);
+        end
         
         % figure out if individual or group
         if strcmp(sn,'group'),
-            outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
-            load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('%s.mat',anaType)));
+            outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K),'map.nii');
+            load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K),...
+                sprintf('%s.mat',algorithmString{algorithm})));
             % individual analysis
         else
-            %             outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_%s_%d%s.nii',));
-            %             load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_%s_%d%s.mat',anaType,studyStr,K,anaName)));
+            outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_%s_%s_%d.nii',studyStr,algorithmString{algorithm},K));
+            load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_%s_%d.mat',studyStr,algorithmString{algorithm},K)));
         end
         
         % transpose matrix from ICA
