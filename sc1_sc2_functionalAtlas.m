@@ -2225,7 +2225,7 @@ switch what
                     Ss.sortedNum=A.numT(y);
                     tmp=[1 Ss.sortedNum(end-numTasks+1:end)'];
                     dlmwrite(fullfile(studyDir{2},encodeDir,'glm4',sprintf('subsets_SC%d_%ddissimilar.txt',i,numTasks)),tmp,'\t')
-                
+                    
                     char(A.nameT(tmp(2:end)))
                 end
         end
@@ -3448,7 +3448,7 @@ switch what
         for ii=1:20,
             condNumIdx=unique(T.subset(T.numSets==ii,:));
             char(A.condNames(condNumIdx))
-        end     
+        end
     case 'AXES:indiv_diff' % make summary graph for diff curves for indiv maps
         toPlot=varargin{1};% {'SC2_10cluster','SC2_10cluster'}
         evalNums=varargin{2}; % repmat([4],length(plotName),1)

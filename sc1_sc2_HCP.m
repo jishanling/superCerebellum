@@ -806,10 +806,19 @@ switch what
     case 'EVAL:PLOT:CURVES'
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
         condType=varargin{2}; % 'subset1', 'subset2' etc
+        subjs=varargin{3}; % {'new','old'}, or {'new'}
         
-        vararginoptions({varargin{3:end}},{'CAT','sn'}); % option if doing individual map analysis
+        vararginoptions({varargin{4:end}},{'CAT','sn'}); % option if doing individual map analysis
         
-        T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s.mat',condType)));
+        T=[];
+        for ss=1:length(subjs),
+            S=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s_%sSubjs.mat',condType,subjs{ss})));
+            if ss==2,
+                S.SN=S.SN*101;
+            end
+            T=addstruct(T,S);
+            clear S
+        end
         
         % distances are diff across evals so need to get dist per bin:
         for b=1:length(unique(T.bin)),
@@ -819,16 +828,26 @@ switch what
         end
         
         if exist('CAT'),
-            xyplot(T.dist,T.corr,T.dist,'split',T.bwParcel,'subset',T.crossval==0 & T.dist<=35,'CAT',CAT,'leg',{'within','between'},'leglocation','SouthEast');
+            xyplot(T.dist,T.corr,T.dist,'split',T.bwParcel,'subset',T.crossval==0 & T.dist<=35 & ~isnan(T.corr),'CAT',CAT,'leg',{'within','between'},'leglocation','SouthEast');
         else
-            xyplot(T.dist,T.corr,T.dist,'split',T.bwParcel,'subset',T.crossval==0 & T.dist<=35,'leg',{'within','between'},'leglocation','SouthEast');
+            xyplot(T.dist,T.corr,T.dist,'split',T.bwParcel,'subset',T.crossval==0 & T.dist<=35 & ~isnan(T.corr),'leg',{'within','between'},'leglocation','SouthEast');
         end
     case 'EVAL:STATS:CURVES'
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
         condType=varargin{2};
+        subjs=varargin{3}; % {'new','old'}, or {'new'}
+        
         crossval=0;
         
-        T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s.mat',condType)));
+        T=[];
+        for ss=1:length(subjs),
+            S=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s_%sSubjs.mat',condType,subjs{ss})));
+            if ss==2,
+                S.SN=S.SN*101;
+            end
+            T=addstruct(T,S);
+            clear S
+        end
         
         % do stats (over all bins) for group only
         C=getrow(T,T.crossval==crossval & T.dist<=35); % only crossval and dist<35
@@ -858,14 +877,16 @@ switch what
     case 'EVAL:PLOT:DIFF'
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
         condType=varargin{2}; % 'subset1', 'subset2' etc
-        
-        subjs={'old'};
-        
-        vararginoptions({varargin{3:end}},{'CAT','sn'}); % option if plotting individual map analysis
+        subjs=varargin{3}; % {'new','old'}, or {'new'}
+
+        vararginoptions({varargin{4:end}},{'CAT','sn'}); % option if plotting individual map analysis
         
         T=[];
         for ss=1:length(subjs),
             S=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s_%sSubjs.mat',condType,subjs{ss})));  %sprintf('spatialBoundfunc_HCP_%s.mat',condType)
+            if ss==2,
+                S.SN=S.SN*101;
+            end
             T=addstruct(T,S);
             clear S
         end
@@ -891,12 +912,22 @@ switch what
     case 'EVAL:STATS:DIFF'
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<algorithm>_<numCluster>'
         condType=varargin{2}; % 'subset3_groupSize25'
+        subjs=varargin{3}; % {'new','old'}, or {'new'}
+        
         crossval=0;
         
         % do stats
         P=[];
         for m=1:length(mapType),
-            T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc_HCP_%s.mat',condType)));
+            T=[];
+            for ss=1:length(subjs),
+                S=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s_%sSubjs.mat',condType,subjs{ss})));
+                if ss==2,
+                    S.SN=S.SN*101;
+                end
+                T=addstruct(T,S);
+                clear S
+            end
             A=getrow(T,T.crossval==crossval);
             A.type=repmat({sprintf('%d.%s',m,mapType{m})},length(A.bin),1);
             A.m=repmat(m,length(A.bin),1);
@@ -1110,8 +1141,9 @@ switch what
         fprintf('min diff is %2.5f and max diff is %2.2f \n', min(tmp),max(tmp));
         
     case 'AXES:group_curves' % make separate graphs for 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_10cluster'
-        toPlot=varargin{1}; % 'SC12_10cluster'
+        toPlot=varargin{1}; % 'SC12_cnvf_10'
         condType=varargin{2}; % 'subset1', 'subset2' etc
+        subjs=varargin{3}; % {'new','old'} or {'new'} or {'old'}
         
         % Aesthetics
         CAT.markertype='none';
@@ -1121,7 +1153,7 @@ switch what
         CAT.linewidth={2, 2};
         CAT.linestyle={'-','-'};
         
-        sc1_sc2_HCP('EVAL:PLOT:CURVES',toPlot,condType,'CAT',CAT);
+        sc1_sc2_HCP('EVAL:PLOT:CURVES',toPlot,condType,subjs,'CAT',CAT);
         
         % Labelling
         set(gca,'YLim',[0 0.55],'XLim',[0 35],'FontSize',14,'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'}); %
@@ -1135,6 +1167,7 @@ switch what
     case 'AXES:diff_curves' % make summary graph for diff curves for all maps
         toPlot=varargin{1}; % {'SC12_10cluster','Buckner_17Networks'}
         condType=varargin{2}; % 'subset1', 'subset2' etc
+        subjs=varargin{3}; % {'new','old'}, or {'new'}
         
         % aesthetics
         CAT.errorwidth=.5;
@@ -1152,7 +1185,7 @@ switch what
         for m=1:length(toPlot),
             CAT.errorcolor=errorcolor{m};
             CAT.linecolor=linecolor{m};
-            sc1_sc2_HCP('EVAL:PLOT:DIFF',toPlot{m},condType,'CAT',CAT); % always take crossval + unique
+            sc1_sc2_HCP('EVAL:PLOT:DIFF',toPlot{m},condType,subjs,'CAT',CAT); % always take crossval + unique
             hold on
         end
         hold off
