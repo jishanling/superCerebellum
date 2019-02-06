@@ -1684,8 +1684,8 @@ switch what
             load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('%s.mat',anaType)));
             % individual analysis
         else
-            %             outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_%s_%d%s.nii',));
-            %             load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_%s_%d%s.mat',anaType,studyStr,K,anaName)));
+            outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_%s_%d%s.nii',));
+            load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_%s_%d%s.mat',anaType,studyStr,K,anaName)));
         end
         
         % transpose matrix from ICA
