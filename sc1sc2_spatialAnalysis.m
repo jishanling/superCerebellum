@@ -411,9 +411,9 @@ switch(what)
         varargout={T};
     case 'SNN:bootstrap_eval'
         mapsize = [ 2 2 5 4]; % For paper size
-        T=load('bootstrap_oldF.mat');
+        T=load('bootstrap_tasks.mat');
         [~,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',2,1,'build'); % Get V and volindx
-        N=size(T.Error,1);
+        N=size(T.assign,1);
         for n=2:N
             T.RandIndx(n,1)=RandIndex(T.assign(1,:)',T.assign(n,:)');
         end;
@@ -468,7 +468,7 @@ switch(what)
         axis off;
         set(gcf,'PaperPosition',mapsize);
         wysiwyg;
-        
+        varargout={T}; 
         
         % figure(5); % Different Alphas: We decided that this did not look
         % as good.
