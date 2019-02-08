@@ -1,8 +1,10 @@
+
 function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
-baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+% baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+baseDir          = '/Users/maedbhking/Remote/Documents/Cerebellum_Cognition'; 
+% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 atlasDir='/Users/maedbhking/Documents/Atlas_templates/';
@@ -1478,7 +1480,7 @@ switch what
         end
         
         % Set output filename: group or indiv ?
-        if strcmp(sn,'group'), % group
+        if strcmp(sn,'group') % group
             sn=returnSubjs;
             if (~isempty(smooth))
                 % Load the unsmoothed version as a starting value
@@ -1674,17 +1676,28 @@ switch what
         save(outName,'A_PW','S_PW','W_PW','volIndx','V');
     case 'MAP:visualise'
         sn=varargin{1}; % [2] or 'group'
-        mapType=varargin{2}; % Full map name - 'lob10','Buckner_17','SC12_cnvf_10'
-        anaType=varargin{3}; % 'SNN' or 'ICAs' or 'cnvf'
+        study=varargin{2};  % 1 or 2 or [1,2]
+        
+        algorithmString = {'snn','cnvf','ica'}; % Semi-nonengative matrix factorization
+        algorithm = 2;
+        K=10; % number of regions
+        
+        % Set the String correctly
+        if length(study)>1
+            studyStr='SC12'; % both studies combined
+        else
+            studyStr = sprintf('SC%d',study);
+        end
         
         % figure out if individual or group
         if strcmp(sn,'group'),
-            outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
-            load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('%s.mat',anaType)));
+            outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K),'map.nii');
+            load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K),...
+                sprintf('%s.mat',algorithmString{algorithm})));
             % individual analysis
         else
-            %             outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_%s_%d%s.nii',));
-            %             load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_%s_%d%s.mat',anaType,studyStr,K,anaName)));
+            outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_%s_%s_%d.nii',studyStr,algorithmString{algorithm},K));
+            load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('%s_%s_%d.mat',studyStr,algorithmString{algorithm},K)));
         end
         
         % transpose matrix from ICA
@@ -2167,6 +2180,7 @@ switch what
         keyboard;
     case 'EVAL:RDM_subsets'
         step=varargin{1}; % what do you want ? 'visualise' or 'getSubset'
+        numTasks=varargin{2}; % how many task conditions in each subset ?
         
         % load in RDM
         [fullRDM,condNames,X,taskType]=sc1_sc2_functionalAtlas('REPRESENTATION:get_distances','cerebellum','all','all');
@@ -2192,18 +2206,19 @@ switch what
                 caxis([0 1]);
                 g=set(gca,'Ytick',condNum','YTickLabel',condNames,'FontSize',7);
                 g.Color='white';
-                colorbar   
+                colorbar
             case 'getSubset'
                 % now figure out task subsets (min and max)
                 sessN=[2 1];
                 RR=[];
                 for ss=1:2,
-                    taskB=sum(D.StudyNum==ss); 
+                    taskB=sum(D.StudyNum==ss);
                     taskE=sessN(ss);
                     for c=1:taskB,
                         [x y]=sort(fullRDM_avrg(D.StudyNum==ss & D.condNum==c,D.StudyNum==taskE));
-                        R.nameT=D.condNames(D.StudyNum==ss & D.condNum==c); 
-                        nameB=D.condNames(D.StudyNum==taskE); 
+                        R.nameT=D.condNames(D.StudyNum==ss & D.condNum==c);
+                        R.numT=D.condNum(D.StudyNum==ss & D.condNum==c);
+                        nameB=D.condNames(D.StudyNum==taskE);
                         R.minT=nameB(y(1)); % min task
                         R.maxT=nameB(y(end)); % max task
                         R.minD=x(1);
@@ -2213,15 +2228,19 @@ switch what
                     end
                 end
                 
-                % find most dissimilar tasks in set B for set A (and vice
-                % versa)
+                % sort the tasks in A by the size of the minimal distance
+                % to B (and vice versa)
                 for i=1:2,
-                    [RR.nameT(RR.studyNum==i) RR.maxT(RR.studyNum==i)]
+                    A=getrow(RR,RR.studyNum==i);
+                    [x y]=sort(A.minD);
+                    Ss.sortedName=A.nameT(y);
+                    Ss.sortedNum=A.numT(y);
+                    tmp=[1 Ss.sortedNum(end-numTasks+1:end)'];
+                    dlmwrite(fullfile(studyDir{2},encodeDir,'glm4',sprintf('subsets_SC%d_%ddissimilar.txt',i,numTasks)),tmp,'\t')
+                    
+                    char(A.nameT(tmp(2:end)))
                 end
         end
-        
-        
-        keyboard;
     case 'EVAL:subsets'
         mapType=varargin{1}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks','Cole_10Networks','SC<studyNum>_<num>cluster'
         data=varargin{2}; % evaluating data from study [1] or [2] ?
@@ -2408,7 +2427,7 @@ switch what
                     lineplot(W.dist,W.diff,'subset',W.dist<=35,'CAT',CAT);
                 else
                     lineplot(W.dist,W.diff,'subset',W.dist<=35);
-                end 
+                end
             case 'dissimilar'
                 P=getrow(TT,TT.crossval==crossval);
                 % plot boxplot of different clusters
@@ -2437,11 +2456,14 @@ switch what
                 end
                 W{1}=addstruct(W{1},W{2});
                 
+                % try this
+                [x y]=sort(W{1}.diff);
+                
                 % plot diff between maps for each subset
-                lineplot(W{1}.numSets,W{1}.diff,'subset',W{1}.dist<=35,'split',W{1}.mapNum,'CAT',CAT);
-
-%                  results=anovaMixed(W{1}.diff,W{1}.SN,'between',X,'betweenNames',{'a','b','c','d','e','f','g','h','i','j','k','l',...
-%                     'm','n','o','p','q','r','s','t'});
+                lineplot(W{1}.numSets,W{1}.diff,'subset',W{1}.dist<=35 & W{1}.numSets,'split',W{1}.mapNum,'CAT',CAT);
+                
+                %                  results=anovaMixed(W{1}.diff,W{1}.SN,'between',X,'betweenNames',{'a','b','c','d','e','f','g','h','i','j','k','l',...
+                %                     'm','n','o','p','q','r','s','t'});
             otherwise
                 disp('You need to give two maps as input to compare random task subsets \n')
         end
@@ -3364,12 +3386,12 @@ switch what
         
         % do stats
         %         sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',toPlot,evalNums,'group',1,'unique'); % always take crossval + unique
-    case 'AXES:subsets_dissimilar'
+    case 'AXES:subsets'
         mapType=varargin{1};
-        subset=varargin{2}; % 'movies' or 'dissimilar'
+        data=varargin{2}; % eval. on [1] or [2]
+        subset=varargin{3}; % 'movies' or 'dissimilar'
+        numTasks=varargin{4}; % 3 for movies, 2 or 3 for dissimilar
         
-        data=2;
-        numTasks=3;
         crossval=1;
         
         % aesthetics
@@ -3378,8 +3400,8 @@ switch what
         CAT.linewidth=3;
         CAT.linewidth={2, 2, 2, 2, 2, 2};
         linestyle={'-','-','-','-','-','-'};
-        errorcolor={'k','b','g','m','y','g'};
-        linecolor={'k','b','g','m','y','g'};
+        errorcolor={'g','b','y','m','k','g'};
+        linecolor={'g','b','y','m','k','g'};
         
         idx=1;
         for m=1:length(mapType),
@@ -3428,6 +3450,17 @@ switch what
         xlabel(sprintf('Random Task Subsets (%d)',numTasks));
         ylabel('Difference');
         %         set(gcf,'units','centimeters','position',[5,5,9,12])
+        
+        % find task names for each subset
+        T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType{1}),sprintf('spatialBoundfunc%d_subsets_%s%d.mat',data,subset,numTasks)));
+        
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        A=getrow(D,D.StudyNum==data);
+        
+        for ii=1:20,
+            condNumIdx=unique(T.subset(T.numSets==ii,:));
+            char(A.condNames(condNumIdx))
+        end
     case 'AXES:indiv_diff' % make summary graph for diff curves for indiv maps
         toPlot=varargin{1};% {'SC2_10cluster','SC2_10cluster'}
         evalNums=varargin{2}; % repmat([4],length(plotName),1)
@@ -3768,7 +3801,7 @@ switch what
                         switch norm,
                             case 'SUIT'
                                 spm_write_vol(X,C{c}.dat);
-                                 fprintf('save out vol in SUIT %s:%s \n',subj_name{returnSubjs(s)},F.condNames{c})
+                                fprintf('save out vol in SUIT %s:%s \n',subj_name{returnSubjs(s)},F.condNames{c})
                             case 'MNI'
                                 suitDir=fullfile(baseDir,'website_maps',sprintf('SUIT_%s_%s',sn,map),subj_name{returnSubjs(s)});
                                 if isdir(fullfile(suitDir,sprintf('%s.nii',F.condNames{c})))
