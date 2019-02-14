@@ -1,7 +1,8 @@
 function varargout=sc1_sc2_HCP(what,varargin)
 
 % Directories
-baseDir_orig          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+% baseDir_orig          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+baseDir_orig     = '/Users/maedbhking/Remote/Documents2/Cerebellum_Cognition';
 baseDir          = '/Volumes/Seagate Backup Plus Drive';
 % baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
@@ -748,7 +749,7 @@ switch what
         SN=unique(T.SN(T.SN~=0));
         P=size(T.data,2);
         
-        switch condType,
+        switch condType
             case 'subset1' % includes all taskConds
                 idx=CN';
             case 'subset2' % doesn't include cue, lf, rf, tongue, la-story
@@ -878,7 +879,7 @@ switch what
         mapType=varargin{1}; % options are 'lob10','lob26','bucknerRest','SC<studyNum>_<num>cluster', or 'SC<studyNum>_POV<num>'
         condType=varargin{2}; % 'subset1', 'subset2' etc
         subjs=varargin{3}; % {'new','old'}, or {'new'}
-
+        
         vararginoptions({varargin{4:end}},{'CAT','sn'}); % option if plotting individual map analysis
         
         T=[];
@@ -892,7 +893,7 @@ switch what
         end
         
         % distances are diff across evals so need to get dist per bin:
-        for b=1:length(unique(T.bin)),
+        for b=1:length(unique(T.bin))
             dist=mode(round(T.dist(T.bin==b)));
             idx=find(T.bin==b);
             T.dist(idx,1)=dist;
@@ -918,10 +919,10 @@ switch what
         
         % do stats
         P=[];
-        for m=1:length(mapType),
+        for m=1:length(mapType)
             T=[];
-            for ss=1:length(subjs),
-                S=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc_HCP_%s_%sSubjs.mat',condType,subjs{ss})));
+            for ss=1:length(subjs)
+                S=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc_HCP_%s_%sSubjs.mat',condType,subjs{ss})));
                 if ss==2,
                     S.SN=S.SN*101;
                 end
@@ -1176,8 +1177,8 @@ switch what
         CAT.linestyle={'-','-','-','-','-','-'};
         CAT.linewidth={2, 2, 2, 2, 2, 2};
         
-        errorcolor={'g','b','m','g','r','r'};
-        linecolor={'g','b','m','g','r','r'};
+        errorcolor={'g','b','m','y','r','r'};
+        linecolor={'g','b','m','y','r','r'};
         
         %         errorcolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
         %         linecolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
@@ -1191,7 +1192,7 @@ switch what
         hold off
         
         % Labelling
-        set(gca,'YLim',[0 .06],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
+        set(gca,'YLim',[0 .12],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
         xlabel('Spatial Distances (mm)');
         ylabel('Difference');
         set(gcf,'units','centimeters','position',[5,5,9,12])
@@ -1204,7 +1205,7 @@ end
 
 % Local functions
 function dircheck(dir)
-if ~exist(dir,'dir');
+if ~exist(dir,'dir')
     warning('%s doesn''t exist. Creating one now. You''re welcome! \n',dir);
     mkdir(dir);
 end
