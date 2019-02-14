@@ -2,8 +2,8 @@
 function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
-% baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-baseDir          = '/Users/maedbhking/Remote/Documents2/Cerebellum_Cognition';
+baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+% baseDir          = '/Users/maedbhking/Remote/Documents2/Cerebellum_Cognition';
 % baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
@@ -1683,7 +1683,7 @@ switch what
         
         algorithmString = {'snn','cnvf','ica'}; % Semi-nonengative matrix factorization
         algorithm = 2;
-        K=10; % number of regions
+        K=15; % number of regions
         
         % Set the String correctly
         if length(study)>1
@@ -1704,7 +1704,7 @@ switch what
         end
         
         % transpose matrix from ICA
-        if strcmp(anaType,'ICAs'),
+        if strcmp(algorithmString,'ica'),
             bestG=S_PW';
         end
         [x,groupFeat]=max(bestG,[],2);
@@ -2350,6 +2350,9 @@ switch what
                     if ~isempty(strfind(mapType,'cnvf')) || ~isempty(strfind(mapType,'snn')),
                         T=load(fullfile(encodeGLM,sprintf('groupEval_SC%d_%s',studyType(i),mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
                         outDir=fullfile(encodeGLM,sprintf('groupEval_SC2_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
+                    elseif (strfind(mapType,'SC12_cnvf'))>1,
+                         T=load(fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
+                        outDir=fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
                     else
                         T=load(fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
                         outDir=fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
@@ -3450,8 +3453,8 @@ switch what
         CAT.linewidth=3;
         CAT.linestyle={'-','-','-','-','-','-'};
         CAT.linewidth={2, 2, 2, 2, 2, 2};
-        errorcolor={'k','r','b','g','r','r'};
-        linecolor={'k','r','b','g','r','r'};
+        errorcolor={'g','r','b','k','r','r'};
+        linecolor={'g','r','b','k','r','r'};
         
         %         errorcolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
         %         linecolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
