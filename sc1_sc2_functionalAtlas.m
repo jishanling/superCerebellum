@@ -2,8 +2,8 @@
 function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
-% baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-baseDir          = '/Users/maedbhking/Remote/Documents/Cerebellum_Cognition'; 
+baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+% baseDir          = '/Users/maedbhking/Remote/Documents2/Cerebellum_Cognition';
 % baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
@@ -1494,6 +1494,9 @@ switch what
             dircheck(outDir);
             outName=fullfile(outDir,sprintf('%s.mat',algorithmString{algorithm}));
         else % indiv
+            prevSol=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K),...
+                sprintf('%s.mat',algorithmString{algorithm})));
+            G0=prevSol.bestG;
             outDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
             outName=fullfile(outDir,sprintf('%s_%s_%d.mat',studyStr,algorithmString{algorithm},K));
         end
@@ -1511,7 +1514,7 @@ switch what
                 case 1
                     [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get a segmentation using
                 case 2 % convec
-                    [F,G,Info]=cnvSemiNonNegMatFac(X_C,K,'threshold',0.01,'maxIter',200,'G0',G0); % get a segmentation using
+                    [F,G,Info]=cnvSemiNonNegMatFac(X_C,K,'threshold',0.01,'maxIter',100,'G0',G0); % get a segmentation using
             end;
             errors(iter)=Info.error;    % record error
             [~,winner]=max(G,[],2);     % determine the highest loading cluster for each voxel
@@ -1680,7 +1683,7 @@ switch what
         
         algorithmString = {'snn','cnvf','ica'}; % Semi-nonengative matrix factorization
         algorithm = 2;
-        K=10; % number of regions
+        K=15; % number of regions
         
         % Set the String correctly
         if length(study)>1
@@ -1701,7 +1704,7 @@ switch what
         end
         
         % transpose matrix from ICA
-        if strcmp(anaType,'ICAs'),
+        if strcmp(algorithmString,'ica'),
             bestG=S_PW';
         end
         [x,groupFeat]=max(bestG,[],2);
@@ -2094,7 +2097,7 @@ switch what
             RR = addstruct(RR,R);
         end;
         save(outName,'-struct','RR');
-    case 'EVAL:crossval_individ' % Evaluate Individual maps
+    case 'EVAL:crossval_individ' % DEPRECIATED ?
         % T1=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC1_10cluster',2,'unique');
         % T2=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC2_10cluster',1,'unique');
         % T3=sc1_sc2_functionalAtlas('EVAL:crossval_individ','SC12_10cluster',1,'unique');
@@ -2164,22 +2167,8 @@ switch what
             RR = addstruct(RR,R);
         end;
         varargout={RR};
-    case 'EVAL:makeSubsets' % get subsets of tasks to evaluate
-        data=varargin{1}; % evaluating data from study [1] or [2] ?
-        numTasks=varargin{2}; % # of random tasks to choose.
-        
-        numSets=20;
-        
-        % choose random sets of n tasks
-        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
-        D1=getrow(D,D.StudyNum==data);
-        uniqueIdx=D1.condNum(D1.overlap==0); % get index for unique tasks
-        for ii=1:numSets,
-            subsetIdx(ii,:)=datasample(uniqueIdx',numTasks,'Replace',false);
-        end
-        keyboard;
-    case 'EVAL:RDM_subsets'
-        step=varargin{1}; % what do you want ? 'visualise' or 'getSubset'
+    case 'EVAL:get_subsets'
+        step=varargin{1}; % what do you want ? 'dissimilar','makeRandom','evalRandom'
         numTasks=varargin{2}; % how many task conditions in each subset ?
         
         % load in RDM
@@ -2191,23 +2180,8 @@ switch what
         % get avrg RDM
         fullRDM_avrg=nanmean(fullRDM,3);
         
-        switch step,
-            case 'visualise'
-                % get condNum
-                condNum=1:length(condNames);
-                
-                % loop over sc<taskNum> taskConds
-                for c=1:length(condNum),
-                    [x(c,:) y(c,:)]=sort(fullRDM_avrg(condNum(c),condNum));
-                    
-                end
-                
-                figure();imagesc_rectangle(x,'YDir','reverse')
-                caxis([0 1]);
-                g=set(gca,'Ytick',condNum','YTickLabel',condNames,'FontSize',7);
-                g.Color='white';
-                colorbar
-            case 'getSubset'
+        switch step
+            case 'dissimilar' % get most dissimilar task conditions from each task set
                 % now figure out task subsets (min and max)
                 sessN=[2 1];
                 RR=[];
@@ -2240,6 +2214,55 @@ switch what
                     
                     char(A.nameT(tmp(2:end)))
                 end
+            case 'makeRandom' % get subsets of random tasks to evalute - run once !
+                numSets=20;
+                for i=1:2,
+                    % choose random sets of n tasks
+                    D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+                    D1=getrow(D,D.StudyNum==data);
+                    uniqueIdx=D1.condNum(D1.overlap==0); % get index for unique tasks
+                    for ii=1:numSets,
+                        subsetIdx(ii,:)=datasample(uniqueIdx',numTasks,'Replace',false);
+                    end
+                end
+                keyboard;
+            case 'evalRandom' % figure out most dissimilar subsets of random sets
+                % now figure out task subsets (min and max)
+                sessN=[2 1];
+                RR=[];
+                for ss=1:2,
+                    taskB=sum(D.StudyNum==ss);
+                    taskE=sessN(ss);
+                    for c=1:taskB,
+                        [x y]=sort(fullRDM_avrg(D.StudyNum==ss & D.condNum==c,D.StudyNum==taskE));
+                        R.nameT=D.condNames(D.StudyNum==ss & D.condNum==c);
+                        R.numT=D.condNum(D.StudyNum==ss & D.condNum==c);
+                        nameB=D.condNames(D.StudyNum==taskE);
+                        R.minT=nameB(y(1)); % min task
+                        R.maxT=nameB(y(end)); % max task
+                        R.minD=x(1);
+                        R.maxD=x(end);
+                        R.studyNum=ss;
+                        RR=addstruct(RR,R);
+                    end
+                end
+                
+                % sort the tasks in subsets A by the size of the minimal distance
+                % to B (and vice versa)
+                for i=1:2
+                    D=load(fullfile(studyDir{2},'encoding','glm4',sprintf('subsets_SC%d_%drandom.txt',i,numTasks)));
+                    D=D(:,2:end);
+                    for c=1:size(D,1)
+                        A=getrow(RR,RR.studyNum==i);
+                        subsetN=D(c,:);
+                        [x y]=sort(A.minD(subsetN));
+                        avrgMinD(c,i)=nanmean(x);
+                        %                         Ss.sortedName=A.nameT(y);
+                        %                         Ss.sortedNum=A.numT(y);
+                    end
+                end
+                [x y]=sort(avrgMinD);
+                varargout={y};
         end
     case 'EVAL:subsets'
         mapType=varargin{1}; % options are 'lob10','lob26','Buckner_17Networks','Buckner_7Networks','Cole_10Networks','SC<studyNum>_<num>cluster'
@@ -2321,12 +2344,15 @@ switch what
         
         encodeGLM=fullfile(studyDir{2},'encoding','glm4');
         
-        switch level,
+        switch level
             case 'group'
-                for i=1:2,
+                for i=1:2
                     if ~isempty(strfind(mapType,'cnvf')) || ~isempty(strfind(mapType,'snn')),
                         T=load(fullfile(encodeGLM,sprintf('groupEval_SC%d_%s',studyType(i),mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
                         outDir=fullfile(encodeGLM,sprintf('groupEval_SC2_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
+                    elseif (strfind(mapType,'SC12_cnvf'))>1,
+                         T=load(fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
+                        outDir=fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
                     else
                         T=load(fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
                         outDir=fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
@@ -2349,7 +2375,7 @@ switch what
         end
         
         % remove subsets if 'random'
-        if strfind(condType,'subsets'),
+        if strfind(condType,'subsets')
             R=rmfield(R,{'distmin','distmax','N','subset'});
             % get average of both structures here
             A=tapply(R,{'bin','SN','bwParcel','crossval','numSets'},{'corr'});
@@ -2394,7 +2420,7 @@ switch what
     case 'EVAL:PLOT:SUBSETS'
         mapType=varargin{1}; % 'SC2_cnvf_10' or 'SC2_snn_10'
         data=varargin{2}; % 1, 2, 4 . [1: eval on sc1; 2: eval on sc2; 4: eval on sc1+sc2]
-        subset=varargin{3}; % 'random' or 'movies' or 'dissimilar'
+        subset=varargin{3}; % 'random' or 'movies' or 'dissimilar' or 'all'
         numTasks=varargin{4}; % how many random tasks are we taking ? 7,5,3 ?
         crossval=varargin{5}; % 0 or 1
         
@@ -2402,8 +2428,8 @@ switch what
         
         TT=[];
         % how many maps are we dealing with ?
-        if size(mapType,2)>1,
-            for m=1:size(mapType,2),
+        if size(mapType,2)>1
+            for m=1:size(mapType,2)
                 T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d_subsets_%s%d.mat',data,subset,numTasks)));
                 T.mapType=repmat(mapType(m),length(T.SN),1);
                 T.mapNum=repmat(m,length(T.SN),1);
@@ -2413,7 +2439,14 @@ switch what
             TT=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType{1}),sprintf('spatialBoundfunc%d_subsets_%s%d.mat',data,subset,numTasks)));
         end
         
-        switch subset,
+        % distances are diff across evals so need to get dist per bin:
+        for b=1:length(unique(TT.bin))
+            dist=mode(round(TT.dist(TT.bin==b)));
+            idx=find(TT.bin==b);
+            TT.dist(idx,1)=dist;
+        end
+        
+        switch subset
             case 'movies'
                 P=getrow(TT,TT.crossval==crossval);
                 % plot boxplot of different clusters
@@ -2437,7 +2470,7 @@ switch what
                 W=rmfield(W,{'bwParcel','crossval','corr'});
                 
                 % figure out plotting here
-                if exist('CAT'),
+                if exist('CAT')
                     lineplot(W.dist,W.diff,'subset',W.dist<=35,'CAT',CAT);
                 else
                     lineplot(W.dist,W.diff,'subset',W.dist<=35);
@@ -2467,6 +2500,64 @@ switch what
             otherwise
                 disp('You need to give two maps as input to compare random task subsets \n')
         end
+    case 'EVAL:PLOT:SUBSETS_DIFF'
+        mapType=varargin{1}; % 'SC2_cnvf_10' or 'SC2_snn_10'
+        data=varargin{2}; % 1, 2, 4 . [1: eval on sc1; 2: eval on sc2; 4: eval on sc1+sc2]
+        subset=varargin{3}; % {'random','dissimilar'}
+        numTasks=varargin{4}; % 7 or 5
+        crossval=varargin{5}; % 1
+        
+        vararginoptions({varargin{6:end}},{'CAT'}); % option if doing individual map analysis
+        
+        TT=[];
+        % how many maps are we dealing with ?
+        for m=1:size(mapType,2)
+            for s=1:length(subset)
+                T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d_subsets_%s%d.mat',data,subset{s},numTasks)));
+                if strcmp(subset{s},'dissimilar')
+                    T.numSets=repmat(21,length(T.numSets),1);
+                end
+                T.mapType=repmat(mapType(m),length(T.SN),1);
+                T.mapNum=repmat(m,length(T.SN),1);
+                T.subType=repmat(subset(s),length(T.SN),1);
+                T.subset=repmat(s,length(T.SN),1);
+                
+                % distances are diff across evals so need to get dist per bin:
+                for b=1:length(unique(T.bin))
+                    dist=mode(round(T.dist(T.bin==b)));
+                    idx=find(T.bin==b);
+                    T.dist(idx,1)=dist;
+                end
+                
+                A=getrow(T,T.crossval==crossval);
+                % plot boxplot of different clusters
+                W=getrow(A,A.bwParcel==0); % within
+                B=getrow(A,A.bwParcel==1); % between
+                W.diff=W.corr-B.corr;
+                W=rmfield(W,{'bwParcel','crossval','corr'});
+                
+                TT=addstruct(TT,W);
+            end
+        end
+        
+        % load ordering of random subsets
+        y=sc1_sc2_functionalAtlas('EVAL:get_subsets','evalRandom',numTasks);
+        reOrderIdx=[y(:,data);21];
+        numRep=length(TT.numSets)/length(reOrderIdx);
+        reOrder=repelem(reOrderIdx,numRep);
+        
+        for i=1:21,
+            % plot diff between maps for each subset
+            origOrder=repelem(repmat(i,21,1),numRep);
+            lineplot(origOrder,TT.diff,'subset',TT.dist<=35 & TT.numSets==reOrderIdx(i),'split',TT.mapNum,'style_thickline');
+            hold on
+        end
+        %
+        %         figure(2)
+        %         myboxplot(TT.mapNum,TT.diff,'subset',TT.dist<=35,'style_tukey')
+        
+        figure(3)
+        lineplot(TT.numSets,TT.diff,'subset',TT.dist<=35,'split',TT.mapNum,'style_shade');
     case 'EVAL:STATS:CURVES'
         mapType=varargin{1}; % options <
         data=varargin{2}; % evaluating data from study [1] or [2], both [3] or average of [1] and [2] after eval [4]
@@ -2476,7 +2567,7 @@ switch what
         
         vararginoptions({varargin{6:end}},{'sn'}); % option if doing individual map analysis
         
-        switch type,
+        switch type
             case 'group'
                 T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',data,condType)));
             case 'indiv'
@@ -2526,7 +2617,7 @@ switch what
         
         vararginoptions({varargin{6:end}},{'CAT','sn'}); % option if plotting individual map analysis
         
-        switch type,
+        switch type
             case 'group'
                 T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',data,condType)));
             case 'indiv'
@@ -2558,7 +2649,7 @@ switch what
         data=varargin{2}; % evaluating data from study [1] or [2] or [4]?
         type=varargin{3}; % 'group' or 'indiv'
         crossval=varargin{4}; % [0]-no crossval; [1]-crossval
-        condType=varargin{5}; % evaluating on 'unique' or 'all' taskConds ??
+        condType=varargin{5}; % evaluating on 'unique' or 'all' or 'subsets_movies3'
         
         % example: sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',{'SC1_cnvf_10','Buckner_17Networks'},[2 2],'group',1,'subsets_movies3')
         
@@ -3362,8 +3453,8 @@ switch what
         CAT.linewidth=3;
         CAT.linestyle={'-','-','-','-','-','-'};
         CAT.linewidth={2, 2, 2, 2, 2, 2};
-        errorcolor={'k','r','b','g','r','r'};
-        linecolor={'k','r','b','g','r','r'};
+        errorcolor={'g','r','b','k','r','r'};
+        linecolor={'g','r','b','k','r','r'};
         
         %         errorcolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
         %         linecolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
@@ -3386,7 +3477,7 @@ switch what
         
         % do stats
         %         sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',toPlot,evalNums,'group',1,'unique'); % always take crossval + unique
-    case 'AXES:subsets'
+    case 'AXES:subsets_curves' % curves for movies or dissimilar task subsets
         mapType=varargin{1};
         data=varargin{2}; % eval. on [1] or [2]
         subset=varargin{3}; % 'movies' or 'dissimilar'
@@ -3404,7 +3495,7 @@ switch what
         linecolor={'g','b','y','m','k','g'};
         
         idx=1;
-        for m=1:length(mapType),
+        for m=1:length(mapType)
             CAT.errorcolor=errorcolor{idx};
             CAT.linecolor=linecolor{idx};
             CAT.linestyle=linestyle{idx};
@@ -3423,13 +3514,13 @@ switch what
         
         % do stats
         %         sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',toPlot,evalNums,'group',1,'unique'); % always take crossval + unique
-    case 'AXES:subsets_random'
+    case 'AXES:subsets_diff'
         mapType=varargin{1};
-        data=varargin{2}; % 1, 2, 4 . [1: eval on sc1; 2: eval on sc2; 4: eval on sc1+sc2]
-        subset=varargin{3}; % {'random','movies'} etc. which kind of subsets ?
-        numTasks=varargin{4}; % [7 3] how many tasks are we taking ?
+        data=varargin{2}; % 1, 2, 4 [1: eval on sc1; 2: eval on sc2; 4: eval on sc1+sc2]
+        numTasks=varargin{3}; % [7] how many tasks are we taking ?
         
         crossval=1;
+        subsets={'random','dissimilar'};
         
         % aesthetics
         CAT.errorwidth=.5;
@@ -3443,24 +3534,13 @@ switch what
         CAT.errorcolor=errorcolor;
         CAT.linecolor=linecolor;
         CAT.linestyle=linestyle;
-        sc1_sc2_functionalAtlas('EVAL:PLOT:SUBSETS',mapType,data,subset,numTasks,crossval,'CAT',CAT); % always take crossval + unique
+        sc1_sc2_functionalAtlas('EVAL:PLOT:SUBSETS_DIFF',mapType,data,subsets,numTasks,crossval,'CAT',CAT); % always take crossval + unique
         
         % Labelling
-        set(gca,'YLim',[0.05 0.15],'FontSize',12);
+        set(gca,'YLim',[0.05 0.15],'FontSize',12,'XLim',[1 21],'xtick',[1 21],'XTickLabel',{'Most Similar','Least Similar'});
         xlabel(sprintf('Random Task Subsets (%d)',numTasks));
-        ylabel('Difference');
+        ylabel('DCBC');
         %         set(gcf,'units','centimeters','position',[5,5,9,12])
-        
-        % find task names for each subset
-        T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType{1}),sprintf('spatialBoundfunc%d_subsets_%s%d.mat',data,subset,numTasks)));
-        
-        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
-        A=getrow(D,D.StudyNum==data);
-        
-        for ii=1:20,
-            condNumIdx=unique(T.subset(T.numSets==ii,:));
-            char(A.condNames(condNumIdx))
-        end
     case 'AXES:indiv_diff' % make summary graph for diff curves for indiv maps
         toPlot=varargin{1};% {'SC2_10cluster','SC2_10cluster'}
         evalNums=varargin{2}; % repmat([4],length(plotName),1)
@@ -3669,6 +3749,10 @@ switch what
         sc1_sc2_functionalAtlas('AXES:interSubjCorr')
         subplot(2,2,[3,4])
         sc1_sc2_functionalAtlas('AXES:MT_group_indiv')
+    case 'FIGURE10'% Task subset figure
+        % we want to plot 'dissimilar', 'random', and 'movie' into one
+        % figure
+        
         
     case 'SUPP1'   % Get behavioural results
     case 'SUPP2'   % RDM
