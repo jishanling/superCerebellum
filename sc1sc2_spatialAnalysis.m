@@ -301,7 +301,7 @@ switch(what)
             M=caret_suit_map2surf(Vv,'space','SUIT','stats','mode');
             suit_plotflatmap(M.data,'type','func','border',[],'cscale',[0 0.4])
         end;
-    case 'SNN:bootstrap'
+    case 'SNN:bootstrap_subj'
         type = 'oldF';      % {'oldF','newF'}: Estimate a new F every bootstrap interation?
         study=[1 2];        % Study 1 or 2 or [1,2]
         K=10;               % K=numClusters (i.e. 5);
@@ -411,7 +411,7 @@ switch(what)
         varargout={T};
     case 'SNN:bootstrap_eval'
         mapsize = [ 2 2 5 4]; % For paper size
-        T=load('bootstrap_tasks.mat');
+        T=load('bootstrap_oldF.mat');
         [~,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',2,1,'build'); % Get V and volindx
         N=size(T.assign,1);
         for n=2:N
@@ -420,7 +420,7 @@ switch(what)
         % Generate map of assignments
         CON=bsxfun(@eq,T.assign(2:N,:),T.assign(1,:)); % Consistency of assignment
         con = mean(CON);
-        
+        fprintf('mean AR = %3.3f (%3.3f-%3.3f)\n',mean(T.RandIndx(2:end)),prctile(T.RandIndx(2:end),2.5),prctile(T.RandIndx(2:end),97.5)); 
         
         % This is the histogram of Rand coefficients
         figure;
@@ -602,6 +602,17 @@ switch(what)
         y=linspace(0,1.2,N);
         x=ones(N,1); 
         image(x,y,C);
+    case 'CLUSTER:Similarity' 
+        % Assumes you are in the group-eval directory 
+        renumber=[4 8 2 10 9 3 6 7 1 5];  % Proposed numbering scheme 
+        load cnvf.mat; % 
+        A=dlmread('colourMap.txt');
+        subplot(1,5,[1:4]); 
+        imagesc(corr(bestF(:,renumber))); 
+        subplot(1,5,5); 
+        image(permute(A(renumber,2:4),[1 3 2])/255); 
+        set(gcf,'PaperPosition',[2 2 4 3]); 
+        wysiwyg; 
     case 'visualise_map' % Plot any data on the cerebellar flatmap
         data = varargin{1};     % Data to plot
         volIndx = varargin{2};  % Indices into the volume (mask)
