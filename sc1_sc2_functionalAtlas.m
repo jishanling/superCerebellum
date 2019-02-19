@@ -938,6 +938,9 @@ switch what
         taskType=varargin{1}; % 'unique' or 'all' tasks
         clustering=varargin{2}; % 'distance' or 'region'
         
+        mapType='SC12_cnvf_10';
+        algorithm='cnvf'; 
+        
         % colour
         colour={[1 0 0],[0 1 0],[0 0 1],[0.3 0.3 0.3],[1 0 1],[1 1 0],[0 1 1],...
             [0.5 0 0.5],[0.8 0.8 0.8],[.07 .48 .84],[.99 .76 .21],[.11 .7 .68],...
@@ -972,8 +975,8 @@ switch what
                 clustTree = linkage(Yr,'average');
                 indx = cluster(clustTree,'cutoff',1);
             case 'region'
-                load(fullfile(studyDir{2},'encoding','glm4','groupEval_SC12_10cluster','SNN.mat'));
-                cmap=load(fullfile(studyDir{2},'encoding','glm4','groupEval_SC12_10cluster','colourMap.txt'));
+                load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('%s.mat',algorithm)));
+                cmap=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),'colourMap.txt'));
                 
                 % assign each task to a cluster
                 if strcmp(taskType,'unique'),
@@ -995,8 +998,13 @@ switch what
         
         X1=X(condIndx,condIndx);
         figure()
-        scatterplot3(X1(:,1),X1(:,2),X1(:,3),'split',condIndx','CAT',CAT,'label',condNames);
-        set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
+%         scatterplot3(X1(:,1),X1(:,2),X1(:,3),'split',condIndx','CAT',CAT,'label',condNames);
+%         set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
+           
+        scatterplot3(X1(:,1),X1(:,2),X1(:,3),'split',condIndx','CAT',CAT,...
+           'labelcolor',CAT.labelcolor,'label',condNames,'markersize',6,'labelsize',14);
+       set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
+        
         hold on;
         plot3(0,0,0,'+');
         % Draw connecting lines
@@ -1414,7 +1422,7 @@ switch what
         end
     case 'MAP:make_paint' % Make a paint file from a set of parcellations
         type=varargin{1}; % 'SNNindivid','SNNgroup','CNVFgroup'
-        
+
         switch (type) % Most straightforward to define both the input maps (full path) and
             % outname depending on type
             case 'SNNindivid'       % Previous 'subjs'
@@ -1433,9 +1441,9 @@ switch what
                 end
                 outname='SNN_maps';
             case 'CNVFgroup'
-                clusters=[10];
+                clusters=[7,10,17];
                 for m=1:length(clusters),
-                    mapName{m}=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC12_%dcnvf',clusters(m)),'map.nii');
+                    mapName{m}=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_SC12_cnvf_%d',clusters(m)),'map.nii');
                     column_names{m}=sprintf('%dclusters',clusters(m));
                 end
                 outname='CNVF_maps';
@@ -2348,11 +2356,13 @@ switch what
             case 'group'
                 for i=1:2
                     if ~isempty(strfind(mapType,'cnvf')) || ~isempty(strfind(mapType,'snn')),
-                        T=load(fullfile(encodeGLM,sprintf('groupEval_SC%d_%s',studyType(i),mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
-                        outDir=fullfile(encodeGLM,sprintf('groupEval_SC2_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
-                    elseif (strfind(mapType,'SC12_cnvf'))>1,
-                         T=load(fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
-                        outDir=fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
+                        if ~isempty(strfind(mapType,'SC12_cnvf'))
+                            T=load(fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
+                            outDir=fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
+                        else
+                            T=load(fullfile(encodeGLM,sprintf('groupEval_SC%d_%s',studyType(i),mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
+                            outDir=fullfile(encodeGLM,sprintf('groupEval_SC2_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
+                        end
                     else
                         T=load(fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',evalType(i),condType)));
                         outDir=fullfile(encodeGLM,sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc4_%s.mat',condType));
@@ -2711,6 +2721,36 @@ switch what
             fprintf('Effect size between %s and %s is %2.2f when denom is pooled std  \n',mapType{1},mapType{2},ES_pooled);
             
         end
+    case 'EVAL:PLOT_allMaps'
+        mapType={'SC12_cnvf_7','SC12_cnvf_8','SC12_cnvf_9','SC12_cnvf_10','SC12_cnvf_11','SC12_cnvf_12','SC12_cnvf_15','SC12_cnvf_17'}; 
+        data=4;
+        crossval=1;
+        condType='unique';
+
+        T=[];
+        for m=1:length(mapType),
+            RR=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d_%s.mat',data,condType)));
+            RR.mapType=repmat(mapType(m),length(RR.SN),1);
+            RR.mapNum=repmat(m,length(RR.SN),1);
+            T=addstruct(T,RR);
+        end
+        
+        P=getrow(T,T.crossval==crossval);
+        
+        % plot boxplot of different clusters
+        W=getrow(P,P.bwParcel==0); % within
+        B=getrow(P,P.bwParcel==1); % between
+        W.diff=W.corr-B.corr;
+        W=rmfield(W,{'bwParcel','crossval','corr'});
+        
+        lineplot(W.mapNum,W.diff,'subset',W.dist<=35,'style_shade');
+        
+        % Labelling
+        set(gca,'YLim',[0.14 0.17],'YLim',[0.14 .17],'ytick',[0.14:.01:.17],'FontSize',12,...
+            'xtick',[1:length(mapType)],'XTickLabel',{'7','8','9','10','11','12','15','17'});
+        xlabel('Maps');
+        ylabel('DCBC');
+        set(gcf,'units','centimeters','position',[5,5,9,12])
         
     case 'reformat:average_maps'
         mapTypes=varargin{1}; % {'Buckner_17Networks,'Buckner_7Networks'};
@@ -2959,6 +2999,7 @@ switch what
         %         cmapF = bsxfun(@plus,cmapF*opacacy,[1 1 1]*(1-opacacy));
         
         % Make the plot
+        whitebg
         suit_plotflatmap(Mpa,'type','label','border',[],'cmap',cmapF);
         whitebg
         hold on;
@@ -2984,10 +3025,10 @@ switch what
         
         D=dload(fullfile(baseDir,'featureTable_functionalAtlas.txt'));
         
-        D=dload(fullfile(baseDir,'featureTable_jd_updated.txt')); % Read feature table - updated with new features "naturalistic bio motion" and "naturalistic scenes"
+%         D=dload(fullfile(baseDir,'featureTable_jd_updated.txt')); % Read feature table - updated with new features "naturalistic bio motion" and "naturalistic scenes"
         S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt')); % List of task conditions
         
-        load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'SNN.mat'));
+        load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'cnvf.mat'));
         W=pivottablerow(S.condNumUni,bestF,'mean(x,1)'); % we only want unique taskConds
         
         % get new condNames (unique only)
@@ -3000,7 +3041,7 @@ switch what
         
         % remove superfluous
         D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades','Imagination','LongtermMemory','SceneRecog'});
-        D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades'});
+%         D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades'});
         
         f=fieldnames(D);
         FeatureNames = f(5:end);
@@ -3025,8 +3066,8 @@ switch what
         b = zeros(numFeat,1);
         
         for p=1:numClusters,
-            u(:,p) = cplexqp(XX+lambda(2)*eye(numFeat),ones(numFeat,1)*lambda(1)-XY(:,p),A,b);
-            % u(:,p) = lsqnonneg(X,Y(:,p));
+%             u(:,p) = cplexqp(XX+lambda(2)*eye(numFeat),ones(numFeat,1)*lambda(1)-XY(:,p),A,b);
+             u(:,p) = lsqnonneg(X,double(Y(:,p)));
         end;
         
         % Get corr between feature weights
@@ -3414,7 +3455,7 @@ switch what
         % do stats
         sc1_sc2_functionalAtlas('EVAL:STATS:CURVES',toPlot,4,'indiv',1,'unique','sn',sn)
     case 'AXES:MT_UpperLower' % makes graph for upper and lower bounds of multi-task plot
-        toPlot={'SC12_17cluster','SC2_17cluster'};
+        toPlot={'SC2_cnvf_10','SC12_cnvf_10'};
         toPlotName='Multi-Task Parcellation';
         
         % Aesthetics
@@ -3423,7 +3464,7 @@ switch what
         CAT.linecolor={'r','k'};
         CAT.errorcolor={'r','k'};
         CAT.linewidth={2, 2};
-        CAT.linestyle={'-','-'};
+        CAT.linestyle={'-','--'};
         
         % plot upper and lower within and between curves
         sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',toPlot{1},4,'group',1,'unique','CAT',CAT);
@@ -3437,7 +3478,7 @@ switch what
         set(gca,'YLim',[0 0.55],'FontSize',10,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
         %         set(gca,'YLim',[0 0.6],'XLim',[4 32],'FontSize',18,'xtick',[4 32],'XTickLabel',{'4','32'});
         xlabel('Spatial Distances (mm)');
-        ylabel('Activity Correlation (R)');
+        ylabel('Voxel-to-Voxel Correlation');
         %         title(toPlotName)
         set(gcf,'units','centimeters','position',[5,5,6,6])
         %         legend('within parcels', 'between parcels','Location','SouthWest')
@@ -3453,8 +3494,8 @@ switch what
         CAT.linewidth=3;
         CAT.linestyle={'-','-','-','-','-','-'};
         CAT.linewidth={2, 2, 2, 2, 2, 2};
-        errorcolor={'g','r','b','k','r','r'};
-        linecolor={'g','r','b','k','r','r'};
+        errorcolor={'g','r','b','k','c','y','m'};
+        linecolor={'g','r','b','k','c','y','m'};
         
         %         errorcolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
         %         linecolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
@@ -3469,11 +3510,12 @@ switch what
         hold off
         
         % Labelling
-        set(gca,'YLim',[0 0.18],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
+        set(gca,'YLim',[0 0.2],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
         xlabel('Spatial Distances (mm)');
         ylabel('Difference');
         set(gcf,'units','centimeters','position',[5,5,9,12])
         %         legend(plotName,'Location','NorthWest')
+        
         
         % do stats
         %         sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',toPlot,evalNums,'group',1,'unique'); % always take crossval + unique
@@ -3541,10 +3583,12 @@ switch what
         xlabel(sprintf('Random Task Subsets (%d)',numTasks));
         ylabel('DCBC');
         %         set(gcf,'units','centimeters','position',[5,5,9,12])
-    case 'AXES:indiv_diff' % make summary graph for diff curves for indiv maps
+    case 'AXES:indiv_diff' % make summary graph for diff curves for indiv maps (mostly used for lobular)
         toPlot=varargin{1};% {'SC2_10cluster','SC2_10cluster'}
-        evalNums=varargin{2}; % repmat([4],length(plotName),1)
+        evalNum=varargin{2}; % 4
         sn=varargin{3}; % [8, 15] subject number(s)
+        
+        evalNums=repmat([evalNum],length(toPlot),1);
         
         % aesthetics
         CAT.errorwidth=.5;
@@ -3552,31 +3596,25 @@ switch what
         CAT.linewidth=3;
         CAT.linestyle={'-','-','-','-','-','-'};
         CAT.linewidth={2, 2, 2, 2, 2, 2};
-        errorcolor={'g','b','r'};
-        linecolor={'g','b','r'};
+        errorcolor={'g','b','r','y','m','c'};
+        linecolor={'g','b','r','y','m','c'};
         
         % individual
-        for m=1:length(toPlot)-1,
-            CAT.errorcolor=errorcolor{m};
-            CAT.linecolor=linecolor{m};
-            sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot{m},evalNums(m),'indiv',1,'unique','CAT',CAT); % always take crossval + unique
-            hold on
-        end
-        % group
-        CAT.errorcolor=errorcolor{m+1};
-        CAT.linecolor=linecolor{m+1};
-        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot{m+1},4,'group',1,'unique','CAT',CAT); % always take crossval + unique
-        
         for m=1:length(toPlot),
             CAT.errorcolor=errorcolor{m};
             CAT.linecolor=linecolor{m};
             sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot{m},evalNums(m),'indiv',1,'unique','CAT',CAT,'sn',sn(m)); % always take crossval + unique
             hold on
         end
+        
+        % group
+        CAT.errorcolor='k';
+        CAT.linecolor='k';
+        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF','lob10',4,'group',1,'unique','CAT',CAT); % always take crossval + unique
         hold off
         
         % Labelling
-        set(gca,'YLim',[0 0.27],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
+        set(gca,'YLim',[-.07 0.15],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
         xlabel('Spatial Distances (mm)');
         ylabel('Difference');
         set(gcf,'units','centimeters','position',[5,5,9,12])
@@ -3685,7 +3723,7 @@ switch what
         set(gca,'XTickLabel',xlabels,'FontSize',12);
         set(gcf,'units','centimeters','position',[5,5,9,13])
         %         title('Within and Between-subject correlation');
-        
+
     case 'FIGURE2' % Representational Structure
         sc1_sc2_functionalAtlas('AXES:MDS','all')
     case 'FIGURE3a' % Lobular versus Functional
