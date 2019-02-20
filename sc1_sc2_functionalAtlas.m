@@ -2,9 +2,9 @@
 function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
-baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+% baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
 % baseDir          = '/Users/maedbhking/Remote/Documents2/Cerebellum_Cognition';
-% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 atlasDir='/Users/maedbhking/Documents/Atlas_templates/';
@@ -1469,16 +1469,18 @@ switch what
         sn=varargin{1};     % 'group' or <subjNum>
         study=varargin{2};  % 1 or 2 or [1,2]
         
-        numCount=5;         % How often the "same" solution needs to be found
         algorithmString = {'snn','cnvf','ica'}; % Semi-nonengative matrix factorization
         algorithm = 2;
         K=10; % number of regions
         smooth = [];
         G0 = [];          % Starting value for weights
-        vararginoptions({varargin{3:end}},{'sess','numCount','tol_rand','maxIter','algorithm','K','smooth'}); % options
         
         tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
-        maxIter=100; % if it's not finding a similar solution - force stop at 100 iters
+        maxStart=100;       % How many starts maximally?         
+        numCount=5;         % For how many starting values do we need to find the same solution? 
+        maxIter = 100;      % How many iterations per starting value 
+        
+        vararginoptions({varargin{3:end}},{'sess','numCount','tol_rand','maxIter','maxStart','algorithm','K','smooth'}); % options
         
         % Set the String correctly
         if length(study)>1
@@ -1517,12 +1519,12 @@ switch what
         bestSol = ones(size(X_C,2),1);
         iter=1; % How many iterations
         count=0;
-        while iter<maxIter,
+        while iter<=maxStart,
             switch (algorithm)
                 case 1
                     [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get a segmentation using
                 case 2 % convec
-                    [F,G,Info]=cnvSemiNonNegMatFac(X_C,K,'threshold',0.01,'maxIter',100,'G0',G0); % get a segmentation using
+                    [F,G,Info]=cnvSemiNonNegMatFac(X_C,K,'threshold',0.01,'maxIter',maxIter,'G0',G0); % get a segmentation using
             end;
             errors(iter)=Info.error;    % record error
             [~,winner]=max(G,[],2);     % determine the highest loading cluster for each voxel
