@@ -379,8 +379,8 @@ switch(what)
         S = load(fullfile(outDir,sprintf('%s.mat',algorithm)));
         [X,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,study,'build','smooth',smooth);
         TT = dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
-        TT = getrow(TT,ismember(TT.StudyNum,study)); % Pick the right experiment 
-        N=length(TT.condNumUni); 
+        TT = getrow(TT,ismember(TT.StudyNum,study)); % Pick the right experiment
+        N=length(TT.condNumUni);
         
         for i=1:numBSIter
             % sample with replacement
@@ -389,8 +389,8 @@ switch(what)
             else
                 T.samp(i,:)=unidrnd(N,1,N);
             end;
-            Xs = X(T.samp(i,:),:); 
-            Xs = bsxfun(@minus,Xs,mean(Xs,1)); 
+            Xs = X(T.samp(i,:),:);
+            Xs = bsxfun(@minus,Xs,mean(Xs,1));
             switch (type)
                 case 'newF'
                     switch (algorithm)
@@ -402,14 +402,17 @@ switch(what)
             end;
             [~,g]=max(G,[],2);
             T.assign(i,:)=g';
-            T.numIter(i,1)=Info.numiter; 
-            T.error(i,1)=Info.error; 
+            T.numIter(i,1)=Info.numiter;
+            T.error(i,1)=Info.error;
             fprintf('%d\n',i);
         end;
         fprintf('\n');
         save(fullfile(outDir,'bootstrap_tasks.mat'),'-struct','T');
         varargout={T};
     case 'SNN:bootstrap_eval'
+        blackscheme=1; 
+        xlims = [-100  100];
+        ylims = [-85 85];
         mapsize = [ 2 2 5 4]; % For paper size
         T=load('bootstrap_oldF.mat');
         [~,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',2,1,'build'); % Get V and volindx
@@ -420,7 +423,7 @@ switch(what)
         % Generate map of assignments
         CON=bsxfun(@eq,T.assign(2:N,:),T.assign(1,:)); % Consistency of assignment
         con = mean(CON);
-        fprintf('mean AR = %3.3f (%3.3f-%3.3f)\n',mean(T.RandIndx(2:end)),prctile(T.RandIndx(2:end),2.5),prctile(T.RandIndx(2:end),97.5)); 
+        fprintf('mean AR = %3.3f (%3.3f-%3.3f)\n',mean(T.RandIndx(2:end)),prctile(T.RandIndx(2:end),2.5),prctile(T.RandIndx(2:end),97.5));
         
         % This is the histogram of Rand coefficients
         figure;
@@ -435,7 +438,7 @@ switch(what)
         cmap = bsxfun(@rdivide,cmap,max(cmap));
         
         % Figure 2: Normal hard assignment
-        LA=sc1sc2_spatialAnalysis('visualise_map',T.assign(1,:)',volIndx,V,'type','label','cmap',cmap);
+        LA=sc1sc2_spatialAnalysis('visualise_map',T.assign(1,:)',volIndx,V,'type','label','cmap',cmap,'blackscheme',blackscheme);
         % title('Hard assignment');
         axis off;
         set(gcf,'PaperPosition',mapsize);
@@ -443,7 +446,7 @@ switch(what)
         
         % Figure 3: Consistency
         figure;
-        CO=sc1sc2_spatialAnalysis('visualise_map',con',volIndx,V,'type','func','cscale',[0.4 1]);
+        CO=sc1sc2_spatialAnalysis('visualise_map',con',volIndx,V,'type','func','cscale',[0.4 1],'blackscheme',blackscheme);
         % title('Consistency of assignment');
         axis off;
         set(gcf,'PaperPosition',mapsize);
@@ -463,19 +466,24 @@ switch(what)
         HSV(i,2) = HSV(i,2).*scaleC;                % Scale Saturation
         HSV(i,3) = (1-scaleC).*0.85+scaleC.*HSV(i,3); % Change towards a light gray
         mRGB(i,:) = hsv2rgb(HSV(i,:)); % color data
-        suit_plotflatmap(mRGB,'type','rgb');
+        if blackscheme
+            suit_plotflatmap(mRGB,'type','rgb','borderstyle','w.','xlims',xlims,'ylims',ylims);
+            set(gcf,'Color',[0 0 0]);
+        else 
+            suit_plotflatmap(mRGB,'type','rgb','borderstyle','xlims',xlims,'ylims',ylims);
+        end; 
         % title('Weighted color map');
         axis off;
         set(gcf,'PaperPosition',mapsize);
         wysiwyg;
-        varargout={T}; 
+        varargout={T};
         
         % figure(5); % Different Alphas: We decided that this did not look
         % as good.
         % scaleA=nan(size(RGB,1),1);
         % scaleA(i,1)=scaleC;
         % suit_plotflatmap(RGB,'type','rgb','alpha',scaleA);
-     
+        
     case 'CLUSTER:GlobalRand'
         compare={'groupEval_SC12_cnvf_7','groupEval_SC12_cnvf_10','groupEval_SC12_cnvf_17',...
             'groupEval_Buckner_7Networks','groupEval_Cole_10Networks','groupEval_Buckner_17Networks',...
@@ -505,7 +513,7 @@ switch(what)
         colormap(hot);
         imagesc(AR,[0 0.8]);
         colorbar;
-        set(gca,'XTickLabel',{'C7','C10','C17','R7','R10','R17'},'YTickLabel',{'C7','C10','C17','R7','R10','R17'}); 
+        set(gca,'XTickLabel',{'C7','C10','C17','R7','R10','R17'},'YTickLabel',{'C7','C10','C17','R7','R10','R17'});
         %set(gcf,'PaperPosition',[2 2 4.7 3.8]);
         % wysiwyg;
         % axis equal
@@ -578,7 +586,7 @@ switch(what)
         % save(fullfile(studyDir{2},encodeDir,'glm4','LocalRand_TaskRest.mat'),'-struct','Out');
         set(gcf,'PaperPosition',[2 3 14 8]);
         wysiwyg;
-        xlims = [-100 100]; 
+        xlims = [-100 100];
         ylims = [-85 85];
         load(fullfile(studyDir{2},encodeDir,'glm4','LocalRand_TaskRest.mat'));
         load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));  % Just to get V and volIndex
@@ -593,26 +601,77 @@ switch(what)
                 'cscale',[0 0.8]);
             % title(titles{i});
         end;
-        subplot(2,3,2); 
+        subplot(2,3,2);
         suit_plotflatmap(M(3).data./M(1).data,'type','func','cmap',parula,...
             'cscale',[0 1.2],'xlims',xlims,'ylims',ylims);
-        subplot(2,3,3); 
+        subplot(2,3,3);
         C=permute(parula,[1 3 2]);
-        N=size(C,1); 
+        N=size(C,1);
         y=linspace(0,1.2,N);
-        x=ones(N,1); 
+        x=ones(N,1);
         image(x,y,C);
-    case 'CLUSTER:Similarity' 
-        % Assumes you are in the group-eval directory 
-        renumber=[4 8 2 10 9 3 6 7 1 5];  % Proposed numbering scheme 
-        load cnvf.mat; % 
+    case 'CLUSTER:Similarity'
+        % Assumes you are in the group-eval directory
+        renumber=[4 8 2 10 9 3 6 7 1 5];  % Proposed numbering scheme
+        load cnvf.mat; %
         A=dlmread('colourMap.txt');
-        subplot(1,5,[1:4]); 
-        imagesc(corr(bestF(:,renumber))); 
-        subplot(1,5,5); 
-        image(permute(A(renumber,2:4),[1 3 2])/255); 
-        set(gcf,'PaperPosition',[2 2 4 3]); 
-        wysiwyg; 
+        subplot(1,5,[1:4]);
+        imagesc(corr(bestF(:,renumber)));
+        subplot(1,5,5);
+        image(permute(A(renumber,2:4),[1 3 2])/255);
+        set(gcf,'PaperPosition',[2 2 4 3]);
+        wysiwyg;
+    case 'CLUSTER:grandTour'
+        clusters = [1:10]; 
+        clusters = [7 4 3 9 6 10];
+        plot_lines = 0; 
+        color_dots = 1; 
+        wdir=fullfile(baseDir,'sc2','encoding','glm4','groupEval_SC12_cnvf_10');
+        D=dload('sc1_sc2_taskConds.txt'); 
+        load(fullfile(wdir,'cnvf.mat'));
+        
+        [X,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data','group',[1 2],'build'); % Get V and volindx
+        A=dlmread(fullfile(wdir,'colourMap.txt'));
+        for i=1:10
+                COL{i}=A(i,2:4)/255;
+        end;
+        
+        N=size(X,1);
+        while 1
+            con=[ 50    49    40]; % unidrnd(N,1,3); % [4 8 24]; % 
+            P=zeros(N,3);
+            P(con(1),1)=1;
+            P(con(2),2)=1;
+            P(con(3),3)=1;
+            Y=(P'*X)';
+            [~,cl]=max(bestG,[],2);
+            pF=(P'*bestF)';
+            hold on;
+            for i=clusters
+                if (color_dots==1)
+                    scatterplot3(Y(:,1),Y(:,2),Y(:,3),'markercolor',COL{i},'markerfill',COL{i},'subset',cl==i);
+                elseif(color_dots==2)
+                    scatterplot3(Y(:,1),Y(:,2),Y(:,3),'markercolor',[0.6 0.6 0.6],'markerfill',[0.6 0.6 0.6],'subset',cl==i);
+                end;
+            end; 
+            for i=clusters
+                if (plot_lines) 
+                    a=quiver3(0,0,0,pF(i,1),pF(i,2),pF(i,3),0);
+                    set(a,'LineWidth',3,'Color',COL{i});
+                end; 
+            end;
+            hold off;
+            l=0.15; 
+            xlabel(D.condNames{con(1)});
+            ylabel(D.condNames{con(2)});
+            zlabel(D.condNames{con(3)});
+            set(gca,'XLim',[-l l],'YLim',[-l l],'ZLim',[-l l]);
+            axis equal; 
+            view(39,10); 
+            set(gcf,'PaperPosition',[2 2 8 6]); 
+            wysiwyg; 
+            keyboard;
+        end;
     case 'visualise_map' % Plot any data on the cerebellar flatmap
         data = varargin{1};     % Data to plot
         volIndx = varargin{2};  % Indices into the volume (mask)
@@ -620,9 +679,10 @@ switch(what)
         cmap = [];
         cscale = [];
         type = 'label';     % func / label
-        xlims = [-100  100]; 
-        ylims = [-85 85]; 
-        vararginoptions(varargin(4:end),{'cmap','type','cscale','xlims','ylims'});
+        xlims = [-100  100];
+        ylims = [-85 85];
+        blackscheme = 0; 
+        vararginoptions(varargin(4:end),{'cmap','type','cscale','xlims','ylims','blackscheme'});
         
         % map features on group
         V.dat=zeros([V.dim(1) V.dim(2) V.dim(3)]);
@@ -634,20 +694,25 @@ switch(what)
                 if (isempty(cmap))
                     cmap = colorcube(max(data));
                 end;
-                outputtype = 'paint'; 
+                outputtype = 'paint';
             case {'func','rgb'}
                 stats = 'nanmean';
                 if (isempty(cmap))
                     cmap = hot;
                 end;
-                outputtype = 'metric'; 
+                outputtype = 'metric';
         end;
         
         % map the data and display on flatmap
         data=suit_map2surf(V,'space','SUIT','stats',stats);
-        suit_plotflatmap(data,'type',type,'cmap',cmap,...
-            'cscale',cscale,'xlims',xlims,'ylims',ylims);
-        
+        if (blackscheme) 
+             suit_plotflatmap(data,'type',type,'cmap',cmap,...
+                'cscale',cscale,'xlims',xlims,'ylims',ylims,'borderstyle','w.');
+            set(gcf,'Color',[ 0 0 0]); 
+        else 
+             suit_plotflatmap(data,'type',type,'cmap',cmap,...
+                'cscale',cscale,'xlims',xlims,'ylims',ylims);
+        end; 
         
         P=caret_struct(outputtype,'data',data);
         varargout={P};
