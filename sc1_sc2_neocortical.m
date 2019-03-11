@@ -8,7 +8,9 @@ wbDir      = fullfile(baseDir,'sc1','surfaceWB');
 fsDir      = fullfile(baseDir,'sc1','surfaceFreesurfer'); 
 atlasDir   = '~/Data/Atlas_templates/standard_mesh';       
 anatomicalDir = fullfile(baseDir,'sc1','anatomicals'); 
-
+studyDir  = {'sc1','sc2'}; 
+Hem       = {'L','R'}; 
+hemname   = {'CortexLeft','CortexRight'}; 
 subj_name = {'s01','s02','s03','s04','s05','s06','s07','s08','s09','s10','s11',...
     's12','s13','s14','s15','s16','s17','s18','s19','s20','s21','s22','s23','s24',...
     's25','s26','s27','s28','s29','s30','s31'};
@@ -37,48 +39,36 @@ switch(what)
         end; 
         
         
-  case 'PREP:cortex:surface_betas'         % STEP 11.5: Map betas and ResMS (.nii) onto surface (.metric)
-        % Run FREESURFER before this step!
-        % map volume images to metric file and save them in individual
-        % surface folder
-        % example: sc1_sc2_imana('map_con_surf',2,1,4,'betas')
-        sn   = varargin{1}; % subjNum
-        study=varargin{2};
-        glm  = varargin{3}; % glmNum
-        contrast = varargin{4}; % 'beta'or 'ResMS'
+    case 'SURF:map_con'         % STEP 11.5: Map con / ResMS (.nii) onto surface (.gifti)
+        sn    = returnSubjs;     % subjNum
+        study = [1 2];
+        glm  = 4;     % glmNum
+        hemis = [1 2];
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds_GLM.txt')); 
+        vararginoptions(varargin,{'sn','study','glm','what','hemis'}); 
         
-        glmDir =[studyDir{study} sprintf('/GLM_firstlevel_%d',glm)];dircheck(glmDir);
-        
-        subjs=length(sn);
-        
-        vararginoptions({varargin{5:end}},{'atlas','regSide'});
-        
-        for s=1:subjs,
-            glmSubjDir=fullfile(glmDir, subj_name{sn(s)});
-            for h=regSide,
-                caretSDir = fullfile(studyDir{study}, caretDir,[atlasA,subj_name{sn(s)}],hemName{h}); dircheck(caretSDir);
-                white=fullfile(studyDir{1},caretDir,[atlasA,subj_name{sn(s)}],hemName{h},[hem{h} '.WHITE.coord']);
-                pial=fullfile(studyDir{1},caretDir,[atlasA,subj_name{sn(s)}],hemName{h},[hem{h} '.PIAL.coord']);
+        for s=sn 
+            for h=hemis
+                surfDir = fullfile(wbDir, subj_name{s}); 
+                white=fullfile(surfDir,sprintf('%s.%s.white.164k.surf.gii',subj_name{s},Hem{h})); 
+                pial=fullfile(surfDir,sprintf('%s.%s.pial.164k.surf.gii',subj_name{s},Hem{h})); 
+                C1=gifti(white);
+                C2=gifti(pial);
                 
-                C1=caret_load(white);
-                C2=caret_load(pial);
-                fileList = [];
-                outfile  = [];
+                for st = study
+                    glmDir =fullfile(baseDir,studyDir{st},sprintf('GLM_firstlevel_%d',glm),subj_name{s});
+                    T=getrow(D,D.StudyNum==st); 
+                    filenames={}; 
+                    for i=1:length(T.condNames); 
+                        filenames{i} = fullfile(glmDir,sprintf('con_%s-rest.nii',T.condNames{i})); 
+                    end; 
+                    outfile = fullfile(surfDir,sprintf('%s.%s.%s.con.func.gii',subj_name{s},Hem{h},studyDir{st}));
                 
-                filenames = dir(fullfile(glmSubjDir,sprintf('*%s*',contrast)));
-                outfile = sprintf('%s_glm%d_%s_cortex_%s.metric',subj_name{sn(s)},glm,contrast,hem{h});
+                    G=surf_vol2surf(C1.vertices,C2.vertices,filenames,'column_names',T.condNames,'anatomicalStruct',hemname{h});
+                    save(G,outfile); 
                 
-                for t = 1:length(filenames),
-                    fileList{t} = {filenames(t).name};
-                end
-                
-                for f=1:length(fileList),
-                    images(f)=spm_vol(fullfile(glmSubjDir,fileList{f}));
-                end;
-                M=caret_vol2surf_own(C1.data,C2.data,images);
-                caret_save(fullfile(caretSDir,outfile),M);
-                
-                fprintf('%s map to surface for %s:%s \n',contrast,subj_name{sn(s)},hemName{h});
+                    fprintf('mapped %s %s %s \n',subj_name{s},Hem{h},studyDir{st});
+                end; 
             end;
         end
 end; 
