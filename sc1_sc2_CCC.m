@@ -5,6 +5,7 @@ function varargout=sc1_sc2_CCC(what,varargin)
 % % (1) Directories
 baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
 % baseDir           = '/Volumes/MotorControl/data/super_cerebellum_new/';
+baseDir_other          = '/Volumes/Seagate Backup Plus Drive';
 
 atlasDir='/Users/maedbhking/Documents/Atlas_templates/';
 
@@ -40,16 +41,17 @@ glm       = 4;
 %==========================================================================
 
 switch(what)
-        
+    
     case 'SIGNAL:meanTS'
         % sc1_connectivity('TS_get_meants',[2 3 6 8 9 10 12 17:22],'sc2',4,'162_tessellation_hem');
         % sc1_connectivity('TS_get_meants',[2:22],'sc1',4,'162_tessellation_hem');
         sn=varargin{1}; % subjNum
         exper=varargin{2}; % Experiment string 'sc1' or 'sc2'
+        type=varargin{3}; % 'Cerebellum_grey', '162_tessellation_hem','yeo' etcsc1_sc2_CCC('SIGNAL:meanTS',returnSubjs,'sc1')
         
         B = [];
         glm=4;
-        type='Cerebellum_grey';
+        %         type='Cerebellum_grey';
         glmDir =fullfile(baseDir,exper,sprintf('/GLM_firstlevel_%d',glm));
         subjs=length(sn);
         
@@ -61,8 +63,8 @@ switch(what)
             
             % load data
             tic;
-            load(fullfile(sc1Dir,regDir,'data',subj_name{sn(s)},sprintf('regions_%s.mat',type))); % 'regions' are defined in 'ROI_define'
-            SPM=spmj_move_rawdata(SPM,fullfile(baseDir,'sc1',imagingDir,subj_name{sn(s)}));
+            load(fullfile(studyDir{1},regDir,'data',subj_name{sn(s)},sprintf('regions_%s.mat',type))); % 'regions' are defined in 'ROI_define'
+            SPM=spmj_move_rawdata(SPM,fullfile(baseDir_other,'sc1','imaging_data',subj_name{sn(s)}));
             
             % Get the raw data files
             V=SPM.xY.VY;
@@ -120,7 +122,7 @@ switch(what)
             
             % load data
             tic;
-            load(fullfile(sc1Dir,regDir,'data',subj_name{sn(s)},sprintf('regions_%s.mat',type))); % 'regions' are defined in 'ROI_define'
+            load(fullfile(studyDir{1},regDir,'data',subj_name{sn(s)},sprintf('regions_%s.mat',type))); % 'regions' are defined in 'ROI_define'
             SPM=spmj_move_rawdata(SPM,fullfile(baseDir,'sc1',imagingDir,subj_name{sn(s)}));
             
             % Get the raw data files
@@ -155,9 +157,9 @@ switch(what)
     case 'SIGNAL:meanBeta'
         % In the new version, this always stores the betas like the occurr
         % in the GLM
-        type    = '162_tessellation_hem';  % 'Cerebellum_grey';
+        type    = 'yeo';  % 'Cerebellum_grey' or 'yeo'
         exper   = {'sc1','sc2'};
-        sn      = goodsubj;
+        sn      = returnSubjs;
         glm     = 4;
         vararginoptions(varargin,{'sn','glm','type'});
         
@@ -191,11 +193,11 @@ switch(what)
         end;
         
     case 'STRUCTURE:TS'      % Make a structure of all cortical time series of all subject
-        sn=goodsubj;  % Take only good subjects
+        sn=returnSubjs;  % Take only good subjects
         glm=4; % glmNum
-        type='162_tessellation_hem'; % 'cortical_lobes','whole_brain','yeo','desikan','cerebellum','yeo_cerebellum'
+        type='yeo'; % 'cortical_lobes','whole_brain','yeo','desikan','cerebellum','yeo_cerebellum'
         session_specific = 1;
-        expDir = sc1Dir;
+        expDir = studyDir{1};
         
         vararginoptions(varargin,{'sn','glm4','type','session_specific'});
         
@@ -676,20 +678,25 @@ switch(what)
     case 'CONNECT:run'
         step=varargin{1}; % 'weights' or 'eval' ?
         method=varargin{2}; % 'l1' 'ridgeFixed' 'l1l2'
+        getLambda=varargin{3}; % 'yes' automatically generate lambdas or 'no' do nothing (winner take all)
         
-        lambdas=sc1_sc2_CCC('getLambda',method);
+        if strcmp(getLambda,'yes')
+            lambdas=sc1_sc2_CCC('getLambda',method);
+        else
+            lambdas=[0];
+        end
         
         switch step,
             case 'weights'
                 for i=1:2,
                     for l=1:length(lambdas),
-                        sc1_sc2_CCC('CONNECT:weights',returnSubjs,method,i,'l2',lambdas(l))
+                        sc1_sc2_CCC('CONNECT:weights',returnSubjs,method,i,'l2',lambdas(l),'model','yeo')
                     end
                 end
             case 'eval'
                 for i=1:2,
                     for l=1:length(lambdas),
-                        sc1_sc2_CCC('CONNECT:eval',returnSubjs,method,i,'l2',lambdas(l))
+                        sc1_sc2_CCC('CONNECT:eval',returnSubjs,method,i,'l2',lambdas(l),'model','yeo')
                     end
                 end
         end
@@ -699,8 +706,9 @@ switch(what)
         switch method,
             case 'L1'
             case 'L2'
-                n=20;
-                lambdas=exp(linspace(log(1000),log(100000),n)); % 20 log spaced values from 10 to 1000 (or 1000 to 10000)
+                n=40;
+                lambdas=exp(linspace(log(10),log(100000),n)); % 20 log spaced values from 10 to 1000 (or 1000 to 10000)
+                %                 lambdas=lambdas(34:end);
             case 'Lasso'
         end
         
@@ -843,27 +851,40 @@ switch(what)
         % load in the connectivity weights (X): option to load in multiple
         % models (each can have different methods, trainings etc)
         % M=sc1_sc2_CCC('CONNECTIVITY:runModel',returnSubjs,model,data,signal,method,'trainMode',trainMode,studyModel,'lambdaL1',lambdaL1,'lambdaL2',lambdaL2);
-        M=load(fullfile(weightDir,sprintf('%s_%s_%s_sc%d_l1_%d_l2_%d.mat',model,signal,method,studyModel,round(l1),round(l2))));
+        weightFile=fullfile(weightDir,sprintf('%s_%s_%s_sc%d_l1_%d_l2_%d.mat',model,signal,method,studyModel,round(l1),round(l2)));
+        if exist(weightFile),
+            M=load(weightFile);
+        else
+            for i=1:2,
+                sc1_sc2_CCC('CONNECT:weights',returnSubjs,method,i,'l2',l2)
+            end
+            M=load(weightFile);
+        end
         
         % eval file name - output and check to see if connectivity eval exists [load if it does exist]
-        if exist('voxels'),
+        if voxels==1,
             evalFile=sprintf('%s_%s_%s_sc%d_%s_voxels.mat',model,signal,method,study,condType);
             RR=[];
         else
             evalFile=sprintf('%s_%s_%s_sc%d_%s.mat',model,signal,method,study,condType);
-            RR=load(fullfile(evalDir,evalFile));
+            if exist(evalFile),
+                RR=load(fullfile(evalDir,evalFile));
+            else
+                RR=[];
+            end
         end
-
+        
         for s=1:length(sn) % subjects
             
             Mm=getrow(M,M.SN==sn(s) & strcmp(M.trainMode,trainMode));
             numVox=size(Mm.W{1},2);
+            numReg=size(Mm.W{1},1);
             
             %             indx = sum(abs(Y{s}(:,:)))>0 & ~isnan(sum(Y{s}(:,:))) &
             %             ~isnan(sum(Mm.W{1})); % introduces diff number of voxels --
             %             introduces complications later on when reslicing into suit
             %             space
-            indx=ones(1,numVox);
+            indx=1:numVox;
             
             for sp=1:length(splits); % task conditions
                 if(meanSub)
@@ -882,27 +903,35 @@ switch(what)
                 
                 switch voxels
                     case 1
-                        SSP   = sum(predY(:,indx).^2);             % Sum of square of predictions
-                        SSY   = sum(Y{s}(testBindx,indx).^2);               % Sum of squares of data
-                        SSCp  = sum(predY(:,indx).*predYnc(:,indx)); % Covariance of Predictions
-                        SSCy  = sum(Y{s}(testAindx,indx).*Y{s}(testBindx,indx));  % Covariance of Y's
-                        SSCn  = sum(predYnc(:,indx).*Y{s}(testBindx,indx));   % Covariance of non-cross prediction and data
-                        SSCc  = sum(predY(:,indx).*Y{s}(testBindx,indx));   % Covariance of cross prediction and data
+                        SSP   = nansum(predY(:,indx).^2);             % Sum of square of predictions
+                        SSY   = nansum(Y{s}(testBindx,indx).^2);               % Sum of squares of data
+                        SSCp  = nansum(predY(:,indx).*predYnc(:,indx)); % Covariance of Predictions
+                        SSCy  = nansum(Y{s}(testAindx,indx).*Y{s}(testBindx,indx));  % Covariance of Y's
+                        SSCn  = nansum(predYnc(:,indx).*Y{s}(testBindx,indx));   % Covariance of non-cross prediction and data
+                        SSCc  = nansum(predY(:,indx).*Y{s}(testBindx,indx));   % Covariance of cross prediction and data
                         R.Rcv   = {SSCc ./ sqrt(SSY.*SSP)}; % Double-Crossvalidated predictive correlation
                         R.Rnc   = {SSCn ./ sqrt(SSY.*SSP)}; % Not double-crossvalidated predictive correlation
                         R.Ry    = {SSCy ./ SSY};            % Reliability of data: noise ceiling
                         R.Rp    = {SSCp ./ SSP};            % Reliability of prediction
+                        threshold=nanmean(max(abs(Mm.W{1})));
+                        R.maxRegv={max(abs(Mm.W{1}))};
+                        R.sumRegv={nansum(abs(Mm.W{1}))};
+                        R.relMaxRegv={R.maxRegv{1}./R.sumRegv{1}};
+                        R.numRegv={nansum(abs(Mm.W{1})>threshold)};
                     case 0
-                        SSP   = sum(sum(predY(:,indx).^2));             % Sum of square of predictions
-                        SSY   = sum(sum(Y{s}(testBindx,indx).^2));               % Sum of squares of data
-                        SSCp  = sum(sum(predY(:,indx).*predYnc(:,indx))); % Covariance of Predictions
-                        SSCy  = sum(sum(Y{s}(testAindx,indx).*Y{s}(testBindx,indx)));  % Covariance of Y's
-                        SSCn  = sum(sum(predYnc(:,indx).*Y{s}(testBindx,indx)));   % Covariance of non-cross prediction and data
-                        SSCc  = sum(sum(predY(:,indx).*Y{s}(testBindx,indx)));   % Covariance of cross prediction and data
+                        SSP   = nansum(nansum(predY(:,indx).^2));             % Sum of square of predictions
+                        SSY   = nansum(nansum(Y{s}(testBindx,indx).^2));               % Sum of squares of data
+                        SSCp  = nansum(nansum(predY(:,indx).*predYnc(:,indx))); % Covariance of Predictions
+                        SSCy  = nansum(nansum(Y{s}(testAindx,indx).*Y{s}(testBindx,indx)));  % Covariance of Y's
+                        SSCn  = nansum(nansum(predYnc(:,indx).*Y{s}(testBindx,indx)));   % Covariance of non-cross prediction and data
+                        SSCc  = nansum(nansum(predY(:,indx).*Y{s}(testBindx,indx)));   % Covariance of cross prediction and data
                         R.Rcv   = SSCc ./ sqrt(SSY.*SSP); % Double-Crossvalidated predictive correlation
                         R.Rnc   = SSCn ./ sqrt(SSY.*SSP); % Not double-crossvalidated predictive correlation
                         R.Ry    = SSCy ./ SSY;            % Reliability of data: noise ceiling
                         R.Rp    = SSCp ./ SSP;            % Reliability of prediction
+                        R.maxRegm=nanmean(max(abs(Mm.W{1})));
+                        R.sumRegm=nanmean(nansum(abs(Mm.W{1})));
+                        R.relMaxRegm=R.maxRegm./R.sumRegm; % mean(maxReg)
                 end
                 R.SN    = Mm.SN;
                 R.lambda = Mm.lambda(:,:);
@@ -913,65 +942,54 @@ switch(what)
                 R.split = {condType};
                 RR = addstruct(RR,R);
             end;
-            fprintf('pred done for %s \n',subj_name{sn(s)})
+            fprintf('pred done for %s for l1-%2.2f, l2-%2.2f \n',subj_name{sn(s)},l1,l2)
             clear R
         end
         save(fullfile(evalDir,evalFile),'-struct','RR')
-    case 'CONNECT:plot' % loads in multiple methods and compares them
+    case 'CONNECT:checks' % does some checks: crossed vs uncrossed, unique vs all vs shared etc for one method
         method=varargin{1}; % {'L2'}, {'nonNegative','L2} etc
         study=varargin{2}; % evaluating on which study, 1 or 2 ? [1,2]
+        signal=varargin{3}; % 'fitted'
+        model=varargin{4}; % '162_tessellation_hem'
+        trainMode=varargin{5}; % 'crossed'
+        condType=varargin{6}; % {'unique','all','shared'} or {'unique'} etc
+        condIdx=varargin{7}; % 1, 2, or 3 [1-unique,2-all,3-shared]
+        whatToPlot=varargin{8}; % 'condType','crossUcross','taskConds','RcvRnc' etc
         
-        signal='fitted';
-        model='162_tessellation_hem';
-        trainMode={'crossed'};
-        condType={'unique'};
-        whatToPlot='bestMethod';
+        vararginoptions({varargin{9:end}},{'CAT'}); % option if plotting individual map analysis.
         
         RR=[];
         S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         
-        % Aesthetics
-        CAT.markertype='none';
-        CAT.errorwidth=1;
-        CAT.linecolor={'r','k','b','g'};
-        CAT.errorcolor={'r','k','b','g'};
-        CAT.linewidth={3, 3, 3, 3};
-        CAT.linestyle={'-','-','-','-'};
-        
-        for m=1:length(method),
-            % figure out L1,L2, or lasso
-            if strcmp(method{m},'L2'),
-                M1=2;
-            elseif strcmp(method{m},'L1'),
-                M1=1;
-            elseif strcmp(method{m},'winnerTakeAll'),
-                M1=2;
-            end
-            for c=1:length(condType),
-                T=load(fullfile(studyDir{2},connDir,'glm4','eval',sprintf('%s_%s_%s_sc%d_%s.mat',model,signal,method{m},study,condType{c})));
-                T.methodNum=repmat(m,size(T.SN,1),1);
-                T.condNum=repmat(c,size(T.SN,1),1);
-                RR=addstruct(RR,T);
-            end
+        % figure out L1,L2, or lasso
+        if strcmp(method,'L2'),
+            M1=2;
+        elseif strcmp(method,'L1'),
+            M1=1;
+        elseif strcmp(method,'winnerTakeAll'),
+            M1=2;
+        end
+        for c=1:length(condType),
+            T=load(fullfile(studyDir{2},connDir,'glm4','eval',sprintf('%s_%s_%s_sc%d_%s.mat',model,signal,method,study,condType{c})));
+            T.condNum=repmat(c,size(T.SN,1),1);
+            RR=addstruct(RR,T);
         end
         switch whatToPlot,
             case 'condType'
                 % 'unique' versus 'all'
-                figure(1)
-                lineplot(RR.lambda(:,M1),RR.Rcv,'split',RR.split,'leg','auto','CAT',CAT,...
-                    'subset',strcmp(RR.method,method{1}) & strcmp(RR.trainMode,'crossed'))
+                lineplot(RR.lambda(:,M1),RR.Rcv,'split',RR.split,'leg','auto',...
+                    'subset',strcmp(RR.method,method) & strcmp(RR.trainMode,trainMode))
                 ylabel('R')
                 xlabel('lambda')
-                title(sprintf('%s-%s',signal,method{1}))
+                title(sprintf('%s-%s',signal,method))
                 set(gca,'YLim',[.1 0.4],'FontSize',14,'ytick',[.1,.15,.2,.25,.3, .35,.4]);
             case 'crossUncross'
                 % 'crossed' versus 'uncrossed'
-                figure(1)
-                lineplot(RR.lambda(:,M1),RR.Rcv,'split',RR.trainMode,'leg','auto','CAT',CAT,...
-                    'subset',strcmp(RR.method,method{1}) & strcmp(RR.split,'unique'))
+                lineplot(RR.lambda(:,M1),RR.Rcv,'split',RR.trainMode,'leg','auto',...
+                    'subset',strcmp(RR.method,method) & strcmp(RR.split,condType{condIdx}))
                 ylabel('R')
                 xlabel('lambda')
-                title(sprintf('%s-%s',signal,method{1}))
+                title(sprintf('%s-%s',signal,method))
                 set(gca,'YLim',[.1 0.3],'FontSize',14,'ytick',[.1,.15,.2,.25,.3]);
             case 'taskConds'
                 
@@ -979,80 +997,99 @@ switch(what)
                 condNames=S.condNames(S.StudyNum==study & S.overlap==0);
                 figure(1)
                 barplot(RR.splitby,RR.Rcv,'subset',...
-                    strcmp(RR.method,method{1}) & strcmp(RR.split,'unique') & strcmp(RR.trainMode,'crossed'))
+                    strcmp(RR.method,method) & strcmp(RR.split,'unique') & strcmp(RR.trainMode,trainMode),'leg','auto')
                 ylabel('R')
-                title(sprintf('%s-%s-unique',signal,method{1}))
+                title(sprintf('%s-%s-unique',signal,method))
                 set(gca,'YLim',[0 0.4],'FontSize',8,'XTickLabel',condNames);
                 
                 % split by taskConds (all)
                 condNames=S.condNames(S.StudyNum==study);
                 figure(2)
-                barplot(RR.splitby,RR.Rcv,'subset',strcmp(RR.method,method{1}) & strcmp(RR.split,'all') & strcmp(RR.trainMode,'crossed') & strcmp(RR.trainMode,'crossed'))
+                barplot(RR.splitby,RR.Rcv,'subset',...
+                    strcmp(RR.method,method) & strcmp(RR.split,'all') & strcmp(RR.trainMode,trainMode),'leg','auto')
                 ylabel('R')
-                title(sprintf('%s-%s-all',signal,method{1}))
+                title(sprintf('%s-%s-all',signal,method))
                 set(gca,'YLim',[0 0.55],'FontSize',8,'XTickLabel',condNames);
                 
                 % split by taskConds (shared)
                 condNames=S.condNames(S.StudyNum==study);
                 figure(3)
-                barplot(RR.splitby,RR.Rcv,'subset',strcmp(RR.method,method{1}) & strcmp(RR.split,'shared') & strcmp(RR.trainMode,'crossed') & strcmp(RR.trainMode,'crossed'))
+                barplot(RR.splitby,RR.Rcv,'subset',...
+                    strcmp(RR.method,method) & strcmp(RR.split,'shared') & strcmp(RR.trainMode,trainMode),'leg','auto')
                 ylabel('R')
-                title(sprintf('%s-%s-shared',signal,method{1}))
+                title(sprintf('%s-%s-shared',signal,method))
                 set(gca,'YLim',[0 0.55],'FontSize',8,'XTickLabel',condNames);
             case 'RcvRnc'
                 % split Rcv versus Rnc
                 figure(1)
-                lineplot(RR.lambda(:,M1),RR.Rcv,'CAT',CAT,'subset',strcmp(RR.method,method{1}) & strcmp(RR.split,'unique') & strcmp(RR.trainMode,'crossed'))
+                lineplot(RR.lambda(:,M1),RR.Rcv,'subset',...
+                    strcmp(RR.method,method) & strcmp(RR.split,condType{condIdx}) & strcmp(RR.trainMode,trainMode),'leg','auto')
                 hold on
                 CAT.linecolor={'k'};
                 CAT.linestyle={'-'};
                 CAT.errorcolor={'k'};
-                lineplot(RR.lambda(:,M1),RR.Rnc,'CAT',CAT,'subset',strcmp(RR.method,method{1}) & strcmp(RR.split,'unique') & strcmp(RR.trainMode,'crossed'))
+                lineplot(RR.lambda(:,M1),RR.Rnc,'CAT',CAT,'subset',...
+                    strcmp(RR.method,method)& strcmp(RR.split,condType{condIdx}) & strcmp(RR.trainMode,trainMode),'leg','auto')
                 ylabel('R')
                 xlabel('lambda')
-                title(sprintf('%s-%s',signal,method{1}))
+                title(sprintf('%s-%s',signal,method))
                 set(gca,'YLim',[.1 0.3],'FontSize',14,'ytick',[.1,.15,.2,.25,.3]);
-            case 'bestMethod'
-                % bestMethod
-                xyplot(RR.lambda(:,M1),RR.Rcv,[RR.lambda(:,M1)],'split',[RR.methodNum],...
-                    'subset',strcmp(RR.split,'unique') & strcmp(RR.trainMode,'crossed'),...
-                    'style_thickline','markersize',10,'leg','auto','markersize',10);
-                ylabel('R')
-                xlabel('lambdas')
-                
-                A=getrow(RR,strcmp(RR.split,'unique') & strcmp(RR.trainMode,'crossed'));
-                idx=find(A.Rcv==max(A.Rcv));
-                bestLambda=A.lambda(idx,:);
-                fprintf('bestLambda is %2.2f \n',bestLambda(2))
-%                 set(gca,'FontSize',14,'xtick',[]);
-            case 'bestSubj'
-                for s=1:length(returnSubjs),
-                    A=getrow(RR,RR.SN==returnSubjs(s) & strcmp(RR.split,'unique') & strcmp(RR.trainMode,'crossed'));
-                    idx=find(A.Rcv==max(A.Rcv));
-                    bestLambda=A.lambda(idx,:);
-                    fprintf('bestLambda for s%d is %2.2f \n',returnSubjs(s),bestLambda(2))
-                end
         end
-        keyboard;
+    case 'CONNECT:bestMethod'
+        method=varargin{1}; % {'L2'}, {'nonNegative','L2} etc
+        study=varargin{2}; % evaluating on which study, 1 or 2 ? [1,2]
+        signal=varargin{3}; % 'fitted'
+        model=varargin{4}; % '162_tessellation_hem'
+        trainMode=varargin{5}; % 'crossed'
+        condType=varargin{6}; % 'unique'
+        lambdaRange=varargin{7}; % range of lambda values
+        lambdaIdx=varargin{8}; % either 1,2, or 3 [L1-1; L2-2];
+        
+        vararginoptions({varargin{9:end}},{'CAT'}); % option if plotting individual map analysis.
+        
+        T=load(fullfile(studyDir{2},connDir,'glm4','eval',sprintf('%s_%s_%s_sc%d_%s.mat',model,signal,method,study,condType)));
+        
+        if strcmp(method,'winnerTakeAll'),
+            lineplot(T.lambda(:,lambdaIdx),T.Rcv,'subset', strcmp(T.split,condType) & strcmp(T.trainMode,trainMode),'CAT',CAT)
+        else
+            xyplot(T.lambda(:,lambdaIdx),T.Rcv,[T.lambda(:,lambdaIdx)],...
+                'subset',T.lambda(:,lambdaIdx)>lambdaRange(1) & T.lambda(:,lambdaIdx)<lambdaRange(2) & strcmp(T.split,condType) & strcmp(T.trainMode,trainMode),'CAT',CAT);
+        end
     case 'CONNECT:bestLambda'
         method=varargin{1}; % 'L2' etc
         study=varargin{2}; % evaluating on which study, 1 or 2 ? [1,2]
+        type=varargin{3}; % 'group' or 'indiv'
+        lambdaRange=varargin{4}; % specify range of lambdas [100,10000] for example
         
         signal='fitted';
         model='162_tessellation_hem';
         trainMode='crossed';
         condType='unique';
         
-        RR=[];
-        
         T=load(fullfile(studyDir{2},connDir,'glm4','eval',sprintf('%s_%s_%s_sc%d_%s.mat',model,signal,method,study,condType)));
-
-        A=getrow(T,strcmp(T.trainMode,trainMode));
-        idx=find(A.Rcv==max(A.Rcv));
-        bestLambda=A.lambda(idx,:);
-        fprintf('bestLambda is %2.2f \n',bestLambda(2))
         
-        varargout={bestLambda}; 
+        switch type,
+            case 'group'
+                lambdaIdx=find(T.lambda(T.lambda>lambdaRange(1) & T.lambda<lambdaRange(2)));
+                T.lambdaIdx=zeros(size(T.lambda,1),1);
+                T.lambdaIdx(lambdaIdx)=1;
+                A=getrow(T,strcmp(T.split,condType) & strcmp(T.trainMode,trainMode) & T.lambdaIdx==1);
+                idx=find(A.Rcv==max(A.Rcv));
+                bestLambda=A.lambda(idx,:);
+                fprintf('bestLambda is %2.2f \n',bestLambda(2))
+            case 'indiv'
+                for s=1:length(returnSubjs),
+                    lambdaIdx=find(T.lambda(T.lambda>lambdaRange(1) & T.lambda<lambdaRange(2)));
+                    T.lambdaIdx=zeros(size(T.lambda,1),1);
+                    T.lambdaIdx(lambdaIdx)=1;
+                    A=getrow(T,T.SN==returnSubjs(s) & strcmp(T.split,condType) & strcmp(T.trainMode,trainMode) & T.lambdaIdx==1);
+                    idx=find(A.Rcv==max(A.Rcv));
+                    bestLambda(s,:)=A.lambda(idx(1),:);
+                    fprintf('bestLambda for s%d is %2.2f \n',returnSubjs(s),bestLambda(2))
+                end
+        end
+        
+        varargout={bestLambda};
         
     case 'MAP:cortex'              % Map of where projections come from
         sn=varargin{1};        % [2:22]
@@ -1165,18 +1202,18 @@ switch(what)
         varargout={D,Vres};
     case 'MAP:suit_reslice'
         data=varargin{1};
-        sn=varargin{2}; 
+        sn=varargin{2};
         
-        load(fullfile(studyDir{1},regDir,'data',subj_name{sn},'regions_Cerebellum_grey.mat')); 
+        load(fullfile(studyDir{1},regDir,'data',subj_name{sn},'regions_Cerebellum_grey.mat'));
         
         % Determine the voxels we want to resample in SUIT space
         V=spm_vol(fullfile(studyDir{1},suitDir,'anatomicals','cerebellarGreySUIT.nii'));
-        X= spm_read_vols(V);
+        X=spm_read_vols(V);
         grey_threshold = 0.1; % gray matter threshold
         linIn1=find(X>grey_threshold);
         [i1,j1,k1]= ind2sub(V.dim,linIn1');
         [x1,y1,z1]= spmj_affine_transform(i1,j1,k1,V.mat);
-
+        
         % load cerebellar mask in individual func space
         Vi=spm_vol(fullfile(studyDir{1},suitDir,'anatomicals',subj_name{sn},'maskbrainSUITGrey.nii'));
         X=spm_read_vols(Vi);
@@ -1207,55 +1244,180 @@ switch(what)
             delete(char(fullfile(studyDir{2},'connectivity','eval',subj_name{sn},deleteFiles(b).name)));
         end
         
+        V.dat = zeros(V.dim);
+        Vres=V;
+        %         Vres.dat(linIn1)=permute(D,[2 3 4 1]);
+        Vres.dat=permute(D,[2 3 4 1]);
+        Vres.fname=sprintf('data_%2.2d.nii',1);
+        Vres.pinfo=[1 0 0]';
+        
         % Now map to surface-based representation
         D = suit_map2surf(Vres,'stats','mean');
         varargout={D,Vres};
     case 'MAP:plotCerebellum'      % Plots weights or evaluations onto flatmap for subj or group
         method=varargin{1}; % 'L2' or 'nonNegative'
         study=varargin{2}; % evaluating on which study, 1 or 2 ? [1,2]
+        type=varargin{3}; % get 'bestLambda' for 'group' or 'indiv'
+        signal=varargin{4}; % 'fitted'
+        model=varargin{5}; % '162_tessellation_hem'
+        data=varargin{6}; % 'Cerebellum_grey'
+        trainMode=varargin{7}; % 'crossed'
+        condType=varargin{8}; % 'unique'
+        splitby=varargin{9}; % 'no'
+        sn=varargin{10}; % returnSubjs
+        toPlot=varargin{11}; % 'relMax' or 'R' or 'numReg'
         
-        % set up parameters
-        l1=0;
-        l2=0;
-        signal='fitted';
-        model='162_tessellation_hem';
-        data='Cerebellum_grey';
-        trainMode='crossed';
-        condType='unique'; 
-        toPlot='eval'; % other options - 'eval'
-        splitby='no'; % get pred maps for each task ?
-        sn=[];
+        vararginoptions(varargin(12:end),{'lambdaRange','bestLambda'}); % 'condType' is either 'unique or 'all'
         
-        vararginoptions(varargin(3:end),{'l1','l2','signal','model','data','trainMode','condType','splitby','sn'}); % 'condType' is either 'unique or 'all'
-
-        % get best lambda
-        bestLambda=sc1_sc2_CCC('CONNECT:bestLambda',method,study);
-        
-        sc1_sc2_CCC('CONNECT:eval',returnSubjs,'L2',1,'l2',bestLambda(2),'voxels',1)
-        
-        switch toPlot,
-            case 'weights'
-                weightDir=fullfile(studyDir{2},connDir,'glm4','weights',method);dircheck(weightDir);
-                M=load(fullfile(weightDir,sprintf('%s_%s_%s_sc%d_l1_%d_l2_%d.mat',model,signal,method,study,round(bestLambda(1)),round(bestLambda(2)))));
-            case 'eval'
-                 evalDir=fullfile(studyDir{2},connDir,'glm4','eval');dircheck(evalDir);
-                 T=load(fullfile(evalDir,sprintf('%s_%s_%s_sc%d_%s_voxels.mat',model,signal,method,study,condType)));     
+        % if no lambda is specified
+        if ~exist('bestLambda'),
+            bestLambda=sc1_sc2_CCC('CONNECT:bestLambda',method,study,type,lambdaRange);
+            bestLambda=bestLambda(2);
         end
         
-        subjs=unique(T.SN);
-        taskSplits=unique(T.splitby);
-        % loop over subjects
-        for s=1:length(subjs),
+        sc1_sc2_CCC('CONNECT:eval',returnSubjs,'L2',study,'l2',bestLambda,'voxels',1,'model',model)
+        
+        % load in eval results
+        evalDir=fullfile(studyDir{2},connDir,'glm4','eval');dircheck(evalDir);
+        T=load(fullfile(evalDir,sprintf('%s_%s_%s_sc%d_%s_voxels.mat',model,signal,method,study,condType)));
+        
+        N=[];
+        for s=1:length(sn),
             
-            A=getrow(T,T.SN==subjs(s) & strcmp(T.trainMode,trainMode) & strcmp(T.split,condType));
+            A=getrow(T,T.SN==sn(s) & strcmp(T.trainMode,trainMode) & strcmp(T.split,condType));
+            
+            taskSplits=unique(T.splitby);
+            % figure out tasksplits
+            switch splitby
+                case 'no'
+                    for t=1:length(taskSplits),
+                        switch toPlot,
+                            case 'R'
+                                data_task(t,:)=A.Rcv{t};
+                            case 'relMax'
+                                data_task(t,:)=A.relMaxRegv{t};
+                            case 'numReg'
+                                data_task(t,:)=A.numRegv{t};
+                        end
+                    end
+                    data={nanmean(data_task,1)};
+                    taskSplits=1;
+                    clear data_task
+                case 'yes'
+                    switch toPlot,
+                        case 'R'
+                            data=A.Rcv;
+                        case 'relMax'
+                            data=A.relMaxRegv;
+                        case 'numReg'
+                            data=A.numRegv;
+                    end
+            end
             
             for sp=1:length(taskSplits),
                 % get flatmap coordinates
-                [D,Vres]=sc1_sc2_CCC('MAP:suit_reslice',A.Rcv{taskSplits(sp)},subjs(s));
+                [D,Vres]=sc1_sc2_CCC('MAP:suit_reslice',data{sp},sn(s));
+                %                 [D,Vres]=sc1_sc2_CCC('MAP:cerebellum',data{sp},sn(s));
+                Nn.data=D';
+                Nn.SN=sn(s);
+                Nn.split=taskSplits(sp);
+                N=addstruct(N,Nn);
             end
+            fprintf('subj%d done\n',sn(s))
         end
-        keyboard;
- 
+        
+        % plot to surface
+        suit_plotflatmap(nanmean(N.data,1)')
+        
+        % add to the same connectivity files
+        connectMetName=fullfile(studyDir{2},caretDir,'suit_flat','glm4',sprintf('connectivity-%s.metric',model));
+        if exist(connectMetName),
+            S=caret_load(connectMetName);
+            for i=1:size(S.data,2),
+                dataAll(:,i)=S.data(:,i);
+                dataName{i}=S.column_name{i};
+            end
+            dataAll(:,i+1)=nanmean(N.data,1)';
+            dataName{i+1}=toPlot;
+        else
+            dataAll(:,1)=nanmean(N.data,1)';
+            dataName{1}=toPlot;
+        end
+        M=caret_struct('metric','data',dataAll,'column_name',dataName);
+        caret_save(connectMetName,M);
+        
+    case 'AXES:checks'
+        method=varargin{1}; % 'L2' or 'L1' or 'winnerTakeAll'
+        study=varargin{2}; % studyNum (1 or 2)
+        whatToPlot=varargin{3}; % 'condType','crossUncross','taskConds','RcvRnc'
+        
+        signal='fitted';
+        model='162_tessellation_hem';
+        trainMode='crossed';
+        condType={'unique','all','shared'};
+        condIdx=1; % default is 'unique'
+        
+        sc1_sc2_CCC('CONNECT:checks',method,study,signal,model,trainMode,condType,condIdx,whatToPlot)
+    case 'AXES:bestMethod'
+        study=varargin{1}; % studyNum
+        
+        method={'L2'};
+        lambdaIdx=[2 2]; % L1-1; L2-2
+        lambdaRange={[250 10000]};
+        
+        signal='fitted';
+        model='162_tessellation_hem';
+        trainMode='crossed';
+        condType='unique';
+        
+        CAT.errorwidth=.5;
+        CAT.markertype='none';
+        CAT.linewidth=3;
+        CAT.linestyle={'-','-','-','-','-','-'};
+        CAT.linewidth={2, 2, 2, 2, 2, 2};
+        errorcolor={'g','r','b','k','c','y','m'};
+        linecolor={'g','r','b','k','c','y','m'};
+        
+        % loop over methods
+        for m=1:length(method),
+            CAT.errorcolor=errorcolor{m};
+            CAT.linecolor=linecolor{m};
+            sc1_sc2_CCC('CONNECT:bestMethod',method{m},study,signal,model,trainMode,condType,lambdaRange{m},lambdaIdx(m),'CAT',CAT)
+            hold on
+        end
+        
+        % winner take all
+        CAT.errorcolor='m';
+        CAT.linecolor='m';
+        sc1_sc2_CCC('CONNECT:bestMethod','winnerTakeAll',study,signal,model,trainMode,condType,lambdaRange{m},lambdaIdx(m),'CAT',CAT)
+        
+        % Labelling
+        set(gca,'YLim',[.15 0.22],'FontSize',12,'XLim',[lambdaRange{m}(1)*-5 lambdaRange{m}(2)]);
+        ylabel('R')
+        xlabel('lambdas')
+        %         set(gcf,'units','centimeters','position',[5,5,9,12])
+        %         legend(plotName,'Location','NorthWest')
+    case 'AXES:stats-flatmap'
+        method=varargin{1}; % 'L2' or 'winnerTakeAll'
+        study=varargin{2}; % 1 or 2
+        toPlot=varargin{3}; % 'relMax' or 'R' or 'numReg'
+        
+        % set up parameters
+        signal='fitted';
+        model='yeo';
+        data='Cerebellum_grey';
+        trainMode='crossed';
+        condType='unique';
+        splitby='no'; % get pred maps for each task ?
+        sn=returnSubjs; % returnSubjs
+        type='group'; % get 'bestLambda' for 'group' or 'indiv'
+        bestLambda=[];
+        lambdaRange=[];
+        
+        sc1_sc2_CCC('MAP:plotCerebellum',method,study,type,signal,model,data,...
+            trainMode,condType,splitby,sn,toPlot,'lambdaRange',[0 10000])
+        
+        
     otherwise
         disp('there is no such case.')
 end;
