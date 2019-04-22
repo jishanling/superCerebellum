@@ -2,8 +2,8 @@
 function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
-% baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
-baseDir          = '/Users/maedbhking/Remote/Documents2/Cerebellum_Cognition';
+baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+% baseDir          = '/Users/maedbhking/Remote/Documents2/Cerebellum_Cognition';
 % baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
@@ -184,7 +184,7 @@ switch what
     case 'ACTIVITY:patterns'   % estimate each of the task conditions (motor features are subtracted)
         sn=varargin{1}; % 'group' or <subjNum>
         study=varargin{2};
-        taskType=varargin{3}; % 'allConds', 'averageConds','averageTasks'
+        taskType=varargin{3}; % 'allConds', 'averageConds'
         
         lambda=.01;
         
@@ -241,7 +241,7 @@ switch what
         % subtract baseline
         baseline=nanmean(B,1);
         B=bsxfun(@minus,B,baseline);
-        
+      
         % z score the activity patterns
         B=zscore(B);
         
@@ -262,17 +262,6 @@ switch what
         for i=1:size(indices,1),
             data=reshape(indices(i,:,:,:),[C{1}.dim]);
             C{i}.dat=data;
-        end
-        
-        % save out vol of group contrasts (all 61)
-        exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
-        X=spm_vol(exampleVol);
-        X.private.dat.fname=V.fname;
-        % loop over task conditions
-        cd(fullfile(studyDir{2},'suit/glm4/group_contrasts'))
-        for c=1:length(C),
-            X.fname=sprintf('%s.nii',featNames{c});
-            spm_write_vol(X,C{c}.dat);
         end
         
         % map vol 2 surf
@@ -571,7 +560,7 @@ switch what
         end
         
         % save out results
-        save(fullfile(studyDir{study},encodeDir,'glm4',sprintf('encode_taskModel_%s.mat',partition)),'Ys','-v7.3');
+        save(fullfile(studyDir{study},encodeDir,'glm4',sprintf('encode_taskModel_cerebellum_%s.mat',partition)),'Ys','-v7.3');
     case 'PREDICTIONS:datasets' % get predictions across datasets
         stat=varargin{1}; % 'R' or 'R2' ?
         partition=varargin{2}; % cv across 'run' or 'session' ?
@@ -939,7 +928,7 @@ switch what
         clustering=varargin{2}; % 'distance' or 'region'
         
         mapType='SC12_cnvf_10';
-        algorithm='cnvf'; 
+        algorithm='cnvf';
         
         % colour
         colour={[1 0 0],[0 1 0],[0 0 1],[0.3 0.3 0.3],[1 0 1],[1 1 0],[0 1 1],...
@@ -998,13 +987,17 @@ switch what
         
         X1=X(condIndx,condIndx);
         figure()
-%         scatterplot3(X1(:,1),X1(:,2),X1(:,3),'split',condIndx','CAT',CAT,'label',condNames);
-%         set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
-           
-        scatterplot3(X1(:,1),X1(:,2),X1(:,3),'split',condIndx','CAT',CAT,...
-           'labelcolor',CAT.labelcolor,'label',condNames,'markersize',6,'labelsize',14);
-       set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
+        %         scatterplot3(X1(:,1),X1(:,2),X1(:,3),'split',condIndx','CAT',CAT,'label',condNames);
+        %         set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
         
+%         scatterplot3(X1(:,1),X1(:,2),X1(:,3),'split',condIndx','CAT',CAT,...
+%             'labelcolor',CAT.labelcolor,'label',condNames,'markersize',6,'labelsize',14);
+%         set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
+
+
+        scatterplot3(X1(:,1),X1(:,2),X1(:,3),'split',condIndx','CAT',CAT,'markersize',6);
+        set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
+         
         hold on;
         plot3(0,0,0,'+');
         % Draw connecting lines
@@ -1173,12 +1166,16 @@ switch what
         end
         opt.dmtx = 1;
         spm_imcalc(nam,'average_HCP.nii','mean(X)',opt);
-    case 'HCP:SNN'
-        K=varargin{1};
+    case 'HCP:mapOptimal'
+        algorithmString = {'snn','cnvf','ica'}; % Semi-nonengative matrix factorization
+        algorithm = 2;
+        K=10; % number of regions
+        G0 = [];          % Starting value for weights
         
-        numCount=5;         % How often the "same" solution needs to be found
         tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
-        maxIter=100; % if it's not finding a similar solution - force stop at 100 iters
+        maxStart=100;       % How many starts maximally?
+        numCount=5;         % For how many starting values do we need to find the same solution?
+        maxIter = 100;      % How many iterations per starting value
         
         % atlas dir
         HCPDir=fullfile(atlasDir,'HCP/');
@@ -1189,14 +1186,24 @@ switch what
         % get data
         [X_C]=sc1_sc2_functionalAtlas('HCP:get_data');
         
-        % Intialize iterations G
+        outDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_HCP_%s_%d',algorithmString{algorithm},K));
+        dircheck(outDir);
+        outName=fullfile(outDir,sprintf('%s.mat',algorithmString{algorithm}));
+        
+        % Intialize iterations[G
         bestErr = inf;
-        bestSol = ones(size(X_C,1),1);
+        bestSol = ones(size(X_C,2),1);
         iter=1; % How many iterations
         count=0;
-        while iter<maxIter,
-            [F,G,Info,winner]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get current error
+        while iter<=maxStart,
+            switch (algorithm)
+                case 1
+                    [F,G,Info]=semiNonNegMatFac(X_C,K,'threshold',0.01); % get a segmentation using
+                case 2 % convec
+                    [F,G,Info]=cnvSemiNonNegMatFac(X_C,K,'threshold',0.01,'maxIter',maxIter,'G0',G0); % get a segmentation using
+            end;
             errors(iter)=Info.error;    % record error
+            [~,winner]=max(G,[],2);     % determine the highest loading cluster for each voxel
             randInd(iter)=RandIndex(bestSol,winner); %
             
             % Check if we have a similar solution
@@ -1226,8 +1233,7 @@ switch what
             end;
             iter=iter+1;
         end;
-        dircheck(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_HCP_%dcluster',K)));
-        save(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_HCP_%dcluster',K),'SNN.mat'),'bestG','bestF','bestInfo','errors','randInd','iter','count','volIndx','V');
+        save(outName,'bestG','bestF','bestInfo','errors','randInd','iter','count','volIndx','V');
     case 'HCP:visualise'
         mapType=varargin{1}; % '<dataSet>_<algorithm>_<clusterNum>' example: 'SC12_cnvf_10'
         
@@ -1258,7 +1264,7 @@ switch what
         X.private.dat.fname=V.fname;
         spm_write_vol(X,Vv{1}.dat);
         
-        sc1_sc2_functionalAtlas('MAP:vol2surf',sprintf('HCP_%s',mapType),'no')
+%         sc1_sc2_functionalAtlas('MAP:vol2surf',sprintf('HCP_%s',mapType),'no')
     case 'HCP:taskSpace' % assign HCP tasks to HCP parcellation
         mapType=varargin{1}; % '<dataSet>_<algorithm>_<clusterNum>' example: 'SC12_cnvf_10'
         
@@ -1356,7 +1362,7 @@ switch what
             mapName=sprintf('map_%s.nii',mapType);
         else
             inputDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType));
-            mapName='map.nii';
+            mapName='probAtlas.nii';
         end
         cd(inputDir);
         
@@ -1422,7 +1428,7 @@ switch what
         end
     case 'MAP:make_paint' % Make a paint file from a set of parcellations
         type=varargin{1}; % 'SNNindivid','SNNgroup','CNVFgroup'
-
+        
         switch (type) % Most straightforward to define both the input maps (full path) and
             % outname depending on type
             case 'SNNindivid'       % Previous 'subjs'
@@ -1476,9 +1482,9 @@ switch what
         G0 = [];          % Starting value for weights
         
         tol_rand = 0.90;    % Tolerance on rand coefficient to call it the same solution
-        maxStart=100;       % How many starts maximally?         
-        numCount=5;         % For how many starting values do we need to find the same solution? 
-        maxIter = 100;      % How many iterations per starting value 
+        maxStart=100;       % How many starts maximally?
+        numCount=5;         % For how many starting values do we need to find the same solution?
+        maxIter = 100;      % How many iterations per starting value
         
         vararginoptions({varargin{3:end}},{'sess','numCount','tol_rand','maxIter','maxStart','algorithm','K','smooth'}); % options
         
@@ -1558,59 +1564,6 @@ switch what
             iter=iter+1;
         end;
         save(outName,'bestG','bestF','bestInfo','errors','randInd','iter','count','volIndx','V');
-    case 'MAP:prob' % probabilistic MDTB map
-        sn=varargin{1}; % [2] or 'group'
-        study=varargin{2}; % 1 or 2 or [1,2]
-        K=varargin{3}; % number of clusters
-        
-        vararginoptions({varargin{5:end}},{'sess'}); % option if doing individual map analysis
-        
-        % Set the String correctly
-        studyStr = sprintf('SC%d',study);
-        if length(study)>1
-            studyStr='SC12'; % both studies combined
-        end
-        
-        % figure out if individual or group
-        if strcmp(sn,'group'),
-            if exist('sess'),
-                outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_sess%d_%dcluster_prob',studyStr,sess,K),'map.nii');dircheck(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_sess%d_%dcluster_prob',studyStr,sess,K)));
-                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_sess%d_%dcluster',studyStr,sess,K),'SNN.mat'));
-            else
-                outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%dcluster_prob',studyStr,K),'map.nii');dircheck(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%dcluster_prob',studyStr,K)));
-                load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%dcluster',studyStr,K),'SNN.mat'));
-            end
-            % individual analysis
-        else
-            outName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_%s_%dcluster_prob.nii',studyStr,K));
-            load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('SNN_%s_%dcluster.mat',studyStr,K)));
-        end
-        
-        % with what prob can we assign each of these regions ?
-        total=sum(bestG,2);
-        winner=max(bestG,[],2);
-        
-        probAtlas=winner./total;
-        
-        % z-score the weights
-        %         weights_z=x-mean(x)/std(x);
-        
-        % map features on group
-        %V=spm_vol(which('Cerebellum-SUIT.nii'));
-        Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
-        Yy(1,volIndx)=probAtlas;
-        Yy=reshape(Yy,[V.dim(1),V.dim(2),V.dim(3)]);
-        Yy(Yy==0)=NaN;
-        Vv{1}.dat=Yy;
-        Vv{1}.dim=V.dim;
-        Vv{1}.mat=V.mat;
-        
-        % save out vol of prob
-        exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
-        X=spm_vol(exampleVol);
-        X.fname=outName;
-        X.private.dat.fname=V.fname;
-        spm_write_vol(X,Vv{1}.dat);
     case 'MAP:SNN:SSE'   % temporary function to compute SSE for SNN
         study=varargin{1}; % 1 or 2 or [1,2]
         mapType=varargin{2}; % '<algorithm>_<clusterNum>'
@@ -1693,7 +1646,7 @@ switch what
         
         algorithmString = {'snn','cnvf','ica'}; % Semi-nonengative matrix factorization
         algorithm = 2;
-        K=15; % number of regions
+        K=10; % number of regions
         
         % Set the String correctly
         if length(study)>1
@@ -1738,37 +1691,97 @@ switch what
         X.fname=outName;
         X.private.dat.fname=V.fname;
         spm_write_vol(X,Vv{1}.dat);
-    case 'MAP:compare'  % this function will compute randindex between maps (pairwise if more than 2 maps are provided)
-        maps=varargin{1}; % give cell with any number of maps {'Cole_10Networks','Buckner_7Networks'} etc
-        % example
-        % sc1_sc2_functionalAtlas('MAP:compare',{'Cole_10Networks','Buckner_7Networks,'SC1_10cluster'})
-        numMaps=length(maps);
+    case 'MAP:RAND_global'  % this function will compute randindex between maps (pairwise if more than 2 maps are provided)
+        compare={'groupEval_SC12_cnvf_7','groupEval_SC12_cnvf_10','groupEval_SC12_cnvf_17',...
+            'groupEval_Buckner_7Networks','groupEval_Cole_10Networks','groupEval_Buckner_17Networks',...
+            'groupEval_lob10'};
+        numMaps = length(compare);
+        load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));  % Just to get V and volIndex
+        clear T;
+        for i=1:numMaps
+            try
+                T=load(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'cnvf.mat'));
+                [~,c(:,i)]=max(T.bestG,[],2);
+            catch
+                Vi=spm_vol(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'map.nii'));
+                [i1,j1,k1]=ind2sub(V.dim,volIndx');
+                [x,y,z]=spmj_affine_transform(i1,j1,k1,V.mat);
+                [i2,j2,k2]=spmj_affine_transform(x,y,z,inv(Vi.mat));
+                c(:,i)=spm_sample_vol(Vi,i2,j2,k2,0);
+            end;
+        end;
+        for i=1:numMaps-1
+            for j=i+1:numMaps
+                AR(i,j)=RandIndex(c(:,i),c(:,j));
+                AR(j,i)=AR(i,j);
+            end;
+        end;
+        varargout={AR};
+        colormap(hot);
+        imagesc(AR,[0 0.8]);
+        colorbar;
+        set(gca,'XTickLabel',{'C7','C10','C17','R7','R10','R17'},'YTickLabel',{'C7','C10','C17','R7','R10','R17'});
+        %set(gcf,'PaperPosition',[2 2 4.7 3.8]);
+        % wysiwyg;
+        % axis equal
+    case 'MAP:RAND_local'
+               type = 'searchlight'; % 'voxelwise','searchlight', or 'searchlightvoxel'
+        compare={'groupEval_SC12_cnvf_7','groupEval_SC12_cnvf_10','groupEval_SC12_cnvf_17',...
+            'groupEval_Buckner_7Networks','groupEval_Cole_10Networks','groupEval_Buckner_17Networks'...
+            };
+        compare={'groupEval_Buckner_17Networks'};
+        split = [1 1 1 2 2 2];
+        radius = 10;
+        vararginoptions(varargin,{'radius','compare','type','split'});
+        numMaps = length(compare);
+        load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));  % Just to get V and volIndex
+        clear T;
         
-        % get data
-        [~,volIndx,V] = sc1_sc2_functionalAtlas('EVAL:get_data',2,1,'build'); % just to get volIndx + V
-        
-        % make sure all parcels are sampled into the same space
-        for m=1:numMaps,
-            mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',maps{m}),'map.nii');
-            [i,j,k]=ind2sub(V.dim,volIndx);
-            [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
-            VA=spm_vol(mapName);
-            [i1,j1,k1]=spmj_affine_transform(x,y,z,inv(VA.mat));
-            L(m,:)=spm_sample_vol(VA,i1,j1,k1,0);
-        end
-        
-        for i=1:numMaps,
-            for j=1:numMaps,
-                RI(i,j)=RandIndex(L(i,:),L(j,:));
-            end
-        end
-        
-        % print out values for all pairwise RI
-        %         idx=combnk(1:length(maps),2);
-        %         for i=1:length(idx),
-        %             fprintf('RI:%s with %s is %2.2f \n',char(maps(idx(i,1))),char(maps(idx(i,2))),RI(idx(i,1),idx(i,2)))
-        %         end
-        varargout={RI};
+        for i=1:numMaps
+            try
+                T=load(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'cnvf.mat'));
+                [~,c(:,i)]=max(T.bestG,[],2);
+            catch
+                Vi=spm_vol(fullfile(baseDir,'sc2','encoding','glm4',compare{i},'map.nii'));
+                [i1,j1,k1]=ind2sub(V.dim,volIndx');
+                [x,y,z]=spmj_affine_transform(i1,j1,k1,V.mat);
+                [i2,j2,k2]=spmj_affine_transform(x,y,z,inv(Vi.mat));
+                c(:,i)=spm_sample_vol(Vi,i2,j2,k2,0);
+            end;
+        end;
+        ar=[];
+        [x,y,z]=ind2sub(V.dim,volIndx);
+        [x,y,z]=spmj_affine_transform(x,y,z,T.V.mat);
+        xyz=[x;y;z];
+        D=surfing_eucldist(xyz,xyz);        % Eucledian distance
+        pair = [];
+        for i=1:numMaps-1
+            for j=i+1:numMaps
+                ar(:,end+1)=RandIndexLocal(type,c(:,i),c(:,j),D,radius);
+                if (~isempty(split))
+                    if (split(i)==split(j) && split(i)==1)
+                        pair(end+1)=1;
+                    elseif (split(i)==split(j) && split(i)==2)
+                        pair(end+1)=2;
+                    elseif (split(i)~=split(j))
+                        pair(end+1)=3;
+                    else
+                        pair(end+1)=0;
+                    end;
+                end;
+            end;
+        end;
+        numPlots = length(unique(pair));
+        for i=1:numPlots
+            subplot(1,numPlots,i);
+            sc1sc2_spatialAnalysis('visualise_map',mean(ar(:,pair==i),2),volIndx,V,'type','func');
+        end;
+        Output.type= type;
+        Output.compare= compare;
+        Output.split= split;
+        Output.ar= ar;
+        Output.pair= pair;
+        varargout = {Output};
     case 'MAP:PLOT:ICA' % evaluate POV (ICA) as a function of clusters
         mapDir=varargin{1}; % {'SC1','SC2','SC12'}
         mapType=varargin{2};
@@ -1864,6 +1877,59 @@ switch what
             
             fprintf('subj%d done \n',subjs(s));
         end
+    case 'MAP:probabilistic'
+        algorithmString = {'snn','cnvf','ica'}; % Semi-nonengative matrix factorization
+        algorithm=2;
+        K=10; % number of regions
+        studyStr='SC12'; 
+        
+        load(fullfile(studyDir{2},'encoding','glm4','cereb_avrgDataStruct.mat'));
+        
+%         % load in group map
+%         load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K),...
+%             sprintf('%s.mat',algorithmString{algorithm})));
+%         [x,feats_group]=max(bestG,[],2); 
+%         
+        for s=1:length(returnSubjs),
+            inDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{returnSubjs(s)});
+            inName=fullfile(inDir,sprintf('%s_%s_%d.mat',studyStr,algorithmString{algorithm},K));
+            outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K)); 
+            load(inName);
+            [x,feats]=max(bestG,[],2); 
+            feats_indiv(:,s)=feats; 
+        end
+
+        % figure out probability 
+        for p=1:size(feats_indiv,1)
+            assignment=mode(feats_indiv(p,:));
+            certainty=numel(find(feats_indiv(p,:)==assignment)); 
+            prob(p,:)=certainty/size(feats_indiv,2); 
+        end
+
+        % map to volume
+        Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
+        Yy(1,volIndx)=prob;
+        Yy=reshape(Yy,[V.dim(1),V.dim(2),V.dim(3)]);
+        Yy(Yy==0)=NaN;
+        Vv{1}.dat=Yy;
+        Vv{1}.dim=V.dim;
+        Vv{1}.mat=V.mat;
+        
+        % save out vol of prob
+        exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
+        X=spm_vol(exampleVol);
+        X.fname=sprintf('%s/probAtlas.nii',outName);
+        X.private.dat.fname=V.fname;
+        spm_write_vol(X,Vv{1}.dat);
+        
+        cd(outName)
+        % save out MNI version as well
+        suit_mni2suit('probAtlas.nii','def','suit2mni');
+        
+        % map to surface
+        M=caret_suit_map2surf(Vv,'space','SUIT');
+        M=caret_struct('metric','data',M.data);
+        caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','probAtlas.metric'),M);
         
     case 'CORTEX:makeModel'
         study=varargin{1};
@@ -2348,8 +2414,6 @@ switch what
         evalType=[2,1]; % evaluate on the other
         R=[];
         
-        % *** FIX INDIV ***
-        
         vararginoptions({varargin{4:end}},{'sn'}); % option if doing individual map analysis
         
         encodeGLM=fullfile(studyDir{2},'encoding','glm4');
@@ -2374,11 +2438,16 @@ switch what
                 end
             case 'indiv'
                 for i=1:2,
-                    if strfind(mapType,'SC1') | strfind(mapType,'SC2'),
-                        T=load(fullfile(encodeGLM,subj_name{sn},sprintf('SC%d_%s_spatialBoundfunc%d_%s.mat',studyType(i),mapType(str+1:end),evalType(i),condType)));
-                        outDir=fullfile(encodeGLM,subj_name{sn},sprintf('SC2_%s_spatialBoundfunc4_%s.mat',mapType(str+1:end),condType));
+                    if ~isempty(strfind(mapType,'cnvf')) || ~isempty(strfind(mapType,'snn')),
+                        if ~isempty(strfind(mapType,'SC12_cnvf'))
+                            T=load(fullfile(encodeGLM,subj_name{sn},sprintf('%s_spatialBoundfunc%d_%s.mat',mapType,evalType(i),mapType,i,condType)));
+                            outDir=fullfile(encodeGLM,subj_name{sn},sprintf('%s_spatialBoundfunc4_%s.mat',mapType,condType));
+                        else
+                            T=load(fullfile(encodeGLM,subj_name{sn},sprintf('SC%d_%s_spatialBoundfunc%d_%s.mat',evalType(i),mapType,i,condType)));
+                            outDir=fullfile(encodeGLM,subj_name{sn},sprintf('SC2_%s_spatialBoundfunc4_%s.mat',mapType,condType));
+                        end
                     else
-                        T=load(fullfile(encodeGLM,subj_name{sn},sprintf('%s_spatialBoundfunc%d_%s.mat',mapType,evalType(i),condType)));
+                        T=load(fullfile(encodeGLM,subj_name{sn},sprintf('%s_spatialBoundfunc%d_%s.mat',mapType,i,condType)));
                         outDir=fullfile(encodeGLM,subj_name{sn},sprintf('%s_spatialBoundfunc4_%s.mat',mapType,condType));
                     end
                     T.studyNum=repmat([i],length(T.SN),1);
@@ -2515,7 +2584,7 @@ switch what
     case 'EVAL:PLOT:SUBSETS_DIFF'
         mapType=varargin{1}; % 'SC2_cnvf_10' or 'SC2_snn_10'
         data=varargin{2}; % 1, 2, 4 . [1: eval on sc1; 2: eval on sc2; 4: eval on sc1+sc2]
-        subset=varargin{3}; % {'random','dissimilar'}
+        subset=varargin{3}; % {'random'}
         numTasks=varargin{4}; % 7 or 5
         crossval=varargin{5}; % 1
         
@@ -2526,9 +2595,6 @@ switch what
         for m=1:size(mapType,2)
             for s=1:length(subset)
                 T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d_subsets_%s%d.mat',data,subset{s},numTasks)));
-                if strcmp(subset{s},'dissimilar')
-                    T.numSets=repmat(21,length(T.numSets),1);
-                end
                 T.mapType=repmat(mapType(m),length(T.SN),1);
                 T.mapNum=repmat(m,length(T.SN),1);
                 T.subType=repmat(subset(s),length(T.SN),1);
@@ -2554,22 +2620,19 @@ switch what
         
         % load ordering of random subsets
         y=sc1_sc2_functionalAtlas('EVAL:get_subsets','evalRandom',numTasks);
-        reOrderIdx=[y(:,data);21];
-        numRep=length(TT.numSets)/length(reOrderIdx);
-        reOrder=repelem(reOrderIdx,numRep);
-        
-        for i=1:21,
-            % plot diff between maps for each subset
-            origOrder=repelem(repmat(i,21,1),numRep);
-            lineplot(origOrder,TT.diff,'subset',TT.dist<=35 & TT.numSets==reOrderIdx(i),'split',TT.mapNum,'style_thickline');
-            hold on
+        reOrderIdx=[y(:,data)];
+
+        % plot diff maps
+        indx=[];
+        toPlot=[];
+        for m=1:length(mapType),
+            A=getrow(TT,strcmp(TT.mapType,mapType{m}));
+            numRep=length(A.numSets)/length(reOrderIdx);
+            reOrder=repelem(reOrderIdx,numRep);
+            indx=[indx;reOrder];
+            toPlot=[toPlot;A.diff];
         end
-        %
-        %         figure(2)
-        %         myboxplot(TT.mapNum,TT.diff,'subset',TT.dist<=35,'style_tukey')
-        
-        figure(3)
-        lineplot(TT.numSets,TT.diff,'subset',TT.dist<=35,'split',TT.mapNum,'style_shade');
+        lineplot(indx, toPlot,'style_shade','split',TT.mapType,'leg','auto')
     case 'EVAL:STATS:CURVES'
         mapType=varargin{1}; % options <
         data=varargin{2}; % evaluating data from study [1] or [2], both [3] or average of [1] and [2] after eval [4]
@@ -2627,11 +2690,23 @@ switch what
         crossval=varargin{4}; % [0]-no crossval; [1]-crossval
         condType=varargin{5}; % evaluating on 'unique' or 'all' taskConds ??
         
-        vararginoptions({varargin{6:end}},{'CAT','sn'}); % option if plotting individual map analysis
+        vararginoptions({varargin{6:end}},{'CAT','sn','snToPred'}); % option if plotting individual map analysis.
+        % 'sn' option - which indiv subject map ? 'snToPred', which
+        % subjects do you want to predict ?
         
         switch type
             case 'group'
-                T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',data,condType)));
+                T=[];
+                if ~exist('snToPred'),
+                    sn=returnSubjs;
+                else
+                    sn=snToPred;
+                end
+                for s=1:length(sn)
+                    tmp=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),sprintf('spatialBoundfunc%d_%s.mat',data,condType)));
+                    S=getrow(tmp,tmp.SN==sn(s)); % which subjs to predict ?
+                    T=addstruct(T,S);
+                end
             case 'indiv'
                 T=[];
                 if ~exist('sn'),
@@ -2663,16 +2738,33 @@ switch what
         crossval=varargin{4}; % [0]-no crossval; [1]-crossval
         condType=varargin{5}; % evaluating on 'unique' or 'all' or 'subsets_movies3'
         
+        % if getting diff between indiv lob and group lob:
+        % sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',{'lob10','averageLob'},4,'group',1,'unique','snToPred',[26:31])
+        
         % example: sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',{'SC1_cnvf_10','Buckner_17Networks'},[2 2],'group',1,'subsets_movies3')
+        vararginoptions({varargin{6:end}},{'CAT','sn','snToPred'}); % option if plotting individual map analysis.
         
         % do stats
         P=[];
         for m=1:length(mapType),
             switch type,
                 case 'group'
-                    T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d_%s.mat',data(m),condType)));
+                    T=[];
+                    if ~exist('snToPred'),
+                        sn=returnSubjs;
+                    else
+                        sn=snToPred;
+                    end
+                    for s=1:length(sn)
+                        tmp=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d_%s.mat',data,condType)));
+                        S=getrow(tmp,tmp.SN==sn(s)); % which subjs to predict ?
+                        T=addstruct(T,S);
+                    end
                 case 'indiv'
                     T=[];
+                    if ~exist('sn'),
+                        sn=returnSubjs;
+                    end
                     for s=1:length(sn)
                         tmp=load(fullfile(studyDir{2},'encoding','glm4',subj_name{sn(s)},sprintf('%s_spatialBoundfunc%d_%s.mat',mapType{m},data(m),condType)));
                         S=getrow(tmp,tmp.SN==sn(s)); % only predicting the same subject !
@@ -2724,11 +2816,11 @@ switch what
             
         end
     case 'EVAL:PLOT_allMaps'
-        mapType={'SC12_cnvf_7','SC12_cnvf_8','SC12_cnvf_9','SC12_cnvf_10','SC12_cnvf_11','SC12_cnvf_12','SC12_cnvf_15','SC12_cnvf_17'}; 
+        mapType={'SC12_cnvf_7','SC12_cnvf_8','SC12_cnvf_9','SC12_cnvf_10','SC12_cnvf_11','SC12_cnvf_12','SC12_cnvf_15','SC12_cnvf_17'};
         data=4;
         crossval=1;
         condType='unique';
-
+        
         T=[];
         for m=1:length(mapType),
             RR=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType{m}),sprintf('spatialBoundfunc%d_%s.mat',data,condType)));
@@ -2800,16 +2892,52 @@ switch what
             save(fullfile(studyDir{2},'encoding','glm4',subj_name{subjs(s)},mapTypes{generalisation+1}),'-struct','S');
             fprintf('subj %s done \n',subj_name{subjs(s)});
         end
+    case 'reformat:average_indivLob'
+        
+        outName='averageLob';
+        mapType='lob10';
+        data=4;
+        condType='unique';
+        
+        sn=[26:31]; % indiv lobular parcellations were made for these subjs
+        %         for m=1:length(mapTypes),
+        %
+        %             T=load(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapTypes{m}),sprintf('spatialBoundfunc%d_%s.mat',4,'unique')));
+        %             T.map=repmat(m,length(T.SN),1);
+        %             S=addstruct(S,T);
+        %             clear T
+        %         end
+        T=[];
+        for s=1:length(sn)
+            tmp=load(fullfile(studyDir{2},'encoding','glm4',subj_name{sn(s)},sprintf('%s_spatialBoundfunc%d_%s.mat',mapType,data,condType)));
+            S=getrow(tmp,tmp.SN==sn(s)); % only predicting the same subject !
+            T=addstruct(T,S);
+        end
+        
+        % get average struct
+        R=tapply(T,{'bin','SN','bwParcel','dist','crossval'},{'corr'});
+        
+        dircheck(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',outName)));
+        save(fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',outName),sprintf('spatialBoundfunc%d_%s.mat',4,'unique')),'-struct','R');
         
     case 'STRENGTH:get_bound'
         % This goes from a group parcellation map and generates a
         % structure of clusters and boundaries from the volume
-        mapType = varargin{1};
+        mapType = varargin{1}; % SC12_cnvf_10
+        sn=varargin{2}; % [2] or 'group'
         
         bDir    = fullfile(studyDir{2},'encoding','glm4');
-        EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
         load(fullfile(bDir,'cereb_avrgDataStruct.mat'));
-        mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
+        
+        % figure out if individual or group
+        if strcmp(sn,'group'),
+            mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map.nii');
+            EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),'boundaries.mat');
+            % individual analysis
+        else
+            mapName=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('map_%s.nii',mapType));
+            EvalDir = fullfile(studyDir{2},'encoding','glm4',subj_name{sn},sprintf('boundaries_%s.mat',mapType));
+        end
         
         % Get the parcellation data
         [i,j,k]=ind2sub(V.dim,volIndx);
@@ -2856,28 +2984,45 @@ switch what
         % Visualise using graph toolbox
         G = graph(Edge(:,1),Edge(:,2));
         plot(G)
-        save(fullfile(EvalDir,'boundaries.mat'),'V','volIndx','Parcel','Cluster','coords','Edge');
+        save(EvalDir,'V','volIndx','Parcel','Cluster','coords','Edge');
     case 'STRENGTH:fullEval'
         mapType = varargin{1};
-        EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
+        sn      = varargin{2};
         
-        T1=sc1_sc2_functionalAtlas('STRENGTH:eval_bound',mapType,1,'unique');
-        T2=sc1_sc2_functionalAtlas('STRENGTH:eval_bound',mapType,2,'unique');
+        % figure out if individual or group
+        if strcmp(sn,'group'),
+            EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType),'BoundariesFun3_all.mat');
+            % individual analysis
+        else
+            EvalDir = fullfile(studyDir{2},'encoding','glm4',subj_name{sn},sprintf('BoundariesFun3_all_%s.mat',mapType));
+        end
+        
+        T1=sc1_sc2_functionalAtlas('STRENGTH:eval_bound',mapType,1,'unique',sn);
+        T2=sc1_sc2_functionalAtlas('STRENGTH:eval_bound',mapType,2,'unique',sn);
         T1.study = ones(length(T1.SN),1)*1;
         T2.study = ones(length(T1.SN),1)*2;
         T=addstruct(T1,T2);
-        save(fullfile(EvalDir,'BoundariesFunc3_all.mat'),'-struct','T');
+        save(EvalDir,'-struct','T');
         varargout={T};
     case 'STRENGTH:eval_bound'
         mapType = varargin{1}; % 'SC12_10cluster','Buckner_7Networks'
         study   = varargin{2}; % evaluating data from study [1] or [2] ?
         condType = varargin{3}; % 'unique' or 'all'
+        sn=varargin{4};
         
         spatialBins = [0:3:35];
         
         bDir    = fullfile(studyDir{2},'encoding','glm4');
-        EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
-        load(fullfile(EvalDir,'boundaries.mat'));
+        
+        % figure out if individual or group
+        if strcmp(sn,'group'),
+            EvalDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'boundaries.mat');
+            % individual analysis
+        else
+            EvalDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('boundaries_%s.mat',mapType));
+        end
+        
+        load(EvalDir);
         numBins = length(spatialBins)-1;
         
         % Get the condition numbers
@@ -2939,11 +3084,20 @@ switch what
         opacacy = 0.5;
         bscale = 180;
         bmax=20;
-        vararginoptions(varargin(2:end),{'bcolor','opacacy','bscale','bmax'});
+        vararginoptions(varargin(2:end),{'bcolor','opacacy','bscale','bmax','sn'});
         
-        EvalDir = fullfile(studyDir{2},'encoding','glm4',sprintf('groupEval_%s',mapType));
-        SurfDir = fullfile(studyDir{1},'surfaceCaret','suit_flat');
-        load(fullfile(EvalDir,'boundaries.mat'));
+        % group or individual
+        if exist('sn')==0,
+            EvalDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'boundaries.mat');
+            T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'BoundariesFunc3_all.mat')); % Evaluate the strength of each border
+            colourDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType));
+            % individual analysis
+        else
+            EvalDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('boundaries_%s.mat',mapType));
+            T=load(fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn},sprintf('BoundariesFun3_all_%s.mat',mapType))); % Evaluate the strength of each border
+            colourDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{sn});
+        end
+        load(EvalDir)
         
         % Map the clusters
         V.dat=zeros([V.dim(1) V.dim(2) V.dim(3)]);
@@ -2979,9 +3133,7 @@ switch what
                     COORD.vertices(Tedges(indxEdge(e),2),:))/2; % Average of coordinates
             end;
         end;
-        
-        % Evaluate the strength of each border
-        T=load(fullfile(EvalDir,'BoundariesFunc3_all.mat'));
+
         for  i=1:size(Edge,1)
             % Make sure that the bin is calcualted both for within and
             % between
@@ -2991,8 +3143,8 @@ switch what
         end;
         
         % check if a color map is provided
-        if exist(fullfile(EvalDir,'colourMap.txt'),'file'),
-            cmap=load(fullfile(EvalDir,'colourMap.txt'));
+        if exist(fullfile(colourDir,'colourMap.txt'),'file'),
+            cmap=load(fullfile(colourDir,'colourMap.txt'));
             cmap=cmap(:,2:4);
             cmapF=cmap/255;
         else
@@ -3027,7 +3179,7 @@ switch what
         
         D=dload(fullfile(baseDir,'featureTable_functionalAtlas.txt'));
         
-%         D=dload(fullfile(baseDir,'featureTable_jd_updated.txt')); % Read feature table - updated with new features "naturalistic bio motion" and "naturalistic scenes"
+        %         D=dload(fullfile(baseDir,'featureTable_jd_updated.txt')); % Read feature table - updated with new features "naturalistic bio motion" and "naturalistic scenes"
         S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt')); % List of task conditions
         
         load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'cnvf.mat'));
@@ -3043,7 +3195,7 @@ switch what
         
         % remove superfluous
         D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades','Imagination','LongtermMemory','SceneRecog'});
-%         D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades'});
+        %         D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades'});
         
         f=fieldnames(D);
         FeatureNames = f(5:end);
@@ -3068,8 +3220,8 @@ switch what
         b = zeros(numFeat,1);
         
         for p=1:numClusters,
-%             u(:,p) = cplexqp(XX+lambda(2)*eye(numFeat),ones(numFeat,1)*lambda(1)-XY(:,p),A,b);
-             u(:,p) = lsqnonneg(X,double(Y(:,p)));
+            %             u(:,p) = cplexqp(XX+lambda(2)*eye(numFeat),ones(numFeat,1)*lambda(1)-XY(:,p),A,b);
+            u(:,p) = lsqnonneg(X,double(Y(:,p)));
         end;
         
         % Get corr between feature weights
@@ -3559,12 +3711,12 @@ switch what
         % do stats
         %         sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',toPlot,evalNums,'group',1,'unique'); % always take crossval + unique
     case 'AXES:subsets_diff'
-        mapType=varargin{1};
+        mapType=varargin{1}; % {SC2_cnvf_10} for ex.
         data=varargin{2}; % 1, 2, 4 [1: eval on sc1; 2: eval on sc2; 4: eval on sc1+sc2]
         numTasks=varargin{3}; % [7] how many tasks are we taking ?
         
         crossval=1;
-        subsets={'random','dissimilar'};
+        subsets={'random'};
         
         % aesthetics
         CAT.errorwidth=.5;
@@ -3581,16 +3733,14 @@ switch what
         sc1_sc2_functionalAtlas('EVAL:PLOT:SUBSETS_DIFF',mapType,data,subsets,numTasks,crossval,'CAT',CAT); % always take crossval + unique
         
         % Labelling
-        set(gca,'YLim',[0.05 0.15],'FontSize',12,'XLim',[1 21],'xtick',[1 21],'XTickLabel',{'Most Similar','Least Similar'});
+        set(gca,'YLim',[0.05 0.13],'FontSize',12,'XLim',[0 21],'xtick',[0 21],'XTickLabel',{'Most Similar','Least Similar'});
         xlabel(sprintf('Random Task Subsets (%d)',numTasks));
         ylabel('DCBC');
         %         set(gcf,'units','centimeters','position',[5,5,9,12])
     case 'AXES:indiv_diff' % make summary graph for diff curves for indiv maps (mostly used for lobular)
-        toPlot=varargin{1};% {'SC2_10cluster','SC2_10cluster'}
+        toPlot=varargin{1};% 'lob10'
         evalNum=varargin{2}; % 4
         sn=varargin{3}; % [8, 15] subject number(s)
-        
-        evalNums=repmat([evalNum],length(toPlot),1);
         
         % aesthetics
         CAT.errorwidth=.5;
@@ -3602,21 +3752,21 @@ switch what
         linecolor={'g','b','r','y','m','c'};
         
         % individual
-        for m=1:length(toPlot),
-            CAT.errorcolor=errorcolor{m};
-            CAT.linecolor=linecolor{m};
-            sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot{m},evalNums(m),'indiv',1,'unique','CAT',CAT,'sn',sn(m)); % always take crossval + unique
+        for s=1:length(sn),
+            CAT.errorcolor=errorcolor{s};
+            CAT.linecolor=linecolor{s};
+            sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',toPlot,evalNum,'indiv',1,'unique','CAT',CAT,'sn',sn(s)); % always take crossval + unique
             hold on
         end
         
         % group
         CAT.errorcolor='k';
         CAT.linecolor='k';
-        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF','lob10',4,'group',1,'unique','CAT',CAT); % always take crossval + unique
+        sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF','lob10',4,'group',1,'unique','CAT',CAT,'snToPred',sn); % always take crossval + unique
         hold off
         
         % Labelling
-        set(gca,'YLim',[-.07 0.15],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
+        set(gca,'YLim',[-.07 0.12],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
         xlabel('Spatial Distances (mm)');
         ylabel('Difference');
         set(gcf,'units','centimeters','position',[5,5,9,12])
@@ -3625,16 +3775,16 @@ switch what
         % do stats
         %         sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',toPlot,evalNums,'group',1,'unique'); % always take crossval + unique
     case 'AXES:MT_group_indiv' % group versus indiv for multi-task map
-        mapsGroup={'SC12_10cluster','SC2_10cluster'};
-        mapsIndiv={'SC12_10cluster_group','SC2_10cluster_group','SC12_10cluster','SC2_10cluster'};
+        mapsGroup={'SC2_cnvf_10'};
+        mapsIndiv={'SC2_cnvf_10'};
         
         % Aesthetics
         CAT.markertype='none';
         CAT.errorwidth=.5;
         CAT.linecolor={'r'};
         CAT.errorcolor={'r'};
-        linewidth={2, .5, 2, .5};
-        linestyle={'-','--','-','--'};
+        linewidth={2, .5};
+        linestyle={'-'};
         
         % group
         for m=1:length(mapsGroup),
@@ -3643,9 +3793,11 @@ switch what
             sc1_sc2_functionalAtlas('EVAL:PLOT:DIFF',mapsGroup{m},4,'group',1,'unique','CAT',CAT); % always take crossval + unique
             hold on
         end
+        
         % individual
-        errorcolor={'k','k','g','g'};
-        linecolor={'k','k','g','g'};
+        errorcolor={'k'};
+        linecolor={'k'};
+        linestyle={'-'};
         for m=1:length(mapsIndiv),
             CAT.linewidth=linewidth{m};
             CAT.linestyle=linestyle{m};
@@ -3655,7 +3807,7 @@ switch what
         end
         hold off
         % Labelling
-        set(gca,'YLim',[0 0.28],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
+        set(gca,'YLim',[0 0.22],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
         xlabel('Spatial Distances (mm)');
         ylabel('Difference')
         set(gcf,'units','centimeters','position',[5,5,9,13])
@@ -3725,7 +3877,7 @@ switch what
         set(gca,'XTickLabel',xlabels,'FontSize',12);
         set(gcf,'units','centimeters','position',[5,5,9,13])
         %         title('Within and Between-subject correlation');
-
+        
     case 'FIGURE2' % Representational Structure
         sc1_sc2_functionalAtlas('AXES:MDS','all')
     case 'FIGURE3a' % Lobular versus Functional
@@ -3793,7 +3945,6 @@ switch what
         % we want to plot 'dissimilar', 'random', and 'movie' into one
         % figure
         
-        
     case 'SUPP1'   % Get behavioural results
     case 'SUPP2'   % RDM
         sc1_sc2_functionalAtlas('AXES:RDM','all')
@@ -3812,7 +3963,7 @@ switch what
         norm=varargin{2}; % 'MNI' or 'SUIT'
         
         map='contrasts';
-        
+
         F=dload(fullfile(baseDir,'website_taskNames.txt'));
         
         lambda=.01;
@@ -3852,7 +4003,7 @@ switch what
         B=bsxfun(@minus,B,baseline);
         
         % z score the activity patterns
-        B=zscore(B);
+%         B=zscore(B);
         
         % make volume
         Yy(:,:,volIndx)=B;
@@ -3865,7 +4016,7 @@ switch what
         
         switch sn,
             case 'group'
-                outDir=fullfile(baseDir,'website_maps',sprintf('%s_%s_%s',norm,sn,map));
+                outDir=fullfile(baseDir,'website_maps',sprintf('%s_%s_%s',norm,sn,map));dircheck(outDir);
                 indices=nanmean(Yy,1);
                 indices=reshape(indices,[size(indices,2) size(indices,3)]);
                 
