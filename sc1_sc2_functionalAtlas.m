@@ -134,7 +134,6 @@ switch what
         
     case 'ACTIVITY:make_model' % make X matrix (feature models)
         study=varargin{1}; % 1, 2, or [1,2]
-        type=varargin{2};  % 'yes' or 'no' to modelling each run separately ?
         
         F=dload(fullfile(baseDir,'motorFeats.txt')); % load in motor features
         
@@ -146,75 +145,6 @@ switch what
         end
         numConds=length(Fs.studyNum);
         
-        % make feature model
-        x=[eye(numConds) Fs.lHand./Fs.duration Fs.rHand./Fs.duration Fs.saccades./Fs.duration];
-        featNames=Fs.condNames;
-        featNames{numConds+1}='lHand';
-        featNames{numConds+2}='rHand';
-        featNames{numConds+3}='saccades';
-        
-        switch type,
-            case 'yes'
-                % make cond x run x features
-                for f=1:size(x,2),
-                    X.x(:,f)=repmat(x(:,f),numel(run),1);
-                    X.idx=repmat(Fs.condNum,numel(run),1);
-                end
-            case 'no'
-                % do nothing
-                X.x=x;
-                X.idx=[1:size(x,1)]';
-        end
-        
-        % normalise features
-        X.x   = bsxfun(@minus,X.x,mean(X.x));
-        X.x   = bsxfun(@rdivide,X.x,sqrt(sum(X.x.^2)));  % Normalize to unit length vectors
-        
-        % add rest
-        if strcmp(type,'yes')
-            % add rest to the end (better way of doing this !)
-            rest=X.x(X.idx==numConds,:);
-            X.x(X.idx==numConds,:)=[];
-            X=[X.x; rest];
-        else
-            X=X.x;
-        end
-        
-        varargout={X,featNames,numConds,F};
-    case 'ACTIVITY:patterns'   % estimate each of the task conditions (motor features are subtracted)
-        sn=varargin{1}; % 'group' or <subjNum>
-        study=varargin{2};
-        taskType=varargin{3}; % 'allConds', 'averageConds'
-        
-        lambda=.01;
-        
-        % group or individual ?
-        if ~strcmp(sn,'group'),
-            % load in map
-            if length(study)>1,
-                outDir=fullfile(studyDir{2},caretDir,sprintf('x%s',subj_name{sn}),'cerebellum'); dircheck(outDir)
-            else
-                outDir=fullfile(studyDir{study},caretDir,sprintf('x%s',subj_name{sn}),'cerebellum');dircheck(outDir);
-            end
-            subjs=sn;
-        else
-            if length(study)<1,
-                outDir=fullfile(studyDir{study},caretDir,'suit_flat','glm4');
-            else
-                outDir=fullfile(studyDir{2},caretDir,'suit_flat','glm4');
-            end
-            subjs=returnSubjs;
-        end
-        
-        % load in task structure file
-        F=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
-        
-        % load in activity patterns
-        [data,volIndx,V]=sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,study,'eval');
-        
-        % get feature model
-        [X,featNames,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:make_model',study,'no'); % load in model
-        
         % rest
         if length(study)>1,
             rest=[29,61];
@@ -222,17 +152,38 @@ switch what
             rest=numConds;
         end
         
-        % set up volume info
-        numFeat=size(X,2)-numConds;
-        Yy=zeros(numConds+numFeat,length(subjs),V.dim(1)*V.dim(2)*V.dim(3));
-        C{1}.dim=V.dim;
-        C{1}.mat=V.mat;
+        % make feature model
+        x=[eye(numConds) Fs.lHand./Fs.duration Fs.rHand./Fs.duration Fs.saccades./Fs.duration];
+        featNames=Fs.condNames;
+        featNames{numConds+1}='lHand';
+        featNames{numConds+2}='rHand';
+        featNames{numConds+3}='saccades';
         
-        % we're not regressing out motor features against rest
-        X(rest,numConds+1:numConds+3)=X(rest,numConds+1:numConds+3)*-1;
+        X.x=x;
+        X.idx=[1:size(x,1)]';
+        
+        % normalise features
+        X.x   = bsxfun(@minus,X.x,nanmean(X.x));
+        X.x   = bsxfun(@rdivide,X.x,sqrt(nansum(X.x.^2)));  % Normalize to unit length vectors
+        X=X.x;
+        
+        X(rest,62:64)=1;
+        
+        varargout={X,featNames,numConds,F};
+    case 'ACTIVITY:patterns'
+        study=[1,2];
+        lambda=0.1;
+        
+        % load in activity patterns
+        [data,volIndx,V]=sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,study,'eval');
+        
+        % get feature model
+        [X,featNames,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:make_model',study,'no'); % load in model
+        
+        numFeat=size(X,2)-numConds;
         
         % regress out motor features
-        for s=1:length(subjs),
+        for s=1:length(returnSubjs),
             B(:,s,:)=(X'*X+eye(numConds+numFeat)*lambda)\(X'*data(:,:,s)); % was subjs(s) for some reason ?
             fprintf('ridge regress done for subj%d done \n',returnSubjs(s))
         end;
@@ -241,36 +192,47 @@ switch what
         % subtract baseline
         baseline=nanmean(B,1);
         B=bsxfun(@minus,B,baseline);
-      
-        % z score the activity patterns
-        B=zscore(B);
+        
+        varargout={B,featNames,numConds,volIndx,V};
+    case 'ACTIVITY:writeOut_GROUP'
+        writeOut=varargin{1}; % 'paper' (average taskConds - SUIT space - metric file)
+        % or 'website' (all taskConds - MNI and SUIT space - nifti file)
+        
+        websiteDir_SUIT=fullfile(baseDir,'website_maps','SUIT_group_contrasts');dircheck(websiteDir_SUIT) % where website contrasts are being saved for SUIT
+        websiteDir_MNI=fullfile(baseDir,'website_maps','MNI_group_contrasts');dircheck(websiteDir_MNI) % where website contrasts are being saved for MNI
+        suitDir=fullfile(studyDir{2},caretDir,'suit_flat','glm4'); % where figure contrasts are being saved
+        
+        % get activity patterns
+        [B,featNames,numConds,volIndx,V]=sc1_sc2_functionalAtlas('ACTIVITY:patterns');
+        
+        % set up volume info
+        Yy=zeros(length(featNames),length(returnSubjs),V.dim(1)*V.dim(2)*V.dim(3));
+        C{1}.dim=V.dim;
+        C{1}.mat=V.mat;
         
         % make volume
         Yy(:,:,volIndx)=B;
         Yy=permute(Yy,[2 1 3]);
         
-        % group or individual ?
-        if strcmp(sn,'group'),
-            indices=nanmean(Yy,1);
-        else
-            indices=Yy;
-        end
+        indices=nanmean(Yy,1);
         indices=reshape(indices,[size(indices,2),size(indices,3)]);
         
-        % map vol2surf
+        % vol data
         indices=reshape(indices,[size(indices,1) V.dim(1),V.dim(2),V.dim(3)]);
         for i=1:size(indices,1),
             data=reshape(indices(i,:,:,:),[C{1}.dim]);
             C{i}.dat=data;
         end
         
-        % map vol 2 surf
-        S=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',featNames);  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
-        
-        switch taskType,
-            case 'allConds'
-                condName='unCorr_allTaskConds';
-            case 'averageConds'
+        switch writeOut,
+            case 'paper'
+                % load in task structure file for paper
+                F=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+                
+                % map vol 2 surf
+                S=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',featNames);  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
+                
+                % average shared tasks
                 condNumUni=[F.condNumUni;62;63;64];
                 X1=indicatorMatrix('identity_p',condNumUni);
                 uniqueTasks=S.data*X1; % try pinv here ?
@@ -283,18 +245,117 @@ switch what
                 S.column_name=condNames';
                 S.num_cols=size(S.column_name,2);
                 S.column_color_mapping=S.column_color_mapping(1:S.num_cols,:);
-                condName='unCorr_avrgTaskConds'; % average of certain tasks
+                outName='unCorr_avrgTaskConds'; % average of certain tasks
+                
+                % save out metric files for paper
+                caret_save(fullfile(suitDir,sprintf('%s.metric',outName)),S);
+            case 'website'
+                % load in task structure file for website
+                F=dload(fullfile(baseDir,'website_taskNames.txt'));
+                
+                exampleVol=fullfile(studyDir{2},'suit','glm4','s02','wdbeta_0001.nii');% must be better way of doing this
+                X=spm_vol(exampleVol);
+                
+                % loop over task conditions
+                for c=1:length(C),
+                    X.fname=fullfile(websiteDir_SUIT,sprintf('%s.nii',F.condNames{c}));
+                    X.private.dat.fname=fullfile(websiteDir_SUIT,sprintf('%s.nii',F.condNames{c}));
+                    % normalise to SUIT and MNI
+                    spm_write_vol(X,C{c}.dat);
+                    cd(websiteDir_SUIT)
+                    % normalise to MNI
+                    suit_mni2suit(sprintf('%s.nii',F.condNames{c}),'def','suit2mni');
+                    fprintf('save out vol in MNI %s \n',F.condNames{c})
+                    movefile(sprintf('Ws2m_%s.nii',F.condNames{c}),fullfile(websiteDir_MNI,sprintf('%s.nii',F.condNames{c})))
+                    delete(fullfile(websiteDir_SUIT,sprintf('Ws2m_%s.nii',F.condNames{c})));
+                end
+                
+        end
+    case 'ACTIVITY:writeOut_INDIV'
+        writeOut=varargin{1}; % 'paper' (average taskConds - SUIT space - metric file)
+        % or 'website' (all taskConds - MNI and SUIT space - nifti file)
+        
+        % get activity patterns
+        [B,featNames,numConds,volIndx,V]=sc1_sc2_functionalAtlas('ACTIVITY:patterns');
+        
+        
+        for s=1:length(returnSubjs),
+            
+            websiteDir_SUIT=fullfile(baseDir,'website_maps','SUIT_individual_contrasts',subj_name{returnSubjs(s)});dircheck(websiteDir_SUIT) % where website contrasts are being saved for SUIT
+            websiteDir_MNI=fullfile(baseDir,'website_maps','MNI_individual_contrasts',subj_name{returnSubjs(s)});dircheck(websiteDir_MNI) % where website contrasts are being saved for MNI
+            suitDir=fullfile(studyDir{2},caretDir,sprintf('x%s',subj_name{returnSubjs(s)}),'cerebellum');dircheck(suitDir) % where figure contrasts are being saved
+            
+            if exist(fullfile(studyDir{2},caretDir,sprintf('x%s',subj_name{returnSubjs(s)}),'cerebellum',sprintf('%s_unCorr_avrgTaskConds.metric',subj_name{returnSubjs(s)})));
+                delete(fullfile(studyDir{2},caretDir,sprintf('x%s',subj_name{returnSubjs(s)}),'cerebellum',sprintf('%s_unCorr_avrgTaskConds.metric',subj_name{returnSubjs(s)}))); % average of certain task
+            end
+            
+            % set up volume info
+            Yy=zeros(length(featNames),1,V.dim(1)*V.dim(2)*V.dim(3));
+            C{1}.dim=V.dim;
+            C{1}.mat=V.mat;
+            
+            % make volume
+            Yy(:,:,volIndx)=B(:,s,:);
+            Yy=permute(Yy,[2 1 3]);
+            
+            indices=reshape(Yy,[size(Yy,2),size(Yy,3)]);
+            
+            % vol data
+            indices=reshape(indices,[size(indices,1) V.dim(1),V.dim(2),V.dim(3)]);
+            for i=1:size(indices,1),
+                data=reshape(indices(i,:,:,:),[C{1}.dim]);
+                C{i}.dat=data;
+            end
+            
+            switch writeOut,
+                case 'paper'
+                    % load in task structure file for paper
+                    F=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+                    
+                    % map vol 2 surf
+                    S=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',featNames);  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
+                    
+                    % average shared tasks
+                    condNumUni=[F.condNumUni;62;63;64];
+                    X1=indicatorMatrix('identity_p',condNumUni);
+                    uniqueTasks=S.data*X1; % try pinv here ?
+                    % get new condNames (unique only)
+                    condNames=[F.condNames(F.StudyNum==1);F.condNames(F.StudyNum==2 & F.overlap==0)];
+                    condNames{length(condNames)+1}='lHand';
+                    condNames{length(condNames)+1}='rHand';
+                    condNames{length(condNames)+1}='saccades';
+                    S.data=uniqueTasks;
+                    S.column_name=condNames';
+                    S.num_cols=size(S.column_name,2);
+                    S.column_color_mapping=S.column_color_mapping(1:S.num_cols,:);
+                    outName='unCorr_avrgTaskConds'; % average of certain tasks
+                    
+                    % save out metric files for paper
+                    caret_save(fullfile(suitDir,sprintf('%s.metric',outName)),S);
+                case 'website'
+                    % load in task structure file for website
+                    F=dload(fullfile(baseDir,'website_taskNames.txt'));
+                    
+                    exampleVol=fullfile(studyDir{2},'suit','glm4','s02','wdbeta_0001.nii');% must be better way of doing this
+                    X=spm_vol(exampleVol);
+                    
+                    % loop over task conditions
+                    for c=1:length(C),
+                        X.fname=fullfile(websiteDir_SUIT,sprintf('%s.nii',F.condNames{c}));
+                        X.private.dat.fname=fullfile(websiteDir_SUIT,sprintf('%s.nii',F.condNames{c}));
+                        % normalise to SUIT and MNI
+                        spm_write_vol(X,C{c}.dat);
+                        cd(websiteDir_SUIT)
+                        % normalise to MNI
+                        suit_mni2suit(sprintf('%s.nii',F.condNames{c}),'def','suit2mni');
+                        fprintf('save out vol in MNI %s \n',F.condNames{c})
+                        movefile(sprintf('Ws2m_%s.nii',F.condNames{c}),fullfile(websiteDir_MNI,sprintf('%s.nii',F.condNames{c})))
+                        delete(fullfile(websiteDir_SUIT,sprintf('Ws2m_%s.nii',F.condNames{c})));
+                    end
+            end
+            clear Yy C
         end
         
-        % save out metric
-        if strcmp(sn,'group'),
-            outName=condName;
-        else
-            outName=sprintf('%s_%s',subj_name{sn},condName);
-        end
-        caret_save(fullfile(outDir,sprintf('%s.metric',outName)),S);
-        
-        %         varargout={B,featNames,V,volIndx};
     case 'ACTIVITY:reliability_shared'
         glm=varargin{1};
         type=varargin{2}; % 'cerebellum' or 'cortex' 'basalGanglia'
@@ -990,14 +1051,14 @@ switch what
         %         scatterplot3(X1(:,1),X1(:,2),X1(:,3),'split',condIndx','CAT',CAT,'label',condNames);
         %         set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
         
-%         scatterplot3(X1(:,1),X1(:,2),X1(:,3),'split',condIndx','CAT',CAT,...
-%             'labelcolor',CAT.labelcolor,'label',condNames,'markersize',6,'labelsize',14);
-%         set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
-
-
+        %         scatterplot3(X1(:,1),X1(:,2),X1(:,3),'split',condIndx','CAT',CAT,...
+        %             'labelcolor',CAT.labelcolor,'label',condNames,'markersize',6,'labelsize',14);
+        %         set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
+        
+        
         scatterplot3(X1(:,1),X1(:,2),X1(:,3),'split',condIndx','CAT',CAT,'markersize',6);
         set(gca,'XTickLabel',[],'YTickLabel',[],'ZTickLabel',[],'Box','on');
-         
+        
         hold on;
         plot3(0,0,0,'+');
         % Draw connecting lines
@@ -1264,7 +1325,7 @@ switch what
         X.private.dat.fname=V.fname;
         spm_write_vol(X,Vv{1}.dat);
         
-%         sc1_sc2_functionalAtlas('MAP:vol2surf',sprintf('HCP_%s',mapType),'no')
+        %         sc1_sc2_functionalAtlas('MAP:vol2surf',sprintf('HCP_%s',mapType),'no')
     case 'HCP:taskSpace' % assign HCP tasks to HCP parcellation
         mapType=varargin{1}; % '<dataSet>_<algorithm>_<clusterNum>' example: 'SC12_cnvf_10'
         
@@ -1725,7 +1786,7 @@ switch what
         % wysiwyg;
         % axis equal
     case 'MAP:RAND_local'
-               type = 'searchlight'; % 'voxelwise','searchlight', or 'searchlightvoxel'
+        type = 'searchlight'; % 'voxelwise','searchlight', or 'searchlightvoxel'
         compare={'groupEval_SC12_cnvf_7','groupEval_SC12_cnvf_10','groupEval_SC12_cnvf_17',...
             'groupEval_Buckner_7Networks','groupEval_Cole_10Networks','groupEval_Buckner_17Networks'...
             };
@@ -1881,55 +1942,74 @@ switch what
         algorithmString = {'snn','cnvf','ica'}; % Semi-nonengative matrix factorization
         algorithm=2;
         K=10; % number of regions
-        studyStr='SC12'; 
+        studyStr='SC12';
         
         load(fullfile(studyDir{2},'encoding','glm4','cereb_avrgDataStruct.mat'));
         
-%         % load in group map
-%         load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K),...
-%             sprintf('%s.mat',algorithmString{algorithm})));
-%         [x,feats_group]=max(bestG,[],2); 
-%         
+        %         % load in group map
+        %         load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K),...
+        %             sprintf('%s.mat',algorithmString{algorithm})));
+        %         [x,feats_group]=max(bestG,[],2);
+        %
         for s=1:length(returnSubjs),
             inDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{returnSubjs(s)});
             inName=fullfile(inDir,sprintf('%s_%s_%d.mat',studyStr,algorithmString{algorithm},K));
-            outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K)); 
+            outName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K));
             load(inName);
-            [x,feats]=max(bestG,[],2); 
-            feats_indiv(:,s)=feats; 
+            [x,feats]=max(bestG,[],2);
+            feats_indiv(:,s)=feats;
         end
-
-        % figure out probability 
-        for p=1:size(feats_indiv,1)
-            assignment=mode(feats_indiv(p,:));
-            certainty=numel(find(feats_indiv(p,:)==assignment)); 
-            prob(p,:)=certainty/size(feats_indiv,2); 
+        
+        % figure out probability
+        assignment=mode(feats_indiv,2);
+        
+        % figure out probability for each subject
+        for s=1:length(returnSubjs),
+            for p=1:size(feats_indiv,1),
+                certainty=numel(find(feats_indiv(p,:)==assignment(p)));
+                prob(p,s)=certainty/size(feats_indiv,2);
+            end
         end
-
+        %
+        %         for p=1:size(feats_indiv,1)
+        %             assignment(p)=mode(feats_indiv(p,:));
+        %             certainty=numel(find(feats_indiv(p,:)==assignment(p)));
+        %             prob(p,:)=certainty/size(feats_indiv,2);
+        %         end
+        
         % map to volume
-        Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
-        Yy(1,volIndx)=prob;
-        Yy=reshape(Yy,[V.dim(1),V.dim(2),V.dim(3)]);
-        Yy(Yy==0)=NaN;
-        Vv{1}.dat=Yy;
-        Vv{1}.dim=V.dim;
-        Vv{1}.mat=V.mat;
+        for s=1:length(returnSubjs),
+            Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
+            Yy(1,volIndx)=prob(:,s);
+            
+            Yy=reshape(Yy,[V.dim(1),V.dim(2),V.dim(3)]);
+            Yy(Yy==0)=NaN;
+            Vv{1}.dat=Yy;
+            Vv{1}.dim=V.dim;
+            Vv{1}.mat=V.mat;
+            
+            % save out vol of prob
+            exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
+            X=spm_vol(exampleVol);
+            X.fname=sprintf('%s/probAtlas%d.nii',outName,s);
+            fileNames_SUIT{s}=X.fname;
+            fileNames_MNI{s}=sprintf('%s/Ws2m_probAtlas%d.nii',outName,s);
+            X.private.dat.fname=V.fname;
+            spm_write_vol(X,Vv{1}.dat);
+            
+            cd(outName)
+            % save out MNI version as well
+            suit_mni2suit(sprintf('probAtlas%d.nii',s),'def','suit2mni');
+        end
         
-        % save out vol of prob
-        exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
-        X=spm_vol(exampleVol);
-        X.fname=sprintf('%s/probAtlas.nii',outName);
-        X.private.dat.fname=V.fname;
-        spm_write_vol(X,Vv{1}.dat);
+        % make 4d
+        spmj_make4dnii(sprintf('%s/probAtlas.nii',outName),char(fileNames_SUIT'))
+        spmj_make4dnii(sprintf('%s/Ws2m_probAtlas.nii',outName),char(fileNames_MNI'))
         
-        cd(outName)
-        % save out MNI version as well
-        suit_mni2suit('probAtlas.nii','def','suit2mni');
-        
-        % map to surface
-        M=caret_suit_map2surf(Vv,'space','SUIT');
-        M=caret_struct('metric','data',M.data);
-        caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','probAtlas.metric'),M);
+        %         % map to surface
+        %         M=caret_suit_map2surf(Vv,'space','SUIT');
+        %         M=caret_struct('metric','data',M.data);
+        %         caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','probAtlas.metric'),M);
         
     case 'CORTEX:makeModel'
         study=varargin{1};
@@ -2621,7 +2701,7 @@ switch what
         % load ordering of random subsets
         y=sc1_sc2_functionalAtlas('EVAL:get_subsets','evalRandom',numTasks);
         reOrderIdx=[y(:,data)];
-
+        
         % plot diff maps
         indx=[];
         toPlot=[];
@@ -3133,7 +3213,7 @@ switch what
                     COORD.vertices(Tedges(indxEdge(e),2),:))/2; % Average of coordinates
             end;
         end;
-
+        
         for  i=1:size(Edge,1)
             % Make sure that the bin is calcualted both for within and
             % between
@@ -3957,142 +4037,6 @@ switch what
         sc1_sc2_functionalAtlas('AXES:taskSpace','taskList_all')
     case 'SUPP5'   % Feature & Task Loading Matrices
         sc1_sc2_functionalAtlas('AXES:featSpace','featList_all')
-        
-    case 'WEBSITE:contrasts'
-        sn=varargin{1}; % 'group' or 'individual'
-        norm=varargin{2}; % 'MNI' or 'SUIT'
-        
-        map='contrasts';
-
-        F=dload(fullfile(baseDir,'website_taskNames.txt'));
-        
-        lambda=.01;
-        study=[1,2];
-        
-        % load in activity patterns
-        [data,volIndx,V]=sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,study,'eval');
-        
-        % get feature model
-        [X,~,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:make_model',study,'no'); % load in model
-        
-        % rest
-        if length(study)>1,
-            rest=[29,61];
-        else
-            rest=numConds;
-        end
-        
-        % set up volume info
-        numFeat=size(X,2)-numConds;
-        Yy=zeros(numConds+numFeat,length(returnSubjs),V.dim(1)*V.dim(2)*V.dim(3));
-        C{1}.dim=V.dim;
-        C{1}.mat=V.mat;
-        
-        % we're not regressing out motor features against rest
-        X(rest,numConds+1:numConds+3)=X(rest,numConds+1:numConds+3)*-1;
-        
-        % regress out motor features
-        for s=1:length(returnSubjs),
-            B(:,s,:)=(X'*X+eye(numConds+numFeat)*lambda)\(X'*data(:,:,s)); % was subjs(s) for some reason ?
-            fprintf('ridge regress done for subj%d done \n',returnSubjs(s))
-        end;
-        clear data
-        
-        % subtract baseline
-        baseline=nanmean(B,1);
-        B=bsxfun(@minus,B,baseline);
-        
-        % z score the activity patterns
-%         B=zscore(B);
-        
-        % make volume
-        Yy(:,:,volIndx)=B;
-        Yy=permute(Yy,[2 1 3]);
-        
-        % save out vol of group contrasts (all 61)
-        exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii');
-        X=spm_vol(exampleVol);
-        X.private.dat.fname=V.fname;
-        
-        switch sn,
-            case 'group'
-                outDir=fullfile(baseDir,'website_maps',sprintf('%s_%s_%s',norm,sn,map));dircheck(outDir);
-                indices=nanmean(Yy,1);
-                indices=reshape(indices,[size(indices,2) size(indices,3)]);
-                
-                % map vol2surf
-                indices=reshape(indices,[size(indices,1) V.dim(1),V.dim(2),V.dim(3)]);
-                for i=1:size(indices,1),
-                    data=reshape(indices(i,:,:,:),[C{1}.dim]);
-                    C{i}.dat=data;
-                end
-                
-                % save out vol of group contrasts (all 61)
-                exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii');
-                X=spm_vol(exampleVol);
-                X.private.dat.fname=V.fname;
-                % loop over task conditions
-                for c=1:length(C),
-                    X.fname=fullfile(outDir,sprintf('%s.nii',F.condNames{c}));
-                    X.private.dat.fname=fullfile(outDir,sprintf('%s.nii',F.condNames{c}));
-                    % MNI or SUIT ?
-                    switch norm,
-                        case 'SUIT'
-                            spm_write_vol(X,C{c}.dat);
-                            fprintf('save out vol in SUIT %s \n',F.condNames{c})
-                        case 'MNI'
-                            suitDir=fullfile(baseDir,'website_maps',sprintf('SUIT_%s_%s',sn,map));
-                            if isdir(fullfile(suitDir,sprintf('%s.nii',F.condNames{c})))
-                                disp('normalise to SUIT first, then to MNI \n')
-                            else
-                                cd(suitDir)
-                                suit_mni2suit(sprintf('%s.nii',F.condNames{c}),'def','suit2mni');
-                                fprintf('save out vol in MNI %s \n',F.condNames{c})
-                                movefile(sprintf('Ws2m_%s.nii',F.condNames{c}),fullfile(outDir,sprintf('%s.nii',F.condNames{c})))
-                                delete(fullfile(suitDir,sprintf('Ws2m_%s.nii',F.condNames{c})));
-                            end
-                    end
-                end
-            case 'individual'
-                indices=reshape(Yy,[size(Yy,1) size(Yy,2),size(Yy,3)]);
-                
-                % map vol2surf
-                weights=reshape(indices,[size(indices,1) size(indices,2) V.dim(1),V.dim(2),V.dim(3)]);
-                
-                % loop over subjects
-                for s=1:length(returnSubjs),
-                    outDir=fullfile(baseDir,'website_maps',sprintf('%s_%s_%s',norm,sn,map),subj_name{returnSubjs(s)}); dircheck(outDir);
-                    for i=1:size(weights,2),
-                        data=reshape(weights(s,i,:,:,:),[C{1}.dim]);
-                        C{i}.dat=data;
-                    end
-                    
-                    % loop over task conditions
-                    for c=1:length(C),
-                        X.fname=fullfile(outDir,sprintf('%s.nii',F.condNames{c}));
-                        X.private.dat.fname=fullfile(outDir,sprintf('%s.nii',F.condNames{c}));
-                        
-                        % MNI or SUIT ?
-                        switch norm,
-                            case 'SUIT'
-                                spm_write_vol(X,C{c}.dat);
-                                fprintf('save out vol in SUIT %s:%s \n',subj_name{returnSubjs(s)},F.condNames{c})
-                            case 'MNI'
-                                suitDir=fullfile(baseDir,'website_maps',sprintf('SUIT_%s_%s',sn,map),subj_name{returnSubjs(s)});
-                                if isdir(fullfile(suitDir,sprintf('%s.nii',F.condNames{c})))
-                                    disp('normalise to SUIT first, then to MNI')
-                                else
-                                    cd(suitDir)
-                                    suit_mni2suit(sprintf('%s.nii',F.condNames{c}),'def','suit2mni');
-                                    fprintf('save out vol in MNI %s:%s \n',subj_name{returnSubjs(s)},F.condNames{c})
-                                    movefile(sprintf('Ws2m_%s.nii',F.condNames{c}),fullfile(outDir,sprintf('%s.nii',F.condNames{c})))
-                                    delete(fullfile(suitDir,sprintf('Ws2m_%s.nii',F.condNames{c})));
-                                end
-                        end
-                    end
-                    clear data
-                end
-        end
 end
 
 % Local functions
