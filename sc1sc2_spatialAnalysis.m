@@ -981,6 +981,32 @@ switch(what)
         sc1_sc2_functionalAtlas('STRENGTH:visualise_bound','SC12_10cluster');
         set(gca,'XLim',[-100 100],'YLim',[-100 100],'Color',[0 0 0],'Visible','on','Xticklabel',[],'Yticklabel',[],'Box','off');
         axis equal;
+    case 'makeOnlineAtlas' 
+        srcDir = '/Users/jdiedrichsen/Dropbox (Diedrichsenlab)/Sites/Diedrichsenlab_develop/MDTB_maps/SUIT_group_contrasts'; 
+        tgtDir = '/Users/jdiedrichsen/Dropbox (Diedrichsenlab)/Sites/Diedrichsenlab_develop/onlineAtlas';
+        study= {'SetA','SetB'};
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt')); 
+        for i = unique(D.condNumUni)' 
+            A=getrow(D,D.condNumUni==i); 
+            X=[]; 
+            for j=1:length(A.StudyNum)
+                fname=sprintf('%s_Task%d_%s.nii',study{A.StudyNum(j)},A.taskNumUni(j),A.condNamesFull{j}); 
+                V=spm_vol(fullfile(srcDir,fname)); 
+                X(:,:,:,j)=spm_read_vols(V); 
+            end; 
+            M=mean(X,4); 
+            outname=sprintf('Cond%2.2d_%s.nii',A.condNumUni(1),A.condNamesFull{1}); 
+            V.fname=fullfile(tgtDir,outname); 
+            spm_write_vol(V,M); 
+            V.dat=M; 
+            Data(:,i)=suit_map2surf(V); 
+            colNames{i}=A.condNamesFull{1};
+            G1=surf_makeFuncGifti(Data(:,i),'anatomicalStruct','Cerebellum','columnNames',colNames(i)); 
+            outname=sprintf('Cond%2.2d_%s.func.gii',A.condNumUni(1),A.condNamesFull{1}); 
+            save(G1,fullfile(tgtDir,outname));
+        end; 
+        G=surf_makeFuncGifti(Data,'anatomicalStruct','Cerebellum','columnNames',colNames); 
+        save(G,fullfile(tgtDir,'MDTB_maps.func.gii'));
 end;
 % InterSubj Corr
 function C=intersubj_corr(Y)

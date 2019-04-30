@@ -93,9 +93,24 @@ switch(what)
                 W = [wcon{1} wcon{2}];
                 W = bsxfun(@rdivide,W,resMS); % Common noise normalization
                 outfile = fullfile(surfDir,sprintf('%s.%s.wcon.func.gii',subj_name{s},Hem{h}));
-                Go=surf_makeFuncGifti(W,'column_names',T.condNames,'anatomicalStruct',hemname{h});
+                Go=surf_makeFuncGifti(W,'columnNames',T.condNames,'anatomicalStruct',hemname{h});
                 save(Go,outfile);
                 fprintf('combined %s %s \n',subj_name{s},Hem{h});
             end;
         end;
+    case 'SURF:groupFiles' 
+        hemis=[1 2];
+        sn = [2,3,4]; 
+        cd(fullfile(wbDir,'group164k')); 
+        for h=hemis
+            inputFiles = {};
+            for s=1:length(sn)
+                inputFiles{s}  = fullfile(wbDir, subj_name{sn(s)},sprintf('%s.%s.wcon.func.gii',subj_name{sn(s)},Hem{h}));
+                columnName{s} = subj_name{sn(s)}; 
+            end; 
+            groupfile=sprintf('group.wcon.%s.func.gii',Hem{h}); 
+            outfilenamePattern=sprintf('wcon.%%s.%s.func.gii',Hem{h}); 
+            surf_groupGiftis(inputFiles,'groupsummary',groupfile,'outcolnames',subj_name(sn),'outfilenamePattern',outfilenamePattern); 
+        end; 
+        keyboard; 
 end;
