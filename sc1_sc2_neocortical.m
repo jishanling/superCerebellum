@@ -37,8 +37,6 @@ switch(what)
             fprintf('reslicing %d\n',i);
             surf_resliceFS2WB(subj_name{i},fsDir,atlasDir,wbDir);
         end;
-        
-        
     case 'SURF:map_con'         % STEP 11.5: Map con / ResMS (.nii) onto surface (.gifti)
         sn    = returnSubjs;     % subjNum
         study = [1 2];
@@ -98,19 +96,29 @@ switch(what)
                 fprintf('combined %s %s \n',subj_name{s},Hem{h});
             end;
         end;
-    case 'SURF:groupFiles' 
+    case 'SURF:groupFiles'
         hemis=[1 2];
-        sn = [2,3,4]; 
-        cd(fullfile(wbDir,'group164k')); 
+        sn = returnSubjs;
+        cd(fullfile(wbDir,'group164k'));
         for h=hemis
             inputFiles = {};
             for s=1:length(sn)
                 inputFiles{s}  = fullfile(wbDir, subj_name{sn(s)},sprintf('%s.%s.wcon.func.gii',subj_name{sn(s)},Hem{h}));
-                columnName{s} = subj_name{sn(s)}; 
-            end; 
-            groupfile=sprintf('group.wcon.%s.func.gii',Hem{h}); 
-            outfilenamePattern=sprintf('wcon.%%s.%s.func.gii',Hem{h}); 
-            surf_groupGiftis(inputFiles,'groupsummary',groupfile,'outcolnames',subj_name(sn),'outfilenamePattern',outfilenamePattern); 
-        end; 
-        keyboard; 
+                columnName{s} = subj_name{sn(s)};
+            end;
+            groupfile=sprintf('group.wcon.%s.func.gii',Hem{h});
+            outfilenamePattern=sprintf('wcon.%%s.%s.func.gii',Hem{h});
+            surf_groupGiftis(inputFiles,'groupsummary',groupfile,'outcolnames',subj_name(sn),'outfilenamePattern',outfilenamePattern);
+        end;
+    case 'SURF:resample32k'  % Resample functional data from group164 to group32
+        hemis=[1 2];
+        sn = [2,3,4];
+        sourceDir =fullfile(wbDir,'group164k');
+        targetDir =fullfile(wbDir,'group32k');
+        T=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+        
+        for h=hemis
+            % wb_command -metric-resample group164K/group.wcon.L.func.gii group164K/fs_LR.164k.L.sphere.surf.gii group32K/fs_LR.32k.L.sphere.surf.gii BARYCENTRIC group32K/group.wcon.L.func.gii
+            % wb_command -metric-resample group164K/group.wcon.R.func.gii group164K/fs_LR.164k.R.sphere.surf.gii group32K/fs_LR.32k.R.sphere.surf.gii BARYCENTRIC group32K/group.wcon.R.func.gii
+        end;
 end;
