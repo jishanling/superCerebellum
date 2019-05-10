@@ -11,6 +11,7 @@ anatomicalDir = fullfile(baseDir,'sc1','anatomicals');
 studyDir  = {'sc1','sc2'};
 Hem       = {'L','R'};
 hemname   = {'CortexLeft','CortexRight'};
+fshem     = {'lh','rh'}; 
 subj_name = {'s01','s02','s03','s04','s05','s06','s07','s08','s09','s10','s11',...
     's12','s13','s14','s15','s16','s17','s18','s19','s20','s21','s22','s23','s24',...
     's25','s26','s27','s28','s29','s30','s31'};
@@ -35,21 +36,22 @@ switch(what)
         vararginoptions(varargin,{'sn'});
         for i=sn
             fprintf('reslicing %d\n',i);
-            surf_resliceFS2WB(subj_name{i},fsDir,atlasDir,wbDir);
+            surf_resliceFS2WB(subj_name{i},fsDir,atlasDir,wbDir,'resolution','32k');
         end;
     case 'SURF:map_con'         % STEP 11.5: Map con / ResMS (.nii) onto surface (.gifti)
         sn    = returnSubjs;     % subjNum
         study = [1 2];
         glm  = 4;     % glmNum
         hemis = [1 2];
+        resolution = '32k'; 
         D=dload(fullfile(baseDir,'sc1_sc2_taskConds_GLM.txt'));
-        vararginoptions(varargin,{'sn','study','glm','what','hemis'});
+        vararginoptions(varargin,{'sn','study','glm','what','hemis','resolution'});
         
         for s=sn
             for h=hemis
                 surfDir = fullfile(wbDir, subj_name{s});
-                white=fullfile(surfDir,sprintf('%s.%s.white.164k.surf.gii',subj_name{s},Hem{h}));
-                pial=fullfile(surfDir,sprintf('%s.%s.pial.164k.surf.gii',subj_name{s},Hem{h}));
+                white=fullfile(surfDir,sprintf('%s.%s.white.%s.surf.gii',subj_name{s},Hem{h},resolution));
+                pial=fullfile(surfDir,sprintf('%s.%s.pial.%s.surf.gii',subj_name{s},Hem{h},resolution));
                 C1=gifti(white);
                 C2=gifti(pial);
                 
@@ -62,7 +64,7 @@ switch(what)
                     end;
                     filenames{i+1} = fullfile(glmDir,'ResMS.nii');
                     T.condNames{i+1}= 'ResMS';
-                    outfile = fullfile(surfDir,sprintf('%s.%s.%s.con.func.gii',subj_name{s},Hem{h},studyDir{st}));
+                    outfile = fullfile(surfDir,sprintf('%s.%s.%s.con.%s.func.gii',subj_name{s},Hem{h},studyDir{st},resolution));
                     
                     G=surf_vol2surf(C1.vertices,C2.vertices,filenames,'column_names',T.condNames,'anatomicalStruct',hemname{h});
                     save(G,outfile);
@@ -75,13 +77,14 @@ switch(what)
         sn    = returnSubjs;     % subjNum
         glm  = 4;     % glmNum
         hemis = [1 2];
+        resolution = '32k'; 
         T=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
-        vararginoptions(varargin,{'sn','glm','what','hemis'});
+        vararginoptions(varargin,{'sn','glm','what','hemis','resolution'});
         for s=sn
             surfDir = fullfile(wbDir, subj_name{s});
             for h=hemis
                 for st=[1 2]
-                    G{st}=gifti(fullfile(surfDir,sprintf('%s.%s.%s.con.func.gii',subj_name{s},Hem{h},studyDir{st})));
+                    G{st}=gifti(fullfile(surfDir,sprintf('%s.%s.%s.con.%s.func.gii',subj_name{s},Hem{h},studyDir{st},resolution)));
                     N=size(G{st}.cdata,1);
                     wcon{st} = [G{st}.cdata(:,2:end-1) zeros(N,1)]; % Add rest
                     Ts = getrow(T,T.StudyNum==st);
@@ -90,7 +93,7 @@ switch(what)
                 resMS=(G{1}.cdata(:,end)+G{1}.cdata(:,end))/2;
                 W = [wcon{1} wcon{2}];
                 W = bsxfun(@rdivide,W,resMS); % Common noise normalization
-                outfile = fullfile(surfDir,sprintf('%s.%s.wcon.func.gii',subj_name{s},Hem{h}));
+                outfile = fullfile(surfDir,sprintf('%s.%s.wcon.%s.func.gii',subj_name{s},Hem{h},resolution));
                 Go=surf_makeFuncGifti(W,'columnNames',T.condNames,'anatomicalStruct',hemname{h});
                 save(Go,outfile);
                 fprintf('combined %s %s \n',subj_name{s},Hem{h});
@@ -121,4 +124,58 @@ switch(what)
             % wb_command -metric-resample group164K/group.wcon.L.func.gii group164K/fs_LR.164k.L.sphere.surf.gii group32K/fs_LR.32k.L.sphere.surf.gii BARYCENTRIC group32K/group.wcon.L.func.gii
             % wb_command -metric-resample group164K/group.wcon.R.func.gii group164K/fs_LR.164k.R.sphere.surf.gii group32K/fs_LR.32k.R.sphere.surf.gii BARYCENTRIC group32K/group.wcon.R.func.gii
         end;
+    case 'PARCEL:annot2labelgii'
+        filename = varargin{1}; 
+        for i=1:2 
+            name = [fshem{i} '.' filename '.annot']; 
+            [v,label,colorT]=read_annotation(name);
+            values=colorT.table(:,5);
+            newlabel = zeros(size(label)); 
+            for j=1:length(values)
+                newlabel(label==values(j))=j-1;  % New label values starting from 0 
+            end; 
+            RGB = colorT.table(:,1:3)/256; % Scaled between 0 and 1 
+            G=surf_makeLabelGifti(newlabel,'anatomicalStruct',hemname{i},'labelNames',colorT.struct_names,'labelRGBA',[RGB ones(size(RGB,1),1)]);  
+            save(G,[fshem{i} '.' filename '.label.gii']); 
+        end; 
+    case 'PARCEL:fsaverage2FSLR'
+        infilename = varargin{1}; % '~/Data/Atlas_templates/CorticalParcellations/Yeo2011/Yeo_JNeurophysiol11_FreeSurfer/fsaverage/label/lh.Yeo2011_17Networks_N1000.label.gii'
+        outfilename= varargin{2}; % '~/Data/Atlas_templates/FS_LR_164/Yeo_JNeurophysiol11_17Networks.164k.L.label.gii'; 
+        hem        = varargin{3}; 
+        surf       = varargin{4}; % '164k','32k' 
+        inSphere   = fullfile(atlasDir,['fs_' Hem{hem}],['fsaverage.' Hem{hem} '.sphere.164k_fs_' Hem{hem} '.surf.gii']); 
+        outSphere  = fullfile(atlasDir,'resample_fsaverage',['fs_LR-deformed_to-fsaverage.' Hem{hem} '.sphere.' surf '_fs_LR.surf.gii']);
+        
+        % Convert surface to Gifti 
+        system(['wb_command -metric-resample ' infilename ' ' inSphere ' ' outSphere ' ADAP_BARY_AREA ' outfilename ' -area-surfs ' inSphere ' ' outSphere]);
+    case 'DCBC:computeDistances' 
+        sn=returnSubjs; 
+        hem = [1 2]; 
+        resolution = '32k'; 
+        maxradius = 40;
+        
+        vararginoptions(varargin,{'sn','hem','resolution','maxradius'}); 
+        for s=sn
+            for h=hem 
+                surfDir = fullfile(wbDir, subj_name{s});
+                white=fullfile(surfDir,sprintf('%s.%s.white.%s.surf.gii',subj_name{s},Hem{h},resolution));
+                pial=fullfile(surfDir,sprintf('%s.%s.pial.%s.surf.gii',subj_name{s},Hem{h},resolution));
+                C1=gifti(white);
+                C2=gifti(pial);
+                vertices = double((C1.vertices' + C2.vertices' )/2); % Midgray surface 
+                faces    = double(C1.faces'); 
+                numVert=size(vertices,2);
+                n2f=surfing_nodeidxs2faceidxs(faces);
+                D=inf([numVert numVert],'single'); 
+                for i=1:numVert; 
+                    [subV, subF, subIndx,vidxs, fidxs]=surfing_subsurface(vertices, faces, i, maxradius, n2f); % construct correct sub surface
+                    D(vidxs,i)=single(surfing_dijkstradist(subV,subF,subIndx,maxradius));
+                    if (mod(i,100)==0)
+                        fprintf('.'); 
+                    end
+                end; 
+                fprintf('\n'); 
+                save(fullfile(surfDir,sprintf('distances.%s.mat',Hem{h})),'D','-v7.3');
+            end; 
+        end; 
 end;
