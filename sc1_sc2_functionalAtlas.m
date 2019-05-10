@@ -154,6 +154,9 @@ switch what
         
         % make feature model
         x=[eye(numConds) Fs.lHand./Fs.duration Fs.rHand./Fs.duration Fs.saccades./Fs.duration];
+        
+%         x=[eye(numConds)];
+        
         featNames=Fs.condNames;
         featNames{numConds+1}='lHand';
         featNames{numConds+2}='rHand';
@@ -177,14 +180,25 @@ switch what
         
         % get feature model
         [X,featNames,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:make_model',study,'no'); % load in model
-
+        
         % regress out motor features
         for s=1:length(returnSubjs),
-            B(:,s,:)=(X'*X+eye(size(X,2))*lambda)\(X'*data(:,:,s)); 
+            B(:,s,:)=(X'*X+eye(size(X,2))*lambda)\(X'*data(:,:,s));
             fprintf('ridge regress done for subj%d done \n',returnSubjs(s))
+            
+            % evaluate prediction for each subj
+            SST = nansum(data(:,:,s).*data(:,:,s));
+            u=permute(B(:,s,:),[1 3 2]);
+            Ypred=X*u;
+            res =data(:,:,s)-Ypred;
+            SSR = nansum(res.^2);
+            R2(s) = 1-nansum(SSR)/nansum(SST);
+            
         end;
         clear data
-        
+
+        fprintf('average prediction of this feature model across subjects is %2.4f \n',nanmean(R2)); 
+         
         % subtract baseline
         baseline=nanmean(B,1);
         B=bsxfun(@minus,B,baseline);
@@ -230,6 +244,7 @@ switch what
                 
                 % average shared tasks
                 condNumUni=[F.condNumUni;62;63;64];
+                 
                 X1=indicatorMatrix('identity_p',condNumUni);
                 uniqueTasks=S.data*X1; % try pinv here ?
                 % get new condNames (unique only)
