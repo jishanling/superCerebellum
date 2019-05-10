@@ -165,26 +165,22 @@ switch what
         % normalise features
         X.x   = bsxfun(@minus,X.x,nanmean(X.x));
         X.x   = bsxfun(@rdivide,X.x,sqrt(nansum(X.x.^2)));  % Normalize to unit length vectors
-        X=X.x;
-        
-        X(rest,62:64)=1;
-        
+        X=X.x;        
+
         varargout={X,featNames,numConds,F};
     case 'ACTIVITY:patterns'
         study=[1,2];
-        lambda=0.1;
+        lambda=0.01;
         
         % load in activity patterns
         [data,volIndx,V]=sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,study,'eval');
         
         % get feature model
         [X,featNames,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:make_model',study,'no'); % load in model
-        
-        numFeat=size(X,2)-numConds;
-        
+
         % regress out motor features
         for s=1:length(returnSubjs),
-            B(:,s,:)=(X'*X+eye(numConds+numFeat)*lambda)\(X'*data(:,:,s)); % was subjs(s) for some reason ?
+            B(:,s,:)=(X'*X+eye(size(X,2))*lambda)\(X'*data(:,:,s)); 
             fprintf('ridge regress done for subj%d done \n',returnSubjs(s))
         end;
         clear data
@@ -192,7 +188,7 @@ switch what
         % subtract baseline
         baseline=nanmean(B,1);
         B=bsxfun(@minus,B,baseline);
-        
+         
         varargout={B,featNames,numConds,volIndx,V};
     case 'ACTIVITY:writeOut_GROUP'
         writeOut=varargin{1}; % 'paper' (average taskConds - SUIT space - metric file)
@@ -246,7 +242,7 @@ switch what
                 S.num_cols=size(S.column_name,2);
                 S.column_color_mapping=S.column_color_mapping(1:S.num_cols,:);
                 outName='unCorr_avrgTaskConds'; % average of certain tasks
-                
+
                 % save out metric files for paper
                 caret_save(fullfile(suitDir,sprintf('%s.metric',outName)),S);
             case 'website'
