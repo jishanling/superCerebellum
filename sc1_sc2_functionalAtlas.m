@@ -189,14 +189,17 @@ switch what
             % evaluate prediction for each subj
             SST = nansum(data(:,:,s).*data(:,:,s));
             u=permute(B(:,s,:),[1 3 2]);
-            Ypred=X*u;
-            res =data(:,:,s)-Ypred;
+            Ypred(:,:,s)=X*u;
+            res =data(:,:,s)-Ypred(:,:,s);
             SSR = nansum(res.^2);
             R2(s) = 1-nansum(SSR)/nansum(SST);
             
         end;
-        clear data
+%         clear data
 
+        % plot pred against data
+        Ypred=permute(Ypred,[1 3 2]); data=permute(data,[1 3 2]); 
+        plot(nanmean(Ypred,3),nanmean(data,3))
         fprintf('average prediction of this feature model across subjects is %2.4f \n',nanmean(R2)); 
          
         % subtract baseline
