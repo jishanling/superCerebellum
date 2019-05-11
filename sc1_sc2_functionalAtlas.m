@@ -134,6 +134,7 @@ switch what
         
     case 'ACTIVITY:make_model' % make X matrix (feature models)
         study=varargin{1}; % 1, 2, or [1,2]
+        model=varargin{2}; % 'full' or 'excludeMotor'
         
         F=dload(fullfile(baseDir,'motorFeats.txt')); % load in motor features
         
@@ -152,15 +153,17 @@ switch what
             rest=numConds;
         end
         
-        % make feature model
-        x=[eye(numConds) Fs.lHand./Fs.duration Fs.rHand./Fs.duration Fs.saccades./Fs.duration];
-        
-%         x=[eye(numConds)];
-        
         featNames=Fs.condNames;
-        featNames{numConds+1}='lHand';
-        featNames{numConds+2}='rHand';
-        featNames{numConds+3}='saccades';
+        % make feature model
+        switch model,
+            case 'full'
+                x=[eye(numConds) Fs.lHand./Fs.duration Fs.rHand./Fs.duration Fs.saccades./Fs.duration];
+                featNames{numConds+1}='lHand';
+                featNames{numConds+2}='rHand';
+                featNames{numConds+3}='saccades';
+            case 'excludeMotor'
+                x=[eye(numConds)];
+        end
         
         X.x=x;
         X.idx=[1:size(x,1)]';
@@ -172,14 +175,17 @@ switch what
 
         varargout={X,featNames,numConds,F};
     case 'ACTIVITY:patterns'
-        study=[1,2];
-        lambda=0.01;
+        study=varargin{1}; % [1,2]
+        lambda=.01;
+        model='full';
+        
+        vararginoptions({varargin{2:end}},{'lambda','model'}); 
         
         % load in activity patterns
         [data,volIndx,V]=sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,study,'eval');
         
         % get feature model
-        [X,featNames,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:make_model',study,'no'); % load in model
+        [X,featNames,numConds]=sc1_sc2_functionalAtlas('ACTIVITY:make_model',study,model); % load in model (including motor features)
         
         % regress out motor features
         for s=1:length(returnSubjs),
@@ -195,28 +201,24 @@ switch what
             R2(s) = 1-nansum(SSR)/nansum(SST);
             
         end;
-%         clear data
+        clear data
 
-        % plot pred against data
-        Ypred=permute(Ypred,[1 3 2]); data=permute(data,[1 3 2]); 
-        plot(nanmean(Ypred,3),nanmean(data,3))
-        fprintf('average prediction of this feature model across subjects is %2.4f \n',nanmean(R2)); 
-         
         % subtract baseline
         baseline=nanmean(B,1);
         B=bsxfun(@minus,B,baseline);
          
-        varargout={B,featNames,numConds,volIndx,V};
+        varargout={B,featNames,numConds,volIndx,V,R2,Ypred};
     case 'ACTIVITY:writeOut_GROUP'
         writeOut=varargin{1}; % 'paper' (average taskConds - SUIT space - metric file)
         % or 'website' (all taskConds - MNI and SUIT space - nifti file)
+        study=[1,2];
         
         websiteDir_SUIT=fullfile(baseDir,'website_maps','SUIT_group_contrasts');dircheck(websiteDir_SUIT) % where website contrasts are being saved for SUIT
         websiteDir_MNI=fullfile(baseDir,'website_maps','MNI_group_contrasts');dircheck(websiteDir_MNI) % where website contrasts are being saved for MNI
         suitDir=fullfile(studyDir{2},caretDir,'suit_flat','glm4'); % where figure contrasts are being saved
         
         % get activity patterns
-        [B,featNames,numConds,volIndx,V]=sc1_sc2_functionalAtlas('ACTIVITY:patterns');
+        [B,featNames,numConds,volIndx,V]=sc1_sc2_functionalAtlas('ACTIVITY:patterns',study);
         
         % set up volume info
         Yy=zeros(length(featNames),length(returnSubjs),V.dim(1)*V.dim(2)*V.dim(3));
@@ -288,9 +290,10 @@ switch what
     case 'ACTIVITY:writeOut_INDIV'
         writeOut=varargin{1}; % 'paper' (average taskConds - SUIT space - metric file)
         % or 'website' (all taskConds - MNI and SUIT space - nifti file)
+        study=[1,2];
         
         % get activity patterns
-        [B,featNames,numConds,volIndx,V]=sc1_sc2_functionalAtlas('ACTIVITY:patterns');
+        [B,featNames,numConds,volIndx,V]=sc1_sc2_functionalAtlas('ACTIVITY:patterns',study);
         
         
         for s=1:length(returnSubjs),
@@ -369,6 +372,106 @@ switch what
             end
             clear Yy C
         end
+    case 'ACTIVITY:checkRidge'
+        lambda=varargin{1}; 
+        
+        study=[1,2];
+        
+        [data]=sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,study,'eval');
+        [~,~,~,~,~,R2_full,Ypred_full]=sc1_sc2_functionalAtlas('ACTIVITY:patterns',study,'lambda',lambda,'model','full');
+        [~,~,~,~,~,R2_noMotor,Ypred_noMotor]=sc1_sc2_functionalAtlas('ACTIVITY:patterns',study,'lambda',lambda,'model','excludeMotor');
+        
+        % plot pred against data for full and noMotor models
+        subplot(2,1,1)
+        Ypred=permute(Ypred_full,[1 3 2]); data=permute(data,[1 3 2]);
+        plot(nanmean(Ypred,3),nanmean(data,3))
+        title('full model')
+        text(1,1,sprintf('R^2=%2.3',nanmean(R2_noMotor)));
+        subplot(2,1,2)
+        Ypred=permute(Ypred_noMotor,[1 3 2]); data=permute(data,[1 3 2]);
+        plot(nanmean(Ypred_noMotor,3),nanmean(data,3))
+        title('no motor')
+        xlabel('Ypred');ylabel('data');text(1,1,sprintf('R^2=%2.3',nanmean(R2_noMotor)));
+        
+        fprintf('lambda=%2.2f:average prediction of full model across subjects is %2.4f \n',lambda,nanmean(R2_full)); 
+        fprintf('lambda=%2.2f: average prediction of noMotor model across subjects is %2.4f \n',lambda,nanmean(R2_noMotor)); 
+%          
+    case 'ACTIVITY:checkRest_indivSubjects'
+        taskConds=[28,31];  % no instruct, no rest
+        
+        indx=1;
+        for study=1:2,
+            for s=1:length(returnSubjs),
+                
+                % load in SPM
+                SPM_info=load(fullfile(studyDir{study},'GLM_firstlevel_4',subj_name{returnSubjs(s)},'SPM_info.mat'));
+                
+                % load in betas (resliced into suit space)
+                betaDir=dir(fullfile(studyDir{study},'suit','glm4',subj_name{returnSubjs(s)},'*wdbeta*')); 
+                
+                % get task conditions
+                for c=1:taskConds(study),
+                    idx=find(SPM_info.cond==c);
+                    Vi=cellstr(char(betaDir(idx).name));
+                    taskN=SPM_info.TN{SPM_info.cond==c};
+                    
+                    cd(fullfile(studyDir{study},'suit','glm4',subj_name{returnSubjs(s)}));
+                   
+                    % make contrast
+                    spm_imcalc(Vi,sprintf('wdcon_%s.nii',taskN),'(i1+i2+i3+i4+i5+i6+i7+i8+i9+i10+i11+i12+i13+i14+i15+i16)/16');
+                    
+                    % store contrast name
+                    conName{c}=sprintf('wdcon_%s.nii',taskN); 
+                end
+                
+                % calculate average across task conditions (must be better
+                % way than manual input)
+                if study==1,
+                    spm_imcalc(conName','wdcon_taskAvrg.nii','(i1+i2+i3+i4+i5+i6+i7+i8+i9+i10+i11+i12+i13+i14+i15+i16+i17+i18+i19+i20+i21+i22+i23+i24+i25+i26+i27+i28)/28');
+                elseif study==2,
+                    spm_imcalc(conName','wdcon_taskAvrg.nii','(i1+i2+i3+i4+i5+i6+i7+i8+i9+i10+i11+i12+i13+i14+i15+i16+i17+i18+i19+i20+i21+i22+i23+i24+i25+i26+i27+i28+i29+i30+i31)/31');
+                end
+                
+                % calculate rest
+                spm_imcalc('wdcon_taskAvrg.nii','wdcon_rest.nii','i1*-1');
+                
+                % map 2 surf
+                data(indx,:)=suit_map2surf('wdcon_rest.nii'); 
+
+                featNames{indx}=sprintf('sc%d-%s-rest',study,subj_name{returnSubjs(s)});
+                
+                indx=indx+1;
+            end
+        end
+        
+         % map vol 2 surf 
+         S=caret_struct('metric','data',data','column_name',featNames);
+
+         % save out rest metric file (both sc1 and sc2, all subjs)
+         caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','rest_indivSubjs.metric'),S)
+    case 'ACTIVITY:checkRest_avrg_taskSet'     
+        indx=1;
+        for study=1:2,
+            for s=1:length(returnSubjs),
+                conName{s}=fullfile(studyDir{study},'suit','glm4',subj_name{returnSubjs(s)},'wdcon_rest.nii'); 
+            end
+            cd(fullfile(studyDir{study},'suit','glm4',subj_name{returnSubjs(s)}))
+            % average rest across subjects
+                spm_imcalc(conName','wdcon_rest_avrg.nii','(i1+i2+i3+i4+i5+i6+i7+i8+i9+i10+i11+i12+i13+i14+i15+i16+i17+i18+i19+i20+i21+i22+i23+i24)/24');
+                % map 2 surf
+                data(indx,:)=suit_map2surf('wdcon_rest_avrg.nii'); 
+                delete(fullfile(studyDir{study},'suit','glm4',subj_name{returnSubjs(s)},'wdcon_rest_avrg.nii'));
+
+                featNames{indx}=sprintf('sc%d-rest',study);
+                indx=indx+1;
+        end
+        
+         % map vol 2 surf 
+         S=caret_struct('metric','data',data','column_name',featNames);
+
+         % save out rest metric file (both sc1 and sc2, all subjs)
+         caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','rest_avrg.metric'),S)
+         
         
     case 'ACTIVITY:reliability_shared'
         glm=varargin{1};
@@ -467,7 +570,7 @@ switch what
             fprintf('subj%d done',returnSubjs(subj));
         end;
         save(fullfile(studyDir{study},regDir,'glm4','patternReliability_voxel.mat'),'CORR')
-    case 'ACTIVITY:modelThresh'
+    case 'ACTIVITY:modelThresh' % DEPRECIATED CASE
         threshold=0.2;
         
         [B,featNames,V,volIndx]=sc1_sc2_functionalAtlas('ACTIVITY:patterns','group',[1,2],'averageConds');
@@ -583,7 +686,7 @@ switch what
         % save out metric
         caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','voxel_reliability.metric'),M);
         
-    case 'PREDICTIONS:taskModel'
+    case 'PREDICTIONS:taskModel' % DEPRECIATED. ACTIVITY:make_model needs to be modified for this function to work.
         sn=varargin{1}; % returnSubjs
         study=varargin{2}; % 1 or 2
         partition=varargin{3}; % session or run
