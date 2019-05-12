@@ -2163,6 +2163,15 @@ switch(what)
                         r{i}.weight=vertcat(r{i}.weight,r{i+idx}.weight);
                         R{i}=r{i};
                     end
+                case 'frontal_regions'
+                    load('regions_desikan.mat');
+                    idx=[4,13,15,28,29,33];
+                    for i=1:length(idx),
+                        F{i}=R{idx(i)};
+                    end
+                    clear R
+                    R=F;
+                case 'hippocampus'
                 case 'yeo',
                     for h=regSide, % loop over hemispheres
                         % define Yeo networks as regions
@@ -2981,9 +2990,9 @@ switch(what)
                     S.TN   = Y.TN(indx & Y.run==r); % get condNames
                     X=indicatorMatrix('identity',Y.cond(indx,:));
                     S.data = pinv(X)*Y.data(indx,:);
-                    S.data = bsxfun(@minus,S.data,nanmean(S.data)); % remove mean within each session
                     R=struct('sess',sess,'cond',restCond(study),'SN',sn(s),'study',study,'TN','rest','data',zeros(1,size(S.data,2))); % add rest
                     S=addstruct(S,R);
+                    S.data = bsxfun(@minus,S.data,nanmean(S.data)); % remove mean within each session
                     T=addstruct(T,S);
                 end;
                 if strcmp(type,'cereb'),
