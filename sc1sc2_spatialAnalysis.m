@@ -486,8 +486,7 @@ switch(what)
         
     case 'CLUSTER:GlobalRand'
         compare={'groupEval_SC12_cnvf_7','groupEval_SC12_cnvf_10','groupEval_SC12_cnvf_17',...
-            'groupEval_Buckner_7Networks','groupEval_Cole_10Networks','groupEval_Buckner_17Networks',...
-            'groupEval_lob10'};
+            'groupEval_Buckner_7Networks','groupEval_Cole_10Networks','groupEval_Buckner_17Networks'};
         numMaps = length(compare);
         load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));  % Just to get V and volIndex
         clear T;
@@ -512,7 +511,7 @@ switch(what)
         varargout={AR};
         colormap(hot);
         imagesc(AR,[0 0.8]);
-        colorbar;
+        % colorbar;
         set(gca,'XTickLabel',{'C7','C10','C17','R7','R10','R17'},'YTickLabel',{'C7','C10','C17','R7','R10','R17'});
         %set(gcf,'PaperPosition',[2 2 4.7 3.8]);
         % wysiwyg;
@@ -556,6 +555,7 @@ switch(what)
         pair = [];
         for i=1:numMaps-1
             for j=i+1:numMaps
+                fprintf('%d %d\n',i,j); 
                 ar(:,end+1)=RandIndexLocal(type,c(:,i),c(:,j),D,radius);
                 if (~isempty(split))
                     if (split(i)==split(j) && split(i)==1)
