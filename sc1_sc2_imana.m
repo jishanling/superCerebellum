@@ -2614,6 +2614,9 @@ switch(what)
         spm_imcalc(nam,'cerebellarGreySUIT.nii','mean(X)',opt);
         
         fprintf('averaged cerebellar grey mask in SUIT space has been computed \n')
+    case 'PREP:avrgMask_cereb_corr'          % Correct the cerebellar mask - remove brainstem
+        cd(fullfile(studyDir{1},suitDir,'anatomicals'));
+        spm_imcalc({'cerebellarGreySUIT_corrected.nii','brainstem.nii'},'cerebellarGreySUIT_noBrainstem.nii','(i1-i2)>0');%
     case 'PREP:cereb:suit_betas'             % STEP 11.4: Reslice univar pre-whitened betas into suit space
         sn=varargin{1};
         study=varargin{2};
@@ -3388,7 +3391,7 @@ switch(what)
                 switch metric,
                     case 'RT'
                         figure()
-                        lineplot(A.runNum,A.rt,'split',A.trialType,'leg', {'long', 'short'},'subset',A.respMade==1);
+                        lineplot(A.runNum,A.rt,'split',A.trialType,'leg', {'long', 'short'},'subset',A.respMade==1,'CAT',CAT);
                         xlabel('Run');
                         ylabel('Reaction Time');
                     case 'accuracy'
@@ -3502,7 +3505,8 @@ switch(what)
                 switch metric,
                     case 'RT',
                         figure()
-                        lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'meaningful','not meaningful'}, 'subset',A.respMade==1);
+%                         lineplot(A.runNum, A.rt, 'split', A.trialType,'leg', {'meaningful','not meaningful'}, 'subset',A.respMade==1,'CAT',CAT);
+                        lineplot(A.runNum,A.rt,'split',A.condition,'leg',{'prediction','violation','scrambled'},'subset',A.respMade==1, 'subset',A.runNum>13,'CAT',CAT); 
                         xlabel('Run')
                         ylabel('Reaction Time')
                         title(main)
