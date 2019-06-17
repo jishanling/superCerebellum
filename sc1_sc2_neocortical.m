@@ -170,7 +170,7 @@ switch(what)
             % wb_command -metric-resample group164K/group.wcon.L.func.gii group164K/fs_LR.164k.L.sphere.surf.gii group32K/fs_LR.32k.L.sphere.surf.gii BARYCENTRIC group32K/group.wcon.L.func.gii
             % wb_command -metric-resample group164K/group.wcon.R.func.gii group164K/fs_LR.164k.R.sphere.surf.gii group32K/fs_LR.32k.R.sphere.surf.gii BARYCENTRIC group32K/group.wcon.R.func.gii
         end;
-    case 'PARCEL:annot2labelgii'
+    case 'PARCEL:annot2labelgii' % Make an annotation file (freesurfer) into a Gifti 
         filename = varargin{1};
         for i=1:2
             name = [fshem{i} '.' filename '.annot'];
@@ -184,7 +184,7 @@ switch(what)
             G=surf_makeLabelGifti(newlabel,'anatomicalStruct',hemname{i},'labelNames',colorT.struct_names,'labelRGBA',[RGB ones(size(RGB,1),1)]);
             save(G,[fshem{i} '.' filename '.label.gii']);
         end;
-    case 'PARCEL:fsaverage2FSLR'
+    case 'PARCEL:fsaverage2FSLR' % Transform anything from fsaverage to fs_LR
         infilename = varargin{1}; % '~/Data/Atlas_templates/CorticalParcellations/Yeo2011/Yeo_JNeurophysiol11_FreeSurfer/fsaverage/label/lh.Yeo2011_17Networks_N1000.label.gii'
         outfilename= varargin{2}; % '~/Data/Atlas_templates/FS_LR_164/Yeo_JNeurophysiol11_17Networks.164k.L.label.gii';
         hem        = varargin{3};
@@ -194,7 +194,7 @@ switch(what)
         
         % Convert surface to Gifti
         system(['wb_command -label-resample ' infilename ' ' inSphere ' ' outSphere ' ADAP_BARY_AREA ' outfilename ' -area-surfs ' inSphere ' ' outSphere]);
-    case 'PARCEL:Yeo2015' 
+    case 'PARCEL:Yeo2015'        % Make the probabilistic model from Yeo 2015 into a parcellation 
         hem=[1 2]; 
         for h=hem 
             infilename = fullfile(wbDir,'group32k',sprintf('Yeo_CerCor2015_12Comp.32k.%s.func.gii',Hem{h})); 
@@ -205,7 +205,7 @@ switch(what)
             G = surf_makeLabelGifti(data,'anatomicalStruct',hemname{h},'labelRGBA',[colorcube(13) ones(13,1)]); 
             save(G,outfilename); 
         end; 
-    case 'DCBC:computeDistances'
+    case 'DCBC:computeDistances' % Compute individual Dijkstra distances between vertices 
         sn=returnSubjs;
         hem = [1 2];
         resolution = '32k';
@@ -235,7 +235,7 @@ switch(what)
                 save(fullfile(surfDir,sprintf('distances.%s.mat',Hem{h})),'D','-v7.3');
             end;
         end;
-    case 'DCBC:avrgdistances'
+    case 'DCBC:avrgdistances'    % Average individual distances
         sn=[2,3,4,6,8,9,10,12,14];
         hem = [1 2];
         resolution = '32k';
@@ -255,7 +255,7 @@ switch(what)
             avrgDs=sparse(double(avrgD));
             save(fullfile(wbDir,'group32k',sprintf('distances_sp.%s.mat',Hem{h})),'avgrDs');
         end;
-    case 'DCBC:sphericalDist'
+    case 'DCBC:sphericalDist'    % Quick fix: Compute distances on the Sphere 
         hem = [1 2];
         resolution = '32k';
         A=gifti(fullfile(wbDir,'group32k','fs_LR.32k.L.sphere.surf.gii'));
@@ -264,7 +264,7 @@ switch(what)
         Dist(Dist>50)=0;
         Dist=sparse(Dist);
         save(fullfile(wbDir,'group32k',sprintf('distanceSp_sp.mat')),'Dist');
-    case 'Eval:DCBC'
+    case 'Eval:DCBC'             % Get the DCBC evaluation 
         sn=returnSubjs;
         hem = [1 2];
         resolution = '32k';
@@ -342,7 +342,7 @@ switch(what)
             end;
         end;
         varargout={RR};
-    case 'EVAL:doEval'
+    case 'EVAL:doEval'           % Recipe for producing the DCBC evaluation results 
         %         for h=1:2
         %             A=gifti(sprintf('Yeo_JNeurophysiol11_7Networks.32k.%s.label.gii',Hem{h}));
         %             parcel(:,h)=A.cdata;
@@ -413,7 +413,7 @@ switch(what)
         end;
         T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
         save('Eval_Yeo2015_Sphere_all.mat','-struct','T');
-    case 'EVAL:plotSingle'    
+    case 'EVAL:plotSingle'       % Plots a single evaluation   
         toPlot = 'Power2011'; 
         condType='all';
         CAT.linecolor={'k','r'};
@@ -432,7 +432,7 @@ switch(what)
         set(gcf,'PaperPosition',[2 2 3 3.7]); 
         wysiwyg; 
         keyboard;
-    case 'EVAL:plotEval'
+    case 'EVAL:plotEval'         % Comparision plot of different parcellations 
         g1 = [0.5 0.5 0.5]; % Gray 1
         toPlot={'Glasser','Yeo17','Yeo7','Power2011','Yeo2015','Desikan','Dextrieux','Icosahedron362'};
         CAT.linecolor={'r','b','b','b','g','k','k',g1};
