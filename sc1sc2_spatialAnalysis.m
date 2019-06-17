@@ -995,14 +995,14 @@ switch(what)
                 X(:,:,:,j)=spm_read_vols(V); 
             end; 
             M=mean(X,4); 
-            outname=sprintf('Cond%2.2d_%s.nii',A.condNumUni(1),A.condNamesFull{1}); 
+            outname=sprintf('MDTB%2.2d_%s.nii',A.condNumUni(1),A.condNamesFull{1}); 
             V.fname=fullfile(tgtDir,outname); 
             spm_write_vol(V,M); 
             V.dat=M; 
             Data(:,i)=suit_map2surf(V); 
             colNames{i}=A.condNamesFull{1};
             G1=surf_makeFuncGifti(Data(:,i),'anatomicalStruct','Cerebellum','columnNames',colNames(i)); 
-            outname=sprintf('Cond%2.2d_%s.func.gii',A.condNumUni(1),A.condNamesFull{1}); 
+            outname=sprintf('MDTB%2.2d_%s.func.gii',A.condNumUni(1),A.condNamesFull{1}); 
             save(G1,fullfile(tgtDir,outname));
         end; 
         G=surf_makeFuncGifti(Data,'anatomicalStruct','Cerebellum','columnNames',colNames); 

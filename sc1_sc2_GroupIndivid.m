@@ -113,13 +113,13 @@ switch what
         end        
         varargout={RR}; 
     case 'plotDiffCurves' % group versus indiv for multi-task map
-        EvalFiles={'GW0_Sess2_AllC','GW1_Sess2_AllC','GW.3_Sess2_AllC'};
+        EvalFiles={'GW0_Sess2_AllC','GW1_Sess2_AllC','GW.5_Sess2_AllC'};
         
         % Aesthetics
         CAT.markertype='none';
         CAT.errorwidth=.5;
-        CAT.linecolor={'r','k','b'};
-        CAT.errorcolor={'r','k','b'};
+        CAT.linecolor={'r','k','b','g'};
+        CAT.errorcolor={'r','k','b','g'};
         CAT.linewidth=2;
         CAT.linestyle='-';
         D=[]; 
@@ -136,10 +136,10 @@ switch what
        % Labelling
        D.distM = [D.distmin+D.distmax]/2; 
        lineplot(D.distM,D.DCBC,'split',D.type,'leg',EvalFiles,'CAT',CAT); 
-        set(gca,'YLim',[0 0.22],'FontSize',12,'XLim',[0 38],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
+        set(gca,'YLim',[0 0.22],'FontSize',12,'XLim',[0 40],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
         xlabel('Spatial Distances (mm)');
         ylabel('DCBC');
-        set(gcf,'Units','centimeters','PaperPosition',[2,2,6,6]);
+        set(gcf,'Units','centimeters','PaperPosition',[2,2,5,6]);
         wysiwyg; 
     case 'allCalculation' 
         T=sc1_sc2_GroupIndivid('BuildAndEval','groupW',0);
