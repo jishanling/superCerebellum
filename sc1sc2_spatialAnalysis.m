@@ -1007,6 +1007,28 @@ switch(what)
         end; 
         G=surf_makeFuncGifti(Data,'anatomicalStruct','Cerebellum','columnNames',colNames); 
         save(G,fullfile(tgtDir,'MDTB_maps.func.gii'));
+    case 'makeLabelAtlas'   % Generate Label.gii files with the correct color scheme 
+        srcDir = '/Users/jdiedrichsen/Matlab/imaging/suit/atlasesSUIT'; 
+        tgtDir = '/Users/jdiedrichsen/Matlab/imaging/suit/flatmap';
+        
+        Maps = {'Buckner_7Networks','Ji_10Networks','MDTB_10Regions'}; 
+        
+        for i = 1:length(Maps); 
+            labelNames={}; 
+            filename = fullfile(srcDir,[Maps{i} '.nii']); 
+            data = suit_map2surf(filename,'stats','mode'); 
+            Color=dlmread(fullfile(srcDir,[Maps{i} '_Color.txt'])); 
+            RGBA = [0 0 0 0;Color(:,2:4)/256 ones(size(Color,1),1)]; 
+            labelNames{1}='None'; 
+            numRegions=max(data);
+            for r=1:numRegions
+                labelNames{r+1}=sprintf('region %d',r); 
+            end; 
+            G=surf_makeLabelGifti(data,'anatomicalStruct','Cerebellum','columnNames',Maps(i),...
+                'labelNames',labelNames,'labelRGBA',RGBA); 
+            %   'labelNames': Cell array of Names for the labels 
+            save(G,fullfile(tgtDir,[Maps{i} '.label.gii']));
+        end; 
 end;
 % InterSubj Corr
 function C=intersubj_corr(Y)

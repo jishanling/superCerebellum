@@ -73,6 +73,52 @@ switch(what)
                 end;
             end;
         end
+    case 'SURF:map_con_sess'         % Map contrasts and sessions to surface, including ResMS (.nii) prewhitening
+        sn    = returnSubjs;     % subjNum
+        study = [1 2];
+        glm  = 4;     % glmNum
+        hemis = [1 2];
+        resolution = '32k';
+        D=dload(fullfile(baseDir,'sc1_sc2_taskConds_GLM.txt'));
+        vararginoptions(varargin,{'sn','study','glm','what','hemis','resolution'});
+        
+        for s=sn
+            for h=hemis
+                surfDir = fullfile(wbDir, subj_name{s});
+                white=fullfile(surfDir,sprintf('%s.%s.white.%s.surf.gii',subj_name{s},Hem{h},resolution));
+                pial=fullfile(surfDir,sprintf('%s.%s.pial.%s.surf.gii',subj_name{s},Hem{h},resolution));
+                C1=gifti(white);
+                C2=gifti(pial);
+                
+                for st = study
+                    T=getrow(D,D.StudyNum==st);
+                    glmDir =fullfile(baseDir,studyDir{st},sprintf('GLM_firstlevel_%d',glm),subj_name{s});
+                    S= load(fullfile(glmDir,'SPM_info.mat'));
+                    for se=[1 2]
+                        fprintf('SN:%s Hem:%s ST:%s SE:%d:',subj_name{s},Hem{h},studyDir{st},se);
+                        filename=fullfile(glmDir,'ResMS.nii');
+                        ResMS=surf_vol2surf(C1.vertices,C2.vertices,filename);
+                        numCond =max(S.cond);
+                        Data=zeros(size(ResMS.cdata,1),numCond+1); 
+                        for i=1:numCond
+                            betaNum = find(S.cond==i & S.sess==se); 
+                            for j=1:length(betaNum)
+                                filenames{j}=fullfile(glmDir,sprintf('beta_%04d.nii',betaNum(j))); 
+                            end
+                            Beta=surf_vol2surf(C1.vertices,C2.vertices,filenames);
+                            Data(:,i)=mean(Beta.cdata,2)./sqrt(ResMS.cdata); 
+                            fprintf('%d ',i); 
+                        end; 
+                        fprintf('\n'); 
+                        Data(:,numCond+1)=0; 
+                        Data=bsxfun(@minus,Data,mean(Data,2)); 
+                        G=surf_makeFuncGifti(Data,'anatomicalStruct',hemname{h},'columnNames',[T.condNames(2:end);'Rest']); 
+                        outfile = fullfile(surfDir,sprintf('%s.%s.%s.wcon.sess%d.%s.func.gii',subj_name{s},Hem{h},studyDir{st},se,resolution));
+                        save(G,outfile);   
+                    end;
+                end;
+            end
+        end
     case 'SURF:combine_con'    %  Does univariate noise normalization (combined) and then combines the contrast files by the common baseline
         sn    = returnSubjs;     % subjNum
         glm  = 4;     % glmNum
@@ -148,6 +194,17 @@ switch(what)
         
         % Convert surface to Gifti
         system(['wb_command -label-resample ' infilename ' ' inSphere ' ' outSphere ' ADAP_BARY_AREA ' outfilename ' -area-surfs ' inSphere ' ' outSphere]);
+    case 'PARCEL:Yeo2015' 
+        hem=[1 2]; 
+        for h=hem 
+            infilename = fullfile(wbDir,'group32k',sprintf('Yeo_CerCor2015_12Comp.32k.%s.func.gii',Hem{h})); 
+            outfilename = fullfile(wbDir,'group32k',sprintf('Yeo_CerCor2015_12Comp.32k.%s.label.gii',Hem{h})); 
+            A=gifti(infilename); 
+            [~,data]= max(A.cdata,[],2); 
+            data(sum(A.cdata,2)==0,1)=0; 
+            G = surf_makeLabelGifti(data,'anatomicalStruct',hemname{h},'labelRGBA',[colorcube(13) ones(13,1)]); 
+            save(G,outfilename); 
+        end; 
     case 'DCBC:computeDistances'
         sn=returnSubjs;
         hem = [1 2];
@@ -198,23 +255,23 @@ switch(what)
             avrgDs=sparse(double(avrgD));
             save(fullfile(wbDir,'group32k',sprintf('distances_sp.%s.mat',Hem{h})),'avgrDs');
         end;
-    case 'DCBC:sphericalDist' 
+    case 'DCBC:sphericalDist'
         hem = [1 2];
         resolution = '32k';
         A=gifti(fullfile(wbDir,'group32k','fs_LR.32k.L.sphere.surf.gii'));
-        C = double(A.vertices'); 
+        C = double(A.vertices');
         Dist = surfing_eucldist(C,C);
-        Dist(Dist>50)=0; 
-        Dist=sparse(Dist); 
+        Dist(Dist>50)=0;
+        Dist=sparse(Dist);
         save(fullfile(wbDir,'group32k',sprintf('distanceSp_sp.mat')),'Dist');
     case 'Eval:DCBC'
         sn=returnSubjs;
-        hem = [1 2];   
+        hem = [1 2];
         resolution = '32k';
-        taskSet = [1 2];   
-        condType = 'unique'; % Evaluate on all or only unique conditions? 
-        bins = [0:5:40];     % Spatial bins in mm 
-        parcel = [];         % N*2 matrix for both hemispheres 
+        taskSet = [1 2];
+        condType = 'unique'; % Evaluate on all or only unique conditions?
+        bins = [0:5:40];     % Spatial bins in mm
+        parcel = [];         % N*2 matrix for both hemispheres
         RR=[];
         distFile = 'distAvrg_sp';
         vararginoptions(varargin,{'sn','hem','bins','parcel','condType','taskSet','resolution','distFile'});
@@ -223,16 +280,16 @@ switch(what)
         for h=hem
             load(fullfile(wbDir,'group32k',distFile));
             
-            % Now find the pairs that we care about to safe memory 
+            % Now find the pairs that we care about to safe memory
             vertIdx = find(parcel(:,h)>0);
             avrgDs = avrgDs(vertIdx,vertIdx);
-            par    = parcel(vertIdx,h); 
+            par    = parcel(vertIdx,h);
             
             [row,col,avrgD]=find(avrgDs);
             inSp = sub2ind(size(avrgDs),row,col);
             sameReg=(bsxfun(@ne,par',par)+1);
             sameReg=sameReg(inSp);
-            clear avrgDs par; 
+            clear avrgDs par;
             for ts = taskSet;
                 D1=getrow(D,D.StudyNum==ts);
                 switch condType,
@@ -246,11 +303,11 @@ switch(what)
                     A=gifti(fullfile(wbDir,subj_name{s},sprintf('%s.%s.%s.con.%s.func.gii',subj_name{s},Hem{h},studyDir{ts},resolution)));
                     Data = [A.cdata(:,2:end-1) zeros(size(A.cdata,1),1)];
                     Data = bsxfun(@rdivide,Data,sqrt(A.cdata(:,end)));
-                    Data = Data(vertIdx,condIdx); % Take the right subset 
+                    Data = Data(vertIdx,condIdx); % Take the right subset
                     Data = bsxfun(@minus,Data,mean(Data,2));
                     Data = single(Data');
-                    [K,P]=size(Data); 
-                    clear A; 
+                    [K,P]=size(Data);
+                    clear A;
                     
                     SD = sqrt(sum(Data.^2)/K);
                     
@@ -263,8 +320,8 @@ switch(what)
                             in = i+(bw-1)*numBins;
                             inBin = avrgD>bins(i) & avrgD<=bins(i+1) & sameReg==bw;
                             R.SN(in,1)      = s;
-                            R.hem(in,1)     = h; 
-                            R.studyNum(in,1) = ts; 
+                            R.hem(in,1)     = h;
+                            R.studyNum(in,1) = ts;
                             R.N(in,1)       = sum(inBin(:));
                             R.avrDist(in,1) = mean(avrgD(inBin));
                             R.bwParcel(in,1)= bw-1;
@@ -284,92 +341,119 @@ switch(what)
                 end;
             end;
         end;
-        varargout={RR}; 
-    case 'EVAL:doEval' 
+        varargout={RR};
+    case 'EVAL:doEval'
+        %         for h=1:2
+        %             A=gifti(sprintf('Yeo_JNeurophysiol11_7Networks.32k.%s.label.gii',Hem{h}));
+        %             parcel(:,h)=A.cdata;
+        %         end;
+        %         T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
+        %         save('Eval_Yeo7_Sphere_all.mat','-struct','T');
+        %
+        %         for h=1:2
+        %             A=gifti(sprintf('Yeo_JNeurophysiol11_17Networks.32k.%s.label.gii',Hem{h}));
+        %             parcel(:,h)=A.cdata;
+        %         end;
+        %         T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
+        %         save('Eval_Yeo17_Sphere_all.mat','-struct','T');
+        %
 %         for h=1:2
-%             A=gifti(sprintf('Yeo_JNeurophysiol11_7Networks.32k.%s.label.gii',Hem{h})); 
-%             parcel(:,h)=A.cdata; 
-%         end; 
+%             A=gifti(sprintf('Glasser_2016.32k.%s.label.gii',Hem{h}));
+%             parcel(:,h)=A.cdata;
+%         end;
+%         parcel(isnan(parcel))=0;
 %         T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
-%         save('Eval_Yeo7_Sphere_all.mat','-struct','T'); 
-% 
-%         for h=1:2
-%             A=gifti(sprintf('Yeo_JNeurophysiol11_17Networks.32k.%s.label.gii',Hem{h})); 
-%             parcel(:,h)=A.cdata; 
-%         end; 
-%         T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
-%         save('Eval_Yeo17_Sphere_all.mat','-struct','T'); 
+%         save('Eval_Glasser_all.mat','-struct','T');
 %         
-         for h=1:2 
-             A=gifti(sprintf('Glasser_2016.32k.%s.label.gii',Hem{h})); 
-            parcel(:,h)=A.cdata; 
-        end; 
-        parcel(isnan(parcel))=0; 
-        T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
-        save('Eval_Glasser_all.mat','-struct','T'); 
+%         for h=1:2
+%             A=gifti(sprintf('Icosahedron-42.32k.%s.label.gii',Hem{h}));
+%             parcel(:,h)=A.cdata;
+%         end;
+%         T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
+%         save('Eval_Icosahedron42_Sphere_all.mat','-struct','T');
+%         
+%         for h=1:2
+%             A=gifti(sprintf('Icosahedron-162.32k.%s.label.gii',Hem{h}));
+%             parcel(:,h)=A.cdata;
+%         end;
+%         T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
+%         save('Eval_Icosahedron162_Sphere_all.mat','-struct','T');
+%         
+%         for h=1:2
+%             A=gifti(sprintf('Icosahedron-362.32k.%s.label.gii',Hem{h}));
+%             parcel(:,h)=A.cdata;
+%         end;
+%         T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
+%         save('Eval_Icosahedron362_Sphere_all.mat','-struct','T');
+%         
+%         for h=1:2
+%             A=gifti(sprintf('Power2011.32k.%s.label.gii',Hem{h}));
+%             parcel(:,h)=A.cdata;
+%         end;
+%         T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
+%         save('Eval_Power2011_Sphere_all.mat','-struct','T');
+%         
+%         for h=1:2
+%             A=gifti(sprintf('Desikan.32k.%s.label.gii',Hem{h}));
+%             parcel(:,h)=A.cdata;
+%         end;
+%         T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
+%         save('Eval_Desikan_all.mat','-struct','T');
+%         
+%         for h=1:2
+%             A=gifti(sprintf('Dextrieux.32k.%s.label.gii',Hem{h}));
+%             parcel(:,h)=A.cdata;
+%         end;
+%         T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
+%         save('Eval_Dextrieux_all.mat','-struct','T');
 
         for h=1:2
-            A=gifti(sprintf('Icosahedron-42.32k.%s.label.gii',Hem{h})); 
-            parcel(:,h)=A.cdata; 
-        end; 
-        T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
-        save('Eval_Icosahedron42_Sphere_all.mat','-struct','T'); 
-    
-        for h=1:2
-            A=gifti(sprintf('Icosahedron-162.32k.%s.label.gii',Hem{h})); 
-            parcel(:,h)=A.cdata; 
-        end; 
-        T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
-        save('Eval_Icosahedron162_Sphere_all.mat','-struct','T'); 
-    
-        for h=1:2
-            A=gifti(sprintf('Icosahedron-362.32k.%s.label.gii',Hem{h})); 
-            parcel(:,h)=A.cdata; 
-        end; 
-        T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
-        save('Eval_Icosahedron362_Sphere_all.mat','-struct','T'); 
-
-        for h=1:2
-            A=gifti(sprintf('Power2011.32k.%s.label.gii',Hem{h})); 
-            parcel(:,h)=A.cdata; 
-        end; 
-        T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
-        save('Eval_Power2011_Sphere_all.mat','-struct','T'); 
-
-         for h=1:2
-            A=gifti(sprintf('Desikan.32k.%s.label.gii',Hem{h})); 
-            parcel(:,h)=A.cdata; 
-        end; 
-        T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
-        save('Eval_Desikan_all.mat','-struct','T'); 
-
-        for h=1:2
-            A=gifti(sprintf('Dextrieux.32k.%s.label.gii',Hem{h})); 
-            parcel(:,h)=A.cdata; 
-        end; 
-        T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
-        save('Eval_Dextrieux_all.mat','-struct','T'); 
-
-
-  case 'EVAL:plotEval' 
-        g1 = [0.5 0.5 0.5]; % Gray 1 
-        toPlot={'Glasser','Yeo17','Yeo7','Desikan','Dextrieux','Icosahedron42','Icosahedron162','Icosahedron362'}; 
-        CAT.linecolor={'r','b','b','g','g',g1,g1,g1}; 
-        CAT.linestyle={'-','-',':','-',':','-','--',':'}; 
-        CAT.linewidth=2; 
-        CAT.markertype='none'; 
-        CAT.errorcolor={'r','b','b','g','g',g1,g1,g1};  
-        condType='all'; 
-        vararginoptions(varargin,{'toPlot','condType'}); 
-        T=[]; 
-        for i=1:length(toPlot)
-            D=load(sprintf('Eval_%s_%s.mat',toPlot{i},condType)); 
-            TT=tapply(D,{'bin','SN','distmin','distmax'},{'corr','mean','name','corrB','subset',D.bwParcel==0},...
-                                                         {'corr','mean','name','corrW','subset',D.bwParcel==1}); 
-            TT.parcel=ones(length(TT.SN),1)*i; 
-            T=addstruct(T,TT); 
+            A=gifti(sprintf('Yeo_CerCor2015_12Comp.32k.%s.label.gii',Hem{h}));
+            parcel(:,h)=A.cdata;
         end;
-        T.DCBC=T.corrB-T.corrW; 
-        T.binC = (T.distmin+T.distmax)/2; 
-        lineplot(T.binC,T.DCBC,'CAT',CAT,'split',T.parcel,'leg',toPlot); 
+        T=sc1_sc2_neocortical('Eval:DCBC','hem',[1 2],'parcel',parcel,'condType','all','distFile','distSphere_sp');
+        save('Eval_Yeo2015_Sphere_all.mat','-struct','T');
+    case 'EVAL:plotSingle'    
+        toPlot = 'Power2011'; 
+        condType='all';
+        CAT.linecolor={'k','r'};
+        CAT.linestyle={'-','-'};
+        CAT.linewidth=2;
+        CAT.markertype='none';
+        CAT.errorcolor={'k','r'};
+        vararginoptions(varargin,{'toPlot','condType'});
+        
+        T=load(['Eval_' toPlot '_Sphere_' condType '.mat']); 
+        D=tapply(T,{'bin','SN','distmin','distmax','bwParcel'},{'corr'},{'avrDist'});
+        D.binC = (D.distmin+D.distmax)/2;
+        lineplot(D.binC,D.corr,'split',D.bwParcel,'CAT',CAT); 
+        set(gca,'XLim',[0 40],'YLim',[-0.01 0.165],'XTick',[5:5:35]);
+        drawline(0,'dir','horz'); 
+        set(gcf,'PaperPosition',[2 2 3 3.7]); 
+        wysiwyg; 
+        keyboard;
+    case 'EVAL:plotEval'
+        g1 = [0.5 0.5 0.5]; % Gray 1
+        toPlot={'Glasser','Yeo17','Yeo7','Power2011','Yeo2015','Desikan','Dextrieux','Icosahedron362'};
+        CAT.linecolor={'r','b','b','b','g','k','k',g1};
+        CAT.linestyle={'-','-',':','--','-','-',':','-'};
+        CAT.linewidth=2;
+        CAT.markertype='none';
+        CAT.errorcolor={'r','b','b','b','g','k','k',g1};
+        condType='all';
+        vararginoptions(varargin,{'toPlot','condType'});
+        T=[];
+        for i=1:length(toPlot)
+            D=load(sprintf('Eval_%s_Sphere_%s.mat',toPlot{i},condType));
+            TT=tapply(D,{'bin','SN','distmin','distmax'},{'corr','mean','name','corrB','subset',D.bwParcel==0},...
+                {'corr','mean','name','corrW','subset',D.bwParcel==1});
+            TT.parcel=ones(length(TT.SN),1)*i;
+            T=addstruct(T,TT);
+        end;
+        T.DCBC=T.corrB-T.corrW;
+        T.binC = (T.distmin+T.distmax)/2;
+        lineplot(T.binC,T.DCBC,'CAT',CAT,'split',T.parcel,'leg',toPlot);
+        set(gca,'XLim',[0 40],'YLim',[-0.01 0.06],'XTick',[5:5:35]);
+        set(gcf,'PaperPosition',[2 2 3.3 3]); 
+        wysiwyg; 
 end;
