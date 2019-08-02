@@ -390,58 +390,193 @@ switch(what)
         
         set(gcf,'paperposition',[10 10 7 7])
         wysiwyg
-                
-    case 'get_wcon_cerebellum'           %  Gets the standardized activation maps for each session and experiment
+        
+    case 'cortical_pattern_consistency_all'     % Consistency based on betas
+        T=load(fullfile(regDir,'glm4','ts_162_tessellation_hem_all.mat'));
+        X=load(fullfile(regDir,'data','162_reorder.mat'));
+        ii = X.regIndx(X.good==1);
+        X=getrow(X,X.good==1);
+        
+        
+        % Project down to condition space
+        for s=1:numSubj
+            Yc(:,:,s)=X*pinv(X)*B(:,:,s);
+        end;
+        C1=intersubj_corr(Y);
+        C2=intersubj_corr(Yc);
+        C3=intersubj_corr(Y-Yc);
+        subplot(3,1,1);
+        imagesc(C1);
+        title('alldata');
+        subplot(3,1,2);
+        imagesc(C2);
+        title('means');
+        subplot(3,1,3);
+        imagesc(C3);
+        title('residuals');
+        varargout={C1,C2};
+    case 'cortical_pattern_consistency_session' % Between sessions / subjects
+        load(fullfile(encodeDir,'162_tesselation_hem_all.mat'));
+        numSubj=length(goodsubj);
+        sessNum = (partNum>8)+1;
+        for se=1:2
+            indx = find(sessNum==se);
+            X=indicatorMatrix('identity',condNum(indx,:));
+            for subj = 1:numSubj
+                Yp(:,:,subj+(se-1)*numSubj)=X*pinv(X)*Y(indx,:,subj);
+                Yf(:,:,subj+(se-1)*numSubj)=Y(indx,:,subj);
+            end;
+        end;
+        Cf=intersubj_corr(Yf);
+        Cp=intersubj_corr(Yp);
+        Cr=intersubj_corr(Yf-Yp);
+        subplot(3,2,1);
+        imagesc(Cf);
+        title('betas');
+        subplot(3,2,2);
+        [a1,a2,a3]=bwse_corr(Cf);
+        barplot([],[a2 a1 a3],'XTickLabel',{'DiffSess','DiffSubj','DiSeDiSu'});
+        subplot(3,2,3);
+        imagesc(Cp);
+        [a1,a2,a3]=bwse_corr(Cp);
+        title('means');
+        subplot(3,2,4);
+        barplot([],[a2 a1 a3],'XTickLabel',{'DiffSess','DiffSubj','DiSeDiSu'});
+        subplot(3,2,5);
+        imagesc(Cr);
+        [a1,a2,a3]=bwse_corr(Cr);
+        title('residuals');
+        subplot(3,2,6);
+        barplot([],[a2 a1 a3],'XTickLabel',{'DiffSess','DiffSubj','DiSeDiSu'});
+    case 'cortical_pattern_consistency_ts'      % Consistency between time series
+        T=load(fullfile(regDir,'glm4','ts_162_tessellation_hem_all.mat'));
+        type = {'Yhatm','Yhatr','Yres'};
+        X=load(fullfile(regDir,'data','162_reorder.mat'));
+        ii = X.regIndx(X.good==1);
+        
+        for t=1:3
+            Data = T.(type{t})(:,ii,:);
+            Data = bsxfun(@minus,Data,mean(Data,1));
+            Cor=intersubj_corr(Data);
+            subplot(1,3,t);
+            imagesc(Cor);
+            fprintf('%s: %2.2f\n',type{t},1-mean(squareform(1-Cor)));
+        end;
+        set(gcf,'PaperPosition',[2 2 6 2]);
+    case 'TS_power'
+        % Plot power spectrum of signal in cortical ROIs
+        sn=[2:22];  % subjNum
+        glm=4; % glmNum
+        type='162_tessellation_hem'; % 'cortical_lobes','whole_brain','yeo','desikan','cerebellum','yeo_cerebellum'
+        
+        vararginoptions(varargin,{'sn','glm4','type','session_specific'});
+        
+        glmDir =[baseDir sprintf('/GLM_firstlevel_%d',glm)];
+        numSubj=length(sn);
+        
+        for s=1:numSubj
+            fprintf('%d\n',s);
+            % load data
+            glmDirSubj=fullfile(glmDir, subj_name{sn(s)});
+            load(fullfile(glmDirSubj,'SPM_light.mat'));
+            T=load(fullfile(glmDirSubj,'SPM_info.mat'));
+            % load data
+            filename=(fullfile(regDir,sprintf('glm%d',glm),subj_name{sn(s)},sprintf('ts_%s.mat',type)));
+            load(filename);
+            TS.Y=[];
+            for b=1:length(SPM.Sess);
+                row=SPM.Sess(b).row;
+                TS.Y=[TS.Y Data(row,:)];
+            end;
+            TS.t=[0:length(row)-1]';
+            TS.Y=bsxfun(@minus,TS.Y,mean(TS.Y));
+            F=tsFT(TS);
+            F.P=F.F.*conj(F.F);
+            mid=find(F.om>0);
+            mid=mid(1);
+            semilogy(F.om(mid:end,1),mean(F.P(mid:end,:),2));
+            set(gca,'YLim',[1000 300000],'Box','off');
+            
+            keyboard;
+            
+        end;
+    case 'TS_interregion_corr'     % How consistent is the cortical connectivity pattern through the three signal sources
+        T=load(fullfile(sc1Dir,regDir,'glm4','ts_162_tessellation_hem_all_se.mat'));
+        numsubj = size(T.Yres,3);
+        N = size(T.Yres,1);
+        T.Yhat = T.Yhatm + T.Yhatr;
+        T.Y    = T.Yhat + T.Yres;
+        
+        X=load(fullfile(sc1Dir,regDir,'data','162_reorder.mat'));
+        Xx=getrow(X,X.newIndx);
+        ii = Xx.regIndx(Xx.good==1);
+        Xx=getrow(Xx,Xx.good==1);
+        
+        type ={'Yres','Yhat','Y'};
+        
+        blockSize = N/16;
+        Z=kron(eye(16),ones(blockSize,1));
+        
+        for t=1:3
+            Data = T.(type{t})(:,ii,:);
+            for s=1:21
+                Data(:,:,s) = Data(:,:,s) - Z*pinv(Z)*Data(:,:,s);  % subtract run means
+                meanSD(s,t)=mean((sum(Data(:,:,s).^2)/N));             % How much of the mean signal is this?
+            end;
+            C{t} = zeros(length(ii),length(ii),numsubj,2);
+            R{t} = zeros(length(ii),length(ii),numsubj,2);
+            for s=1:numsubj
+                for se=1:2
+                    idx = [1:N/2]+(se-1)*N/2;
+                    C{t}(:,:,s,se)=cov(Data(idx,:,s));
+                    R{t}(:,:,s,se)=corrcov(C{t}(:,:,s,se));
+                end;
+            end;
+        end;
+        DD=[];
+        pairs=[1 1;2 2;3 3;1 2;1 3;2 3];
+        pairtype=[1 2 3 4 5 6];
+        for p=1:size(pairs,1);
+            for s=1:numsubj
+                % fprintf('%d %d\n',s,p);
+                D.SN(s,1)   = s;
+                D.pair(s,1:2) = pairs(p,:);
+                r1 = mycorr([rsa_vectorizeRDM(R{pairs(p,1)}(:,:,s,1))',rsa_vectorizeRDM(R{pairs(p,2)}(:,:,s,2))']);
+                r2 = mycorr([rsa_vectorizeRDM(R{pairs(p,2)}(:,:,s,1))',rsa_vectorizeRDM(R{pairs(p,1)}(:,:,s,2))']);
+                D.corr(s,1)=(r1+r2)/2;
+                D.pairtype(s,1) = pairtype(p);
+            end;
+            DD=addstruct(DD,D);
+        end;
+        
+        subplot(2,2,4);
+        barplot(DD.pairtype,DD.corr);
+        set(gca,'XTickLabel',type)
+        title('Correlation of Correlation');
+        % Plots for lobes
+        borders=find([diff(Xx.lobe)~=0;0] & Xx.lobe>0);
+        
+        for t=1:3
+            subplot(2,2,t);
+            mR = mean(mean(R{t},3),4);
+            imagesc(mR);
+            drawline(borders);
+            drawline(borders,'dir','horz');
+        end;
+        set(gcf,'PaperPosition',[2 2 6 6]);
+        wysiwyg;
+        
+        %  save(fullfile(regDir,'glm4','Covariance_by_session.mat'),...
+        %     'C','R','Xx');
+        varargout={DD,meanSD};
+        
+    case 'get_mbeta_all'           %  Gets the mean betas for each session and experiment
         exper = {'sc1','sc2'};
         glm   = 4;
         yname = 'Cerebellum_grey';
-        xres = 42;
+        xname = '162_tessellation_hem';
         incInstr = 0;                           % Include instruction?
         vararginoptions(varargin,{'exper','glm','yname','xname','incInstr'});
-        
-        % Load the betas for all the tasks
-        for e=1:2
-            myRegDir = fullfile(rootDir,exper{e},regDir);
-            YD{e}=load(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',yname)));
-            XD{e}=load(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',xname)));
-        end;
-        
-        % Make an integrated structure, either including instruction or
-        % rest
-        if (incInstr)
-            T=dload(fullfile(rootDir,'sc1_sc2_taskConds_GLM.txt'));
-        else
-            T=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
-        end;
-        
-        % Make an integrated Structure
-        T1=T;
-        T2=T;
-        T1.sess=ones(length(T.condNum),1)*1;
-        T2.sess=ones(length(T.condNum),1)*2;
-        T=addstruct(T1,T2);
-        for s=1:size(YD{1}.B,1)
-            X{s}=[];
-            Y{s}=[];
-            for se=1:2
-                if (incInstr==0)  % If no instruction, add rest and center within session
-                    for e=1:2
-                        YD{e}.B{s,se}=[YD{e}.B{s,se}(2:end,:);zeros(1,size(YD{e}.B{s,se},2))];
-                        XD{e}.B{s,se}=[XD{e}.B{s,se}(2:end,:);zeros(1,size(XD{e}.B{s,se},2))];
-                        YD{e}.B{s,se}=bsxfun(@minus,YD{e}.B{s,se},mean(YD{e}.B{s,se}));
-                        XD{e}.B{s,se}=bsxfun(@minus,XD{e}.B{s,se},mean(XD{e}.B{s,se}));
-                    end;
-                end;
-                Y{s}=[Y{s};YD{1}.B{s,se};YD{2}.B{s,se}];
-                X{s}=[X{s};XD{1}.B{s,se};XD{2}.B{s,se}];
-            end;
-        end;
-        varargout = {X,Y,T};
-    case 'get_wcon_cortex' 
-        exper = {'sc1','sc2'};
-        glm   = 4;
-        xres = 42;
-        vararginoptions(varargin,{'exper','glm'});
         
         % Load the betas for all the tasks
         for e=1:2

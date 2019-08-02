@@ -687,7 +687,7 @@ switch(what)
             fprintf('Check segmentation results for %s\n', subj_name{sn(s)})
         end;
         
-    case 'SURF:run_all'                      % STEP 2.1-2.5: enter sn - runs all surface constructions (freesurfer + caret format transformation)
+    case 'SURF:run_all'                      % STEP 2.1-2.5: enter sn - runs all surface constructions (freesurfer + caret format transformation): DEPRECIATED 
         sn=varargin{1};
         
         subjs=length(sn) ;
@@ -697,7 +697,7 @@ switch(what)
             sc1_sc2_imana('SURF:map_ico',sn(s));
             sc1_sc2_imana('SURF:make_caret',sn(s));
         end
-    case 'SURF:recon_all'                    % STEP 2.2: Calls recon_all
+    case 'SURF:recon_all'                    % STEP 2.2: Calls recon_all: DEPRECIATED 
         % STUDY 1 ONLY
         % Calls recon-all, which performs, all of the
         % FreeSurfer cortical reconstruction process
@@ -707,7 +707,7 @@ switch(what)
         for i=sn
             freesurfer_reconall(fullfile(studyDir{1},freesurferDir),subj_name{i},fullfile(anatomicalDir,subj_name{i},['anatomical.nii']));
         end
-    case 'SURF:xhemireg'                     % STEP 2.3: cross-register surfaces left / right hem
+    case 'SURF:xhemireg'                     % STEP 2.3: cross-register surfaces left / right hem: DEPRECIATED 
         % STUDY 1 ONLY
         % surface-based interhemispheric registration
         % example: sc1_imana('surf_xhemireg',1)
@@ -716,7 +716,7 @@ switch(what)
         for i=s
             freesurfer_registerXhem({subj_name{i}},fullfile(studyDir{1},freesurferDir),'hemisphere',[1 2]); % For debug... [1 2] orig
         end;
-    case 'SURF:map_ico'                      % STEP 2.4: Align to the new atlas surface (map icosahedron)
+    case 'SURF:map_ico'                      % STEP 2.4: Align to the new atlas surface (map icosahedron): DEPRECIATED 
         % STUDY 1 ONLY
         % Resampels a registered subject surface to a regular isocahedron
         % This allows things to happen in atlas space - each vertex number
@@ -730,7 +730,7 @@ switch(what)
         for i=sn
             freesurfer_mapicosahedron_xhem(subj_name{i},fullfile(studyDir{1},freesurferDir),'smoothing',1,'hemisphere',[1:2]);
         end;
-    case 'SURF:make_caret'                   % STEP 2.5: Translate into caret format
+    case 'SURF:make_caret'                   % STEP 2.5: Translate into caret format: DEPRECIATED 
         % STUDY 1 ONLY
         % Imports a surface reconstruction from Freesurfer automatically into Caret
         % Makes a new spec file and moves the coord-files to respond to World,
