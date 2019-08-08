@@ -22,7 +22,6 @@ connDir         = ['connectivity_cerebellum'];
 %==========================================================================
 
 % % (2) Hemisphere and Region Names
-numReg     = length(regName);
 Hem       = {'L','R'};
 hemname   = {'CortexLeft','CortexRight'};
 subj_name = {'s01','s02','s03','s04','s05','s06','s07','s08','s09','s10','s11',...
@@ -395,24 +394,18 @@ switch(what)
         exper = {'sc1','sc2'};
         glm   = 4;
         yname = 'Cerebellum_grey';
-        xres = 42;
-        incInstr = 0;                           % Include instruction?
-        vararginoptions(varargin,{'exper','glm','yname','xname','incInstr'});
+        inclInstr = 0;                           % Include instruction?
+        vararginoptions(varargin,{'exper','glm','yname','xname','inclInstr'});
         
         % Load the betas for all the tasks
         for e=1:2
             myRegDir = fullfile(rootDir,exper{e},regDir);
             YD{e}=load(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',yname)));
-            XD{e}=load(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',xname)));
         end;
         
         % Make an integrated structure, either including instruction or
         % rest
-        if (incInstr)
-            T=dload(fullfile(rootDir,'sc1_sc2_taskConds_GLM.txt'));
-        else
-            T=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
-        end;
+        T=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
         
         % Make an integrated Structure
         T1=T;
@@ -421,41 +414,34 @@ switch(what)
         T2.sess=ones(length(T.condNum),1)*2;
         T=addstruct(T1,T2);
         for s=1:size(YD{1}.B,1)
-            X{s}=[];
             Y{s}=[];
             for se=1:2
-                if (incInstr==0)  % If no instruction, add rest and center within session
-                    for e=1:2
-                        YD{e}.B{s,se}=[YD{e}.B{s,se}(2:end,:);zeros(1,size(YD{e}.B{s,se},2))];
-                        XD{e}.B{s,se}=[XD{e}.B{s,se}(2:end,:);zeros(1,size(XD{e}.B{s,se},2))];
-                        YD{e}.B{s,se}=bsxfun(@minus,YD{e}.B{s,se},mean(YD{e}.B{s,se}));
-                        XD{e}.B{s,se}=bsxfun(@minus,XD{e}.B{s,se},mean(XD{e}.B{s,se}));
-                    end;
+                for e=1:2
+                    YD{e}.B{s,se}=[YD{e}.B{s,se}(2:end,:);zeros(1,size(YD{e}.B{s,se},2))];
+                    YD{e}.B{s,se}=bsxfun(@minus,YD{e}.B{s,se},mean(YD{e}.B{s,se}));
                 end;
                 Y{s}=[Y{s};YD{1}.B{s,se};YD{2}.B{s,se}];
-                X{s}=[X{s};XD{1}.B{s,se};XD{2}.B{s,se}];
             end;
         end;
-        varargout = {X,Y,T};
-    case 'get_wcon_cortex' 
-        exper = {'sc1','sc2'};
+        varargout = {Y,T};
+    case 'get_wcon_cortex'  % Gets the avarage wcontrast - from the t=regions_beta 
+        exper = [1 2];
         glm   = 4;
         xres = 42;
-        vararginoptions(varargin,{'exper','glm'});
+        inclInstr = 0; 
+        center = 1; 
+        sn   = returnSubjs; 
+        avrgResMS = 1;   % Averager residual MS across experiments? 
+        vararginoptions(varargin,{'exper','glm','xres','inclInstr','avrgResMS'});
         
         % Load the betas for all the tasks
-        for e=1:2
-            myRegDir = fullfile(rootDir,exper{e},regDir);
-            YD{e}=load(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',yname)));
-            XD{e}=load(fullfile(myRegDir,sprintf('glm%d',glm),sprintf('mbeta_%s_all.mat',xname)));
-        end;
-        
+        Isoname =  fullfile(wbDir,'group32k',sprintf('Icosahedron-%d.32k.L.label.gii',xres));
+        G=gifti(Isoname); 
+
         % Make an integrated structure, either including instruction or
-        % rest
-        if (incInstr)
-            T=dload(fullfile(rootDir,'sc1_sc2_taskConds_GLM.txt'));
-        else
-            T=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
+        T=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
+        if (inclInstr)
+        
         end;
         
         % Make an integrated Structure
@@ -464,23 +450,76 @@ switch(what)
         T1.sess=ones(length(T.condNum),1)*1;
         T2.sess=ones(length(T.condNum),1)*2;
         T=addstruct(T1,T2);
-        for s=1:size(YD{1}.B,1)
-            X{s}=[];
-            Y{s}=[];
-            for se=1:2
-                if (incInstr==0)  % If no instruction, add rest and center within session
-                    for e=1:2
-                        YD{e}.B{s,se}=[YD{e}.B{s,se}(2:end,:);zeros(1,size(YD{e}.B{s,se},2))];
-                        XD{e}.B{s,se}=[XD{e}.B{s,se}(2:end,:);zeros(1,size(XD{e}.B{s,se},2))];
-                        YD{e}.B{s,se}=bsxfun(@minus,YD{e}.B{s,se},mean(YD{e}.B{s,se}));
-                        XD{e}.B{s,se}=bsxfun(@minus,XD{e}.B{s,se},mean(XD{e}.B{s,se}));
+
+        for s=1:length(sn) 
+            load(fullfile(rootDir,'sc1','RegionOfInterest','data',subj_name{sn(s)},sprintf('regions_cortex.mat'))); % 'regions' are defined in 'ROI_define'
+            ResMS={}; 
+            voxDat={}; 
+            for e=exper
+                glmDirSubj = fullfile(rootDir,expStr{e},sprintf('GLM_firstlevel_%d',glm),subj_name{sn(s)});
+                spmT          = load(fullfile(glmDirSubj,'SPM_info.mat'));
+            
+                % Load the betas 
+                myRegDir = fullfile(rootDir,expStr{e},regDir,sprintf('glm%d',glm),subj_name{sn(s)});
+                load(fullfile(myRegDir,'betas_cortex.mat'));        
+                for h=1:2 
+                    ResMS{h}(e,:)=B{h}.resMS;  % Save away residual mean square for averaging 
+            
+                    % Now generate mean estimates per session
+                    % Note that in the new SPM_info Instruction is coded as cond =0
+                    if (inclInstr) 
+                        spmT.cond=spmT.cond+1;            % This is only for generating the avergaging matrix
                     end;
-                end;
-                Y{s}=[Y{s};YD{1}.B{s,se};YD{2}.B{s,se}];
-                X{s}=[X{s};XD{1}.B{s,se};XD{2}.B{s,se}];
+                    for se=1:2
+                        X=indicatorMatrix('identity_p',spmT.cond.*(spmT.sess==se));
+                        voxDat{h,e,se}=pinv(X)*B{h}.betasNW(1:size(X,1),:);  % This calculates average beta across runs, skipping intercepts
+                    end; 
+                end; 
             end;
-        end;
-        varargout = {X,Y,T};
+        
+        
+            for h=1:2  % Look over hemispheres and condense the data
+                if (avrgResMS) 
+                    ResMS{h}(1,:) = mean(ResMS{h}); 
+                    ResMS{h}(2,:) = ResMS{h}(1,:); 
+                end; 
+                
+                % Figure out mapping from Nodes to voxels in region 
+                N = length(R{h}.linvoxidxs); 
+                MAP = nan(size(R{h}.location2linvoxindxs)); 
+                for i=1:N
+                    MAP(R{h}.location2linvoxindxs==R{h}.linvoxidxs(i))=i;
+                end;
+                numReg = max(G.cdata); % Numner of cortical regions. 
+                regIndx = G.cdata(R{h}.location); 
+                
+                for se=1:2
+                    for e=1:2 
+                        voxDat{h,e,se}=[voxDat{h,e,se};zeros(1,size(voxDat{h,e,se},2))];  % Add rest 
+                        voxDat{h,e,se}=bsxfun(@rdivide,voxDat{h,e,se},sqrt(ResMS{h}(h,:))); % Prewhiten 
+                        voxDat{h,e,se}=bsxfun(@minus,voxDat{h,e,se},mean(voxDat{h,e,se}));  % Remove the mean from each session 
+                        
+                        % Summarize over cortical parcels 
+                        for r=1:numReg 
+                            voxIndx=(MAP(regIndx == r,:));
+                            regData{h,e,se}(:,r)=nanmean(voxDat{h,e,se}(:,unique(voxIndx(~isnan(voxIndx)))),2); 
+                        end; 
+                    end; 
+                end; 
+                reg(h).region = [1:numReg]'; 
+                reg(h).hemis  = ones(numReg,1)*h;
+            end; 
+
+            D{s}=[[regData{1,1,1} regData{2,1,1}];...
+                [regData{1,2,1} regData{2,2,1}];...
+                [regData{1,1,2} regData{2,1,2}];...
+                [regData{1,2,2} regData{2,2,2}]]; 
+            fprintf('Subject %d\n',sn(s)); 
+        end;                 
+        Reg = addstruct(reg(1),reg(2)); 
+        outname = fullfile(rootDir,'sc1','connectivity_cerebellum','wcon_all',sprintf('wcon_cortex_%d.mat',xres)); 
+        save(outname,'D','T','Reg');
+        varargout = {D,T,Reg};
     case 'mbeta_reliability' % Get beta reliability only on common task conditions
         % In the cerebellum (Y)
         glm =4;
@@ -530,23 +569,25 @@ switch(what)
         
         T=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
         
-        sn=goodsubj;
+        sn=returnSubjs;
         RR= [];
         method= 'ridgeFixed';  % linRegress, ridgeFixed, nonNegExp, cplexqp, lasso, winnerTakeAll
         yname = 'Cerebellum_grey';
-        xname = '162_tessellation_hem';
-        name  = 'mb4_162_ridge';  % mb4_162_ridge or ts4_yeo_nneg or mb5_162_lasso
+        xname = 'cortex_42';
+        name  = 'mb4_42_nneg';  % mb4_162_ridge or ts4_yeo_nneg or mb5_162_lasso
         trainMode = 'crossed';    % training can be done in a crossed or uncrossed fashion
         lambdaL1 = 2500;
         lambdaL2 = 2500;
         overwrite = 0;  % Overwrite old results or add to existing structure?
         exper  = 1;     % Task set to train
-        incInstr = 0;   % For future use: include Instruction
+        inclInstr = 0;   % For future use: include Instruction
         vararginoptions(varargin,{'sn','xname','type','exper','method','glm',...
-            'name','trainMode','lambdaL1','lambdaL2','incInstr','overwrite'});
+            'name','trainMode','lambdaL1','lambdaL2','incInstr','overwrite','numReg'});
         
         % Get data
-        [X,Y,S]=sc1sc2_connectivity('get_mbeta_all','incInstr',incInstr);
+        [Y,S]=sc1sc2_connectivity('get_wcon_cerebellum','inclInstr',inclInstr);
+        fname = fullfile(rootDir,'sc1','connectivity_cerebellum','wcon_all',sprintf('wcon_%s.mat',xname)); 
+        load(fname); 
         
         % Save the fit
         outDir = fullfile(rootDir,expStr{exper},connDir,name);
@@ -576,24 +617,32 @@ switch(what)
             end;
             
             % Get data
-            subjn=find(goodsubj==sn(s));
-            xx = X{subjn}(trainXindx,:);
-            yy = Y{subjn}(trainYindx,:);
+            ss = find(sn(s)==returnSubjs); 
+            xx = D{ss}(trainXindx,:);
+            yy = Y{ss}(trainYindx,:);
             
             % Run for all regularisation parameters
             for l=1:length(lambdaL1)
-                R.SN = sn(s);
-                [W,R.fR2m,R.fRm] = sc_connect_fit(yy,xx,method,'lambda',[lambdaL1(l) lambdaL2(l)]);
-                R.W={W};
-                R.lambda = [lambdaL1(l) lambdaL2(l)];
-                R.method   = {method};
-                R.incInstr = incInstr;
-                R.trainMode = {trainMode};
-                R.xname  = {xname};
+                R=[]; 
+                [W,fR2m,fRm] = sc_connect_fit(yy,xx,method,...
+                    'lambda',[lambdaL1(l) lambdaL2(l)],'numReg',numReg);
+                for i=1:size(W,3)
+                    R.SN(i,1)     = sn(s);
+                    R.W{i,1}      = W(:,:,i);
+                    R.lambda(i,:) = [lambdaL1(l) lambdaL2(l)];
+                    R.method{i,1} = method;
+                    R.incInstr(i,1) = inclInstr;
+                    R.trainMode{i,1} = trainMode;
+                    R.xname{i,1}  = xname;
+                    R.numReg(i,1) = i; 
+                    R.fR2m(i,1)   = fRm(i); 
+                    R.fRm(i,1)    = fR2m(i); 
+                end; 
                 RR=addstruct(RR,R);
             end;
             save(outName,'-struct','RR');
         end;  
+        varargout={RR}; 
     case 'run_connB'
         L1=[10 25 50 100];
         L2=[250 500 1000 1750 3500]; 
@@ -856,16 +905,23 @@ switch(what)
         % 'splitby': by which variable should the evaluation be split?
         % 'meanSub': Mean pattern subtraction before evaluation?
         M = varargin{1};        % This is a structure with the fitted data
-        T = dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
-        subset = T.StudyNum==2;
-        splitby= T.condNum;
+        subset = [];
+        splitby= [];
         yname = 'Cerebellum_grey';
-        xname = '162_tessellation_hem';
+        xname = 'cortex_42';
+        inclInstr= 0; 
         meanSub = 0; % Mean pattern subtraction before prediction?
         vararginoptions(varargin(2:end),{'subset','splitby','meanSub','xname','yname'});
         
         % Get all the mean betas and prepare the evaulation data
-        [X,Y,S]=sc1sc2_connectivity('get_mbeta_all','xname',xname,'yname',yname,'incInstr',0);
+        [Y,S]=sc1sc2_connectivity('get_wcon_cerebellum','inclInstr',inclInstr);
+        fname = fullfile(rootDir,'sc1','connectivity_cerebellum','wcon_all',sprintf('wcon_%s.mat',xname)); 
+        load(fname);
+        X=D; 
+        T=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
+        if (isempty(subset))
+            subset = T.StudyNum==2; 
+        end; 
         S.subset= [subset;subset];
         if (isempty(splitby))
             splitby = ones(length(T.StudyNum),1);
@@ -878,7 +934,7 @@ switch(what)
         RR=[];
         numModels = size(M.SN,1);
         for m=1:numModels
-            s=find(goodsubj==M.SN(m));
+            s=find(returnSubjs==M.SN(m));
             goodindx = sum(abs(Y{s}(:,:)))>0 & ~isnan(sum(Y{s}(:,:))) & ~isnan(sum(M.W{m}));
             for sp =1:length(splits);
                 if(meanSub)
@@ -925,26 +981,20 @@ switch(what)
     case 'evaluate_all'                     % Evaluates different sets of Connnectivity models
         whatAna=varargin{1};                % Which particular models / experiments / modes do you want to compare
         outname = whatAna;
-        xnames = {'162_tessellation_hem'};
+        xnames = {'cortex_42','cortex_162'};
+        sn = returnSubjs;
+
         D=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
-        sn = goodsubj;
         switch(whatAna)
-            case 'mb4_162_ridge'
-                name   = {'mb4_162_ridge';'mb4_162_ridge'};
-                traindata = [1 2];
-                subset    = [D.StudyNum==2 D.StudyNum==1]; % Evaluate on the other experiment
-                xnIn      = [1 1]; % use always 162 tesselation
-                ysplit    = ones(length(D.StudyNum),1); % No splitting
-            case 'mb4_162_all'
-                name   = {'mb4_162_ridge';'mb4_162_ridge';'mb4_162_wtan';'mb4_162_wtan';'mb4_162_nn';'mb4_162_nn'};
-                traindata = [1 2 1 2 1 2]';
-                subset    = [D.StudyNum==2 D.StudyNum==1 D.StudyNum==2 D.StudyNum==1 D.StudyNum==2 D.StudyNum==1]; % Evaluate on the other experiment
-                xnIn      = [1 1 1 1 1 1]; % use always 162 tesselation
+            case 'mb4_nnStep_all'
+                name   = {'mb4_42_nnStep';'mb4_162_nnStep'};
+                traindata = [1 1]';
+                subset    = [D.StudyNum==2 D.StudyNum==2]; % Evaluate on the other experiment
+                xnIn      = [1 2]; % use appropriate tesselation 
                 ysplit    = ones(length(D.StudyNum),1); % No splitting
         end;
         RR=[];
         for i=1:length(name)
-            sn=goodsubj;        % Restrict to good subjects
             for s=sn
                 fprintf('%d\n',s);
                 

@@ -59,16 +59,15 @@ switch(what)
                 
                 for st = study
                     glmDir =fullfile(baseDir,studyDir{st},sprintf('GLM_firstlevel_%d',glm),subj_name{s});
-                    T=load(fullfile(glmDir,'SPM_info.mat')); 
+                    T=load(fullfile(glmDir,'SPM_info.mat'));
                     filenames={};
                     for i=1:length(T.run);
-                        filenames{i} = fullfile(glmDir,sprintf('beta_%4.4d.nii',));
+                        filenames{i} = fullfile(glmDir,sprintf('beta_%4.4d.nii',i));
                     end;
                     filenames{i+1} = fullfile(glmDir,'ResMS.nii');
-                    T.condNames{i+1}= 'ResMS';
-                    outfile = fullfile(surfDir,sprintf('%s.%s.%s.con.%s.func.gii',subj_name{s},Hem{h},studyDir{st},resolution));
+                    outfile = fullfile(surfDir,sprintf('%s.%s.%s.beta.%s.func.gii',subj_name{s},Hem{h},studyDir{st},resolution));
                     
-                    G=surf_vol2surf(C1.vertices,C2.vertices,filenames,'column_names',T.condNames,'anatomicalStruct',hemname{h});
+                    G=surf_vol2surf(C1.vertices,C2.vertices,filenames,'column_names',filenames,'anatomicalStruct',hemname{h});
                     save(G,outfile);
                     
                     fprintf('mapped %s %s %s \n',subj_name{s},Hem{h},studyDir{st});
@@ -196,18 +195,18 @@ switch(what)
             outfilenamePattern=sprintf('wcon.%%s.%s.func.gii',Hem{h});
             surf_groupGiftis(inputFiles,'groupsummary',groupfile,'outcolnames',subj_name(sn),'outfilenamePattern',outfilenamePattern);
         end;
-    case 'SURF:groupSmooth' 
-        kernel =3; 
+    case 'SURF:groupSmooth'
+        kernel =3;
         cd(fullfile(wbDir,'group32k'));
-        for h=1:2 
-            fname = sprintf('group.wcon.%s.func.gii',Hem{h}); 
-            oname = sprintf('group.swcon.%s.func.gii',Hem{h}); 
-            A=gifti(fname);             
+        for h=1:2
+            fname = sprintf('group.wcon.%s.func.gii',Hem{h});
+            oname = sprintf('group.swcon.%s.func.gii',Hem{h});
+            A=gifti(fname);
             A.cdata(isnan(sum(A.cdata,2)),:)=0;
-            save(A,'temp.func.gii'); 
-            com = sprintf('wb_command -metric-smoothing fs_LR.32k.%s.midthickness.surf.gii temp.func.gii %d group.swcon.%s.func.gii -fix-zeros',Hem{h},kernel,Hem{h}); 
-            system(com); 
-        end; 
+            save(A,'temp.func.gii');
+            com = sprintf('wb_command -metric-smoothing fs_LR.32k.%s.midthickness.surf.gii temp.func.gii %d group.swcon.%s.func.gii -fix-zeros',Hem{h},kernel,Hem{h});
+            system(com);
+        end;
         delete('temp.func.gii');
     case 'SURF:resample32k'  % Resample functional data from group164 to group32
         hemis=[1 2];
@@ -612,11 +611,11 @@ switch(what)
             GC=surf_makeLabelGifti(Data,'anatomicalStruct',hemname{h},'labelRGBA',[zeros(1,4);[colorcube(K) ones(K,1)]]);
             save(GC,fullfile(wbDir,'group32k',sprintf('specCluster.%d.%s.label.gii',K,Hem{h})));
         end;
-        con = [10 15 21]; 
-        subplot(1,2,1); 
-        sc1_sc2_neocortical('CLUSTER:visualize',D.data,D.cl,Centroids,'threshold',0.9,'con',con); 
-        subplot(1,2,2); 
-        sc1_sc2_neocortical('CLUSTER:visualize',T.data,T.cl,Centroids,'threshold',0,'con',con); 
+        con = [10 15 21];
+        subplot(1,2,1);
+        sc1_sc2_neocortical('CLUSTER:visualize',D.data,D.cl,Centroids,'threshold',0.9,'con',con);
+        subplot(1,2,2);
+        sc1_sc2_neocortical('CLUSTER:visualize',T.data,T.cl,Centroids,'threshold',0,'con',con);
         keyboard;
     case 'CLUSTER:visualize'
         X=varargin{1};
@@ -624,14 +623,14 @@ switch(what)
         centroids=varargin{3};
         threshold=0.7; % Length threshold
         color_dots=1;
-        plot_lines=1; 
+        plot_lines=1;
         K=max(cl);
         color=colorcube(K+1);
         con=[ 50    49    40]; % unidrnd(N,1,3); % [4 8 24]; %
-
+        
         vararginoptions(varargin(4:end),{'threshold','plot_lines','color_dots','con'});
         
-        L = sqrt(sum(X(:,:).^2,2)); 
+        L = sqrt(sum(X(:,:).^2,2));
         th  = quantile(L,threshold);
         D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         Y=X(:,con);
@@ -648,7 +647,7 @@ switch(what)
             end;
         end;
         hold off;
-        l=abs(minmax(minmax(X(:,con)))); 
+        l=abs(minmax(minmax(X(:,con))));
         xlabel(D.condNames{con(1)});
         ylabel(D.condNames{con(2)});
         zlabel(D.condNames{con(3)});
@@ -656,45 +655,45 @@ switch(what)
         axis equal;
         set(gcf,'PaperPosition',[2 2 8 6]);
         wysiwyg;
-    case 'GRAD:compute'             % Computes local gradient 
+    case 'GRAD:compute'             % Computes local gradient
         cd(fullfile(wbDir,'group32k'));
         normalize=0; % Normalize each location before computing the gradient?
         vararginoptions(varargin,{'normalize'})
-        for h=1:2 
-            sname = sprintf('fs_LR.32k.%s.midthickness.surf.gii',Hem{h}); 
-            fname = sprintf('group.swcon.%s.func.gii',Hem{h}); 
-            if (normalize) 
-                A = gifti(fname); 
-                X = A.cdata; 
+        for h=1:2
+            sname = sprintf('fs_LR.32k.%s.midthickness.surf.gii',Hem{h});
+            fname = sprintf('group.swcon.%s.func.gii',Hem{h});
+            if (normalize)
+                A = gifti(fname);
+                X = A.cdata;
                 X = bsxfun(@rdivide,X,sqrt(sum(X.^2,2)));
-                B = surf_makeFuncGifti(X,'anatomicalStruct',hemname{h}); 
-                fname   = sprintf('group.nwcon.%s.func.gii',Hem{h}); 
+                B = surf_makeFuncGifti(X,'anatomicalStruct',hemname{h});
+                fname   = sprintf('group.nwcon.%s.func.gii',Hem{h});
                 save(B,fname);
             end
-            oname = sprintf('group.grad.%s.func.gii',Hem{h}); 
-            vname = sprintf('group.vec.%s.func.gii',Hem{h}); 
-            com = sprintf('wb_command -metric-gradient %s %s %s -vectors %s',sname,fname,oname,vname); 
-            system(com); 
-        end; 
-    case 'GRAD:compare' 
+            oname = sprintf('group.grad.%s.func.gii',Hem{h});
+            vname = sprintf('group.vec.%s.func.gii',Hem{h});
+            com = sprintf('wb_command -metric-gradient %s %s %s -vectors %s',sname,fname,oname,vname);
+            system(com);
+        end;
+    case 'GRAD:compare'
         cd(fullfile(wbDir,'group32k'));
-        for h=1:2 
-            fname = sprintf('group.vec.%s.func.gii',Hem{h}); 
-            oname = sprintf('group.mgrad.%s.func.gii',Hem{h}); 
-            A=gifti(fname);             
-            [N,Q]=size(A.cdata); 
-            V=reshape(A.cdata,N,3,Q/3); 
+        for h=1:2
+            fname = sprintf('group.vec.%s.func.gii',Hem{h});
+            oname = sprintf('group.mgrad.%s.func.gii',Hem{h});
+            A=gifti(fname);
+            [N,Q]=size(A.cdata);
+            V=reshape(A.cdata,N,3,Q/3);
             A=sqrt(sum(V.^2,2));
-            A=mean(A,3); 
-            V=permute(V,[3 2 1]); 
-            for i=1:size(V,3) 
-                B(i,1:2)=sqrt(eigs(double(V(:,:,i)'*V(:,:,i)),2)); 
+            A=mean(A,3);
+            V=permute(V,[3 2 1]);
+            for i=1:size(V,3)
+                B(i,1:2)=sqrt(eigs(double(V(:,:,i)'*V(:,:,i)),2));
                 if (mod(i,1000)==0)
-                    fprintf('.'); 
+                    fprintf('.');
                 end
-            end; 
-            fprintf('\n'); 
+            end;
+            fprintf('\n');
             K=surf_makeFuncGifti([A B(:,1) B(:,1)-B(:,2) B(:,1)./sum(B,2)],'columnName',{'avrgGrad','sqEig1','sqEigD','sqEigN'},'anatomicalStruct',hemname{h});
-            save(K,oname); 
-        end; 
+            save(K,oname);
+        end;
 end;

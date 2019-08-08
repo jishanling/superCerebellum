@@ -1,5 +1,5 @@
 function [u,R2,R,R2_vox,R_vox,varargout]=sc_connect_fit(Y,X,method,varargin)
-% function [u,R2,R,R2_vox,R_vox,varargout]=sc1_encode_fit(Y,X,method,varargin)
+% function [u,R2,R,R2_vox,R_vox,varargout]=sc1_connect_fit(Y,X,method,varargin)
 %
 % INPUT:
 %    Y: NxP matrix Data
@@ -8,6 +8,8 @@ function [u,R2,R,R2_vox,R_vox,varargout]=sc_connect_fit(Y,X,method,varargin)
 % VARARGIN:
 %    'threshold': Thresholds the u-coefficient at a particular value(s)
 %                 before evaluating the prediction (all < threshold -> 0)
+%    'numReg' : For nonNegStepwise the maximum number of regions 
+%    'lambda' : [L1 L2] regularization coefficient
 % OUTPUT:
 %    R2      : correlation value between Y-actual and Y-pred (overall)
 %    R       : portion of correctly specified variance (overall)
@@ -15,6 +17,7 @@ function [u,R2,R,R2_vox,R_vox,varargout]=sc_connect_fit(Y,X,method,varargin)
 %    R_vox   : correlation values between Y-actual and Y-pred (voxels)
 %    u       : regression coefficients
 % Maedbh King (26/08/2016)
+% joern.diedrichsen@googlemail.com
 i=0;
 [N,P] = size(Y);
 [N,Q] = size(X);
@@ -22,7 +25,7 @@ lambda=0;
 u=zeros(Q,P);
 features=[1:Q];
 
-vararginoptions(varargin,{'lambda'});
+vararginoptions(varargin,{'lambda','numReg'});
 
 % Estimate the weights
 switch method
@@ -151,6 +154,35 @@ switch method
             u(I,p)=X(:,I)'*X(:,I)\X(:,I)'*Y(:,p);
         end
         u(u<0)=0;
+    case 'nonNegStepwise'  % Non-negative regression with stepwise 
+        u=zeros(Q,P,numReg); 
+        for p=1:P
+            if (~isnan(sum(Y(:,p))))
+                inIndx = []; 
+                for k=1:numReg; % Loop over the number of         
+                    bestRSS = inf; 
+                    for q=1:Q; % Loop over all possible cortical parcels
+                        if (~ismember(q,inIndx))
+                            U = lsqnonneg(X(:,[inIndx q]),Y(:,p)); % seems faster on small problems than cplex 
+                            Ypred=X(:,[inIndx q])*U; 
+                            res = Y(:,p)-Ypred; 
+                            RSS = res'*res; 
+                            if RSS < bestRSS 
+                              bestU=U; 
+                              bestIndx=q; 
+                              bestRSS = RSS; 
+                            end 
+                        end
+                    end; 
+                    inIndx = [inIndx bestIndx]; % Add regressor to model 
+                    u(inIndx,p,k)=bestU;
+                end; 
+                if (mod(p,100)==0)
+                    fprintf('.'); 
+                end; 
+            end;
+        end;
+        fprintf('\n'); 
     case 'ridgeFixed'               % L2 regression
         %             u = G*trainX'*((trainX*G*trainX'+eye(sum(trainIdx))*sigma2)\trainY);
         u = (X'*X + eye(Q)*lambda(2))\(X'*Y);
@@ -161,19 +193,20 @@ end
 % Evaluate prediction by calculating R2 and R
 SST = nansum(Y.*Y);
 
-Ypred=X*u;
-res =Y-Ypred;
-SSR = nansum(res.^2);
-R2_vox(1,:) = 1-SSR./SST;
-R2          = 1-nansum(SSR)/nansum(SST);
+for i=1:size(u,3) 
+    Ypred=X*u(:,:,i);
+    res =Y-Ypred;
+    SSR = nansum(res.^2);
+    R2_vox(i,:) = 1-SSR./SST;
+    R2(i,1)     = 1-nansum(SSR)/nansum(SST);
 
-% R (per voxel)
-SYP = nansum(Y.*Ypred,1);
-SPP = nansum(Ypred.*Ypred);
+    % R (per voxel)
+    SYP = nansum(Y.*Ypred,1);
+    SPP = nansum(Ypred.*Ypred);
 
-R_vox(1,:) = SYP./sqrt(SST.*SPP);
-R          = nansum(SYP)./sqrt(nansum(SST).*nansum(SPP));
-
+    R_vox(i,:) = SYP./sqrt(SST.*SPP);
+    R(i,1)          = nansum(SYP)./sqrt(nansum(SST).*nansum(SPP));
+end; 
 
 % Derivative functions for models
 % Basic non-negative regression without a prior
