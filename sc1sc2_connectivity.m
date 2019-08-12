@@ -935,7 +935,7 @@ switch(what)
         sS = getrow(S,S.subset);
         splits = unique(sS.splitby);
         
-        % Loop over models and evaulate
+        % Loop over models and evaluate
         RR=[];
         numModels = size(M.SN,1);
         for m=1:numModels
@@ -949,18 +949,24 @@ switch(what)
                         Y{s}(indx,:)=bsxfun(@minus,Y{s}(indx,:),mean(Y{s}(indx,:)));
                     end;
                 end;
+                
+                % Make one index that arranges the data [sess1;sess2]
                 testAindx=[find(S.subset & S.sess==1 & S.splitby==splits(sp));...
                     find(S.subset & S.sess==2 & S.splitby==splits(sp))];
+                % Make one index that arranges the data [sess2;sess1]
                 testBindx=[find(S.subset & S.sess==2 & S.splitby==splits(sp));...
                     find(S.subset & S.sess==1 & S.splitby==splits(sp))];
+                % If the data is sorted [sess2;sess1], then [sess1;sess2]
+                % is the crossvalidated estimate. 
                 predY   = X{s}(testAindx,:)*M.W{m};                    % Predicted Y using crossvalidation
                 predYnc = X{s}(testBindx,:)*M.W{m};                    % Predicted Y not crossvalidated
-                SSP   = sum(sum(predY(:,goodindx).^2));             % Sum of square of predictions
-                SSY   = sum(sum(Y{s}(testBindx,goodindx).^2));               % Sum of squares of data
-                SSCp  = sum(sum(predY(:,goodindx).*predYnc(:,goodindx))); % Covariance of PRedictions
+                % Caluculate the respective sums-of-squares 
+                SSP   = sum(sum(predY(:,goodindx).^2));                             % Sum of square of predictions
+                SSY   = sum(sum(Y{s}(testBindx,goodindx).^2));                      % Sum of squares of data
+                SSCp  = sum(sum(predY(:,goodindx).*predYnc(:,goodindx)));           % Covariance of Predictions
                 SSCy  = sum(sum(Y{s}(testAindx,goodindx).*Y{s}(testBindx,goodindx)));  % Covariance of Y's
-                SSCn  = sum(sum(predYnc(:,goodindx).*Y{s}(testBindx,goodindx)));   % Covariance of non-cross prediction and data
-                SSCc  = sum(sum(predY(:,goodindx).*Y{s}(testBindx,goodindx)));   % Covariance of cross prediction and data
+                SSCn  = sum(sum(predYnc(:,goodindx).*Y{s}(testBindx,goodindx)));    % Covariance of non-cross prediction and data
+                SSCc  = sum(sum(predY(:,goodindx).*Y{s}(testBindx,goodindx)));      % Covariance of cross prediction and data
                 R.SN    = M.SN(m);
                 R.lambda = M.lambda(m,:);
                 R.method = M.method(m);
@@ -968,8 +974,13 @@ switch(what)
                 R.xname = M.xname(m);
                 R.Rcv   = SSCc ./ sqrt(SSY.*SSP); % Double-Crossvalidated predictive correlation
                 R.Rnc   = SSCn ./ sqrt(SSY.*SSP); % Not double-crossvalidated predictive correlation
-                R.Ry    = SSCy ./ SSY;            % Reliability of data: noise ceiling
+                R.Ry    = SSCy ./ SSY;            % Reliability of data
                 R.Rp    = SSCp ./ SSP;            % Reliability of prediction
+                
+                % If we knew the true pattern, the best correlation we
+                % would expect is sqrt(Ry) 
+                % We also want to take into account the relaibility 
+                
                 R.split = splits(sp);
                 % Calucate Sparseness measures
                 Ws = sort(abs(M.W{m}));
@@ -1110,7 +1121,7 @@ switch(what)
     case 'evaluate_plot_method'   % Does sc1 and sc2 with BM or not
         name = {'eval_mb4_162_all.mat'};
         yfield = 'Rcv';
-        xfield = 'ginni';
+        xfield = 'spIdx';
         
         T=[];
         for n=1:length(name)   % Loop over files
@@ -1147,20 +1158,27 @@ switch(what)
         [methStr,~,T.methNum] = unique(T.method);
         [lambda,b,T.lamCat]=unique([T.lambda],'rows');
         for i=1:length(T.SN) 
-            [~,T.numTessel(i,1)] = textscan(T.xname{i},'%s%d','delimiter','_'); 
+            a = textscan(T.xname{i},'%s%d','delimiter','_'); 
+            T.parcelType{i,1}=a{1}; 
+            T.numTessel(i,1)=double(a{2}); 
         end; 
         % Do an xyplot normalized to an upper noise ceiling, which only is
         % determined by the relability of the data
-        xyplot(T.(xfield),T.(yfield)./sqrt(T.Ry),T.lamCat,'split',T.methNum,'style_thickline','leg',methStr,'subset',T.traindata==2);
+        figure(1); 
+        lineplot(T.numReg,T.(yfield)./sqrt(T.Ry),'split',[T.numTessel],...
+            'subset',T.methNum==2,'leg','auto','style_thickline'); 
+        figure(2); 
+        xyplot(T.spIdx,T.(yfield)./sqrt(T.Ry),T.numReg,'split',[T.methNum T.numTessel],...
+            'leg','auto','style_thickline'); 
         
         % Now determine a lower noise ceiling.... This is determined by the
         % reliability of the prediction, which is model dependent. We here
         % use the average across models
-        noiseCeil = mean(T.Rp);
+        noiseCeil = mean(sqrt(T.Rp));
         drawline(noiseCeil,'dir','horz');
-        set(gca,'YLim',[0.3 1]);
+        set(gca,'YLim',[0.3 0.85]);
         set(gcf,'PaperPosition',[2 2 6 6]);
-        varargout={T};
+        %varargout={T};
         % wysiwyg;
     case 'TS_subspace_overlap'   % Determine relative eigenvalues after projection
         load(fullfile(regDir,'glm4','Covariance_by_session.mat'));
