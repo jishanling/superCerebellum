@@ -578,6 +578,7 @@ switch(what)
         trainMode = 'crossed';    % training can be done in a crossed or uncrossed fashion
         lambdaL1 = 2500;
         lambdaL2 = 2500;
+        numReg = NaN; 
         overwrite = 0;  % Overwrite old results or add to existing structure?
         exper  = 1;     % Task set to train
         inclInstr = 0;   % For future use: include Instruction
@@ -650,6 +651,10 @@ switch(what)
         sc1sc2_connectivity('conn_mbeta','method','cplexqpL1L2','lambdaL1',L1,'lambdaL2',L1*0,'name','mb4_162_nn','exper',2);
         sc1sc2_connectivity('conn_mbeta','method','cplexqpL1L2','lambdaL1',L2*0,'lambdaL2',L2,'name','mb4_162_nn','exper',1);
         sc1sc2_connectivity('conn_mbeta','method','cplexqpL1L2','lambdaL1',L2*0,'lambdaL2',L2,'name','mb4_162_nn','exper',2);
+        sc1sc2_connectivity('conn_mbeta','method','winnerTakeAll_nonNeg','name','mb4_362_wtan','xname','cortex_362','exper',1,'overwrite',1,'numReg',1);
+        sc1sc2_connectivity('conn_mbeta','method','nonNegStepwise','name','mb4_362_nnStep','xname','cortex_362','exper',1,'overwrite',1,'numReg',7);
+        sc1sc2_connectivity('conn_mbeta','method','nonNegStepwise','name','mb4_362_nnStep','xname','cortex_362','exper',2,'overwrite',1,'numReg',7);
+    
     case 'conn_ts'                 % Run encoding model on time series
         % sc1_connectivity('conn_ts',[2:22],'method','winnerTakeAll_nonNeg','name','glm4_162_nnWTA','lambdaL1',0,'lambdaL2',0);
         % sc1_connectivity('conn_ts',goodsubj,'method','winnerTakeAll','name','glm4_162_WTA','lambdaL1',0,'lambdaL2',0);
@@ -974,6 +979,7 @@ switch(what)
                 w=(N-[1:N]'+0.5)/N;
                 ginni = 1-2*sum(bsxfun(@times,Wss,w));
                 R.ginni = nanmean(ginni); % Ginni index: mean over voxels
+                R.numReg = M.numReg(m); 
                 RR = addstruct(RR,R);
             end;
         end;
@@ -981,16 +987,28 @@ switch(what)
     case 'evaluate_all'                     % Evaluates different sets of Connnectivity models
         whatAna=varargin{1};                % Which particular models / experiments / modes do you want to compare
         outname = whatAna;
-        xnames = {'cortex_42','cortex_162'};
+        xnames = {'cortex_42','cortex_162','cortex_362'};
         sn = returnSubjs;
 
         D=dload(fullfile(rootDir,'sc1_sc2_taskConds.txt'));
         switch(whatAna)
             case 'mb4_nnStep_all'
-                name   = {'mb4_42_nnStep';'mb4_162_nnStep'};
-                traindata = [1 1]';
-                subset    = [D.StudyNum==2 D.StudyNum==2]; % Evaluate on the other experiment
-                xnIn      = [1 2]; % use appropriate tesselation 
+                name   = {'mb4_42_nnStep';'mb4_42_nnStep';'mb4_162_nnStep';'mb4_162_nnStep';'mb4_362_nnStep'};
+                traindata = [1 2 1 2 1]';
+                subset    = [D.StudyNum==2 D.StudyNum==1 D.StudyNum==2 D.StudyNum==1 D.StudyNum==2]; % Evaluate on the other experiment
+                xnIn      = [1 1 2 2 3]; % use appropriate tesselation 
+                ysplit    = ones(length(D.StudyNum),1); % No splitting
+            case 'mb4_wtan_all'
+                name   = {'mb4_42_wtan';'mb4_42_wtan';'mb4_162_wtan';'mb4_162_wtan';'mb4_362_wtan';'mb4_362_wtan';};
+                traindata = [1 2 1 2 1 2]';
+                subset    = [D.StudyNum==2 D.StudyNum==1 D.StudyNum==2 D.StudyNum==1 D.StudyNum==2 D.StudyNum==1]; % Evaluate on the other experiment
+                xnIn      = [1 1 2 2 3 3]; % use appropriate tesselation 
+                ysplit    = ones(length(D.StudyNum),1); % No splitting
+            case 'mb4_nneg_all'
+                name   = {'mb4_162_nneg';'mb4_162_nneg'};
+                traindata = [1 2 1 2 1 2]';
+                subset    = [D.StudyNum==2 D.StudyNum==1]; % Evaluate on the other experiment
+                xnIn      = [2 2 ]; % use appropriate tesselation 
                 ysplit    = ones(length(D.StudyNum),1); % No splitting
         end;
         RR=[];
@@ -1102,6 +1120,35 @@ switch(what)
         
         [methStr,~,T.methNum] = unique(T.method);
         [lambda,b,T.lamCat]=unique([T.lambda],'rows');
+        % Do an xyplot normalized to an upper noise ceiling, which only is
+        % determined by the relability of the data
+        xyplot(T.(xfield),T.(yfield)./sqrt(T.Ry),T.lamCat,'split',T.methNum,'style_thickline','leg',methStr,'subset',T.traindata==2);
+        
+        % Now determine a lower noise ceiling.... This is determined by the
+        % reliability of the prediction, which is model dependent. We here
+        % use the average across models
+        noiseCeil = mean(T.Rp);
+        drawline(noiseCeil,'dir','horz');
+        set(gca,'YLim',[0.3 1]);
+        set(gcf,'PaperPosition',[2 2 6 6]);
+        varargout={T};
+        % wysiwyg;
+    case 'evaluate_plot_tessel'   % Does sc1 and sc2 with BM or not
+        name = {'eval_mb4_nnStep_all.mat','eval_mb4_wtan_all.mat','eval_mb4_nneg_all.mat'};
+        yfield = 'Rcv';
+        xfield = 'spIdx';
+        
+        T=[];
+        for n=1:length(name)   % Loop over files
+            TT=load(fullfile(sc1Dir,'connectivity_cerebellum','evaluation',name{n}));
+            T=addstruct(T,TT);
+        end;
+        
+        [methStr,~,T.methNum] = unique(T.method);
+        [lambda,b,T.lamCat]=unique([T.lambda],'rows');
+        for i=1:length(T.SN) 
+            [~,T.numTessel(i,1)] = textscan(T.xname{i},'%s%d','delimiter','_'); 
+        end; 
         % Do an xyplot normalized to an upper noise ceiling, which only is
         % determined by the relability of the data
         xyplot(T.(xfield),T.(yfield)./sqrt(T.Ry),T.lamCat,'split',T.methNum,'style_thickline','leg',methStr,'subset',T.traindata==2);
