@@ -219,6 +219,28 @@ switch(what)
             % wb_command -metric-resample group164K/group.wcon.L.func.gii group164K/fs_LR.164k.L.sphere.surf.gii group32K/fs_LR.32k.L.sphere.surf.gii BARYCENTRIC group32K/group.wcon.L.func.gii
             % wb_command -metric-resample group164K/group.wcon.R.func.gii group164K/fs_LR.164k.R.sphere.surf.gii group32K/fs_LR.32k.R.sphere.surf.gii BARYCENTRIC group32K/group.wcon.R.func.gii
         end;
+    case 'SURF:voxel2vertex' % Tansforms voxels-based data (from regions_cortex.mat) to vertices 
+        % Data should be P(voxel) x K (conditions / values)
+        sn   = []; 
+        hem  = []; 
+        numVert = 32492; 
+        vararginoptions(varargin,{'data','hem','sn'});
+        
+        load(fullfile(rootDir,'sc1','RegionOfInterest','data',subj_name{sn},sprintf('regions_cortex.mat'))); % 'regions' are defined in 'ROI_define'
+        
+                
+        % Figure out mapping from Nodes to voxels in region 
+        N = length(R{hem}.linvoxidxs); 
+        MAP = nan(size(R{hem}.location2linvoxindxs)); % Make a structure of vertices (without medial wall to indices in ROI structure)
+        for i=1:N
+            MAP(R{hem}.location2linvoxindxs==R{hem}.linvoxidxs(i))=i;
+        end;
+
+        vData = nan(numVert,size(data,2)); % Make outout data structure 
+        for i=1:length(R{hem}.location)
+            vData(R{hem}.location(i),:)=nanmean(data(MAP(i,:),:),1);
+        end; 
+        varargout = {vData};
     case 'SURF:getAllData' % returns all cortical data - zero centered
         A=gifti(fullfile(wbDir,'group32k','Icosahedron-362.32k.L.label.gii')); % Determine medial wall
         indx = find(A.cdata>0);
