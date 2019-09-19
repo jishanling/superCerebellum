@@ -1,10 +1,9 @@
-
 function varargout=sc1_sc2_functionalAtlas(what,varargin)
 
 % Directories
-baseDir          = '/Users/maedbhking/Documents/Cerebellum_Cognition';
+baseDir          = '/Users/maedbhking/Documents/projects/Cerebellum_Cognition';
 % baseDir          = '/Users/maedbhking/Remote/Documents2/Cerebellum_Cognition';
-baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
+% baseDir            = '/Volumes/MotorControl/data/super_cerebellum_new';
 % baseDir          = '/Users/jdiedrichsen/Data/super_cerebellum_new';
 
 atlasDir='/Users/maedbhking/Documents/Atlas_templates/';
@@ -105,10 +104,16 @@ switch what
         % save out results
         save(fullfile(studyDir{2},behavDir,sprintf('%sLearning.mat',sess)),'T');
     case 'PLOT:behavioural'
-        sess=varargin{1}; % 'behavioural' or 'scanning'
+        sess=varargin{1}; % 'training' or 'scanning'
         type=varargin{2}; % plot 'subject' or 'run'
         
-        vararginoptions({varargin{3:end}},{'CAT'}); % option if doing individual map analysis
+        CAT.errorwidth=.5;
+        CAT.markertype='none';
+        CAT.linewidth=3;
+        CAT.linestyle={'-','-','-','-','-','-'};
+        CAT.linewidth={2, 2, 2, 2, 2, 2};
+        errorcolor={'g','r','b','c','k','y','m'};
+        linecolor={'g','r','b','c','k','y','m'};
         
         % load in data
         load(fullfile(studyDir{2},behavDir,sprintf('%sLearning.mat',sess)),'T')
@@ -132,7 +137,7 @@ switch what
                 ylabel('Percent correct')
         end
         
-    case 'ACTIVITY:make_model' % make X matrix (feature models)
+    case 'ACTIVITY:make_model' % DEPRECIATED: make X matrix (feature models)
         study=varargin{1}; % 1, 2, or [1,2]
         model=varargin{2}; % 'full' or 'excludeMotor'
         
@@ -145,13 +150,6 @@ switch what
             Fs=getrow(F,F.studyNum==study);
         end
         numConds=length(Fs.studyNum);
-        
-        % rest
-        if length(study)>1,
-            rest=[29,61];
-        else
-            rest=numConds;
-        end
         
         featNames=Fs.condNames;
         % make feature model
@@ -171,15 +169,15 @@ switch what
         % normalise features
         X.x   = bsxfun(@minus,X.x,nanmean(X.x));
         X.x   = bsxfun(@rdivide,X.x,sqrt(nansum(X.x.^2)));  % Normalize to unit length vectors
-        X=X.x;        
-
+        X=X.x;
+        
         varargout={X,featNames,numConds,F};
     case 'ACTIVITY:patterns'
         study=varargin{1}; % [1,2]
         lambda=.01;
         model='full';
         
-        vararginoptions({varargin{2:end}},{'lambda','model'}); 
+        vararginoptions({varargin{2:end}},{'lambda','model'});
         
         % load in activity patterns
         [data,volIndx,V]=sc1_sc2_functionalAtlas('EVAL:get_data',returnSubjs,study,'eval');
@@ -202,11 +200,11 @@ switch what
             
         end;
         clear data
-
+        
         % subtract baseline
         baseline=nanmean(B,1);
         B=bsxfun(@minus,B,baseline);
-         
+        
         varargout={B,featNames,numConds,volIndx,V,R2,Ypred};
     case 'ACTIVITY:writeOut_GROUP'
         writeOut=varargin{1}; % 'paper' (average taskConds - SUIT space - metric file)
@@ -215,7 +213,11 @@ switch what
         
         websiteDir_SUIT=fullfile(baseDir,'website_maps','SUIT_group_contrasts');dircheck(websiteDir_SUIT) % where website contrasts are being saved for SUIT
         websiteDir_MNI=fullfile(baseDir,'website_maps','MNI_group_contrasts');dircheck(websiteDir_MNI) % where website contrasts are being saved for MNI
-        suitDir=fullfile(studyDir{2},caretDir,'suit_flat','glm4'); % where figure contrasts are being saved
+        viewerDir_SUIT=fullfile(baseDir,'viewer_maps','SUIT_group_contrasts');dircheck(viewerDir_SUIT);
+        viewerDir_MNI=fullfile(baseDir,'viewer_maps','MNI_group_contrasts');dircheck(viewerDir_MNI);
+        %         suitDir=fullfile(studyDir{2},caretDir,'suit_flat','glm4'); % where figure contrasts are being saved
+        flatmapDir_contrasts=fullfile(baseDir,'viewer_maps','flatmap-contrasts'); dircheck(flatmapDir_contrasts);
+        parcellationDir = fullfile(baseDir,'viewer_maps','parcellations'); dircheck(parcellationDir);
         
         % get activity patterns
         [B,featNames,numConds,volIndx,V]=sc1_sc2_functionalAtlas('ACTIVITY:patterns',study);
@@ -233,36 +235,52 @@ switch what
         indices=reshape(indices,[size(indices,2),size(indices,3)]);
         
         % vol data
-        indices=reshape(indices,[size(indices,1) V.dim(1),V.dim(2),V.dim(3)]);
-        for i=1:size(indices,1),
-            data=reshape(indices(i,:,:,:),[C{1}.dim]);
+        volIndices=reshape(indices,[size(indices,1) V.dim(1),V.dim(2),V.dim(3)]);
+        for i=1:size(volIndices,1),
+            data=reshape(volIndices(i,:,:,:),[C{1}.dim]);
             C{i}.dat=data;
         end
         
         switch writeOut,
             case 'paper'
                 % load in task structure file for paper
+                D=dload(fullfile(baseDir,'viewer_taskNames.txt'));
+                
+                % load in task structure file for paper
                 F=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+                F.condNames=D.condNames;
+                % average shared tasks
+                condNumUni=[F.condNumUni;62;63;64];
                 
                 % map vol 2 surf
                 S=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',featNames);  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
                 
                 % average shared tasks
                 condNumUni=[F.condNumUni;62;63;64];
-                 
+                
                 X1=indicatorMatrix('identity_p',condNumUni);
                 uniqueTasks=S.data*X1; % try pinv here ?
                 % get new condNames (unique only)
                 condNames=[F.condNames(F.StudyNum==1);F.condNames(F.StudyNum==2 & F.overlap==0)];
-                condNames{length(condNames)+1}='lHand';
-                condNames{length(condNames)+1}='rHand';
-                condNames{length(condNames)+1}='saccades';
+                condNames{length(condNames)+1}='Left_Hand_Presses';
+                condNames{length(condNames)+1}='Right_Hand_Presses';
+                condNames{length(condNames)+1}='Saccades';
                 S.data=uniqueTasks;
                 S.column_name=condNames';
                 S.num_cols=size(S.column_name,2);
                 S.column_color_mapping=S.column_color_mapping(1:S.num_cols,:);
                 outName='unCorr_avrgTaskConds'; % average of certain tasks
-
+                
+                % save out .gii file for viewer (all 47 contrast names)
+                G1=surf_makeFuncGifti(S.data,'anatomicalStruct','Cerebellum','columnNames',condNames);
+                save(G1,fullfile(suitDir,'MDTB_allMaps.func.gii'));
+                
+                % save out .gii file for viewer (all 47 contrast names)
+                for c=1:size(S.data,2),
+                    G1=surf_makeFuncGifti(S.data(:,c),'anatomicalStruct','Cerebellum','columnNames',condNames(c));
+                    save(G1,fullfile(suitDir,sprintf('MDTB%2.2d_%s.func.gii',c,condNames{c})));
+                end
+                
                 % save out metric files for paper
                 caret_save(fullfile(suitDir,sprintf('%s.metric',outName)),S);
             case 'website'
@@ -274,18 +292,90 @@ switch what
                 
                 % loop over task conditions
                 for c=1:length(C),
-                    X.fname=fullfile(websiteDir_SUIT,sprintf('%s.nii',F.condNames{c}));
-                    X.private.dat.fname=fullfile(websiteDir_SUIT,sprintf('%s.nii',F.condNames{c}));
+                    X.fname=sprintf('%s.nii',F.condNames{c});
+                    X.private.dat.fname=sprintf('%s.nii',F.condNames{c});
                     % normalise to SUIT and MNI
-                    spm_write_vol(X,C{c}.dat);
                     cd(websiteDir_SUIT)
+                    spm_write_vol(X,C{c}.dat);
                     % normalise to MNI
                     suit_mni2suit(sprintf('%s.nii',F.condNames{c}),'def','suit2mni');
                     fprintf('save out vol in MNI %s \n',F.condNames{c})
                     movefile(sprintf('Ws2m_%s.nii',F.condNames{c}),fullfile(websiteDir_MNI,sprintf('%s.nii',F.condNames{c})))
                     delete(fullfile(websiteDir_SUIT,sprintf('Ws2m_%s.nii',F.condNames{c})));
                 end
+            case 'viewer'
+                D=dload(fullfile(baseDir,'viewer_taskNames.txt'));
                 
+                % load in task structure file for paper
+                F=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+                F.condNames=D.condNames;
+                % average shared tasks
+                condNumUni=[F.condNumUni;62;63;64];
+                
+                exampleVol=fullfile(studyDir{2},'suit','glm4','s02','wdbeta_0001.nii');% must be better way of doing this
+                X=spm_vol(exampleVol);
+                
+                % get average across task sets
+                X1=indicatorMatrix('identity_p',condNumUni);
+                avrg_indices=indices'*X1;
+                
+                % make vol
+                volIndices_avrg=reshape(avrg_indices,[V.dim(1),V.dim(2),V.dim(3),size(avrg_indices,2)]);
+                
+                % new task names
+                condNames=[F.condNames(F.StudyNum==1);F.condNames(F.StudyNum==2 & F.overlap==0)];
+                condNames{length(condNames)+1}='Feature_Left_Hand';
+                condNames{length(condNames)+1}='Feature_Right_Hand';
+                condNames{length(condNames)+1}='Feature_Saccades';
+                %                 condNames=strcat('MDTB_',condNames);
+                
+                % loop over task conditions
+                for c=1:size(volIndices_avrg,4),
+                    X.fname=fullfile(viewerDir_SUIT,sprintf('MDTB%2.2d_%s.nii',c,condNames{c}));
+                    X.private.dat.fname=fullfile(viewerDir_SUIT,sprintf('MDTB%2.2d_%s.nii',condNames{c}));
+                    % normalise to SUIT and MNI
+                    spm_write_vol(X,volIndices_avrg(:,:,:,c));
+                    cd(viewerDir_SUIT)
+                    % normalise to MNI
+                    suit_mni2suit(sprintf('MDTB%2.2d_%s.nii',c,condNames{c}),'def','suit2mni');
+                    fprintf('save out vol in MNI %s \n',condNames{c})
+                    movefile(sprintf('Ws2m_MDTB%2.2d_%s.nii',c,condNames{c}),fullfile(viewerDir_MNI,sprintf('MDTB%2.2d_%s.nii',c,condNames{c})))
+                    delete(fullfile(viewerDir_SUIT,sprintf('Ws2m_%s.nii',condNames{c})));
+                end
+            case 'parcellations'
+                parcellations = {'MDTB_10Regions_SUIT.nii','Ji_10Networks_SUIT.nii','Buckner_7Networks_SUIT.nii','Buckner_17Networks_SUIT.nii'};
+                colors = {'MDTB_10Regions_Color.txt', 'Ji_10Networks_Color.txt','Buckner_7Networks_Color.txt','Buckner_17Networks_Color.txt'};
+                outName = {'MDTB_10Regions','Ji_10Networks','Buckner_7Networks','Buckner_17Networks'};
+                colName = {'Region','Network','Network','Network'};
+                
+                cd(parcellationDir);
+                
+                for s=1:length(parcellations),
+                    
+                    cmap=load(colors{s});
+                    cmap=[0 0 0 1; cmap];
+                    
+                    % get labelnames
+                    numRegs=size(cmap,1);
+                    idx=1;
+                    for r=1:numRegs,
+                        if r==1,
+                            labelNames(idx)={'???'};
+                        else
+                            labelNames(idx)=strcat({colName{s}},{num2str(cmap(r,1))});
+                        end
+                        idx=idx+1;
+                    end
+                    
+                    % get colors
+                    cmap=[(cmap(:,2:4)/255),ones(1,length(cmap))'];
+                    
+                    S=suit_map2surf(parcellations(s),'stats','mode');
+                    
+                    G1=surf_makeLabelGifti(S,'anatomicalStruct','Cerebellum','labelNames',labelNames,'columnNames',{outName(s)},'labelRGBA',cmap);
+                    save(G1,sprintf('%s.label.gii',outName{s}));
+                    clear labelNames
+                end
         end
     case 'ACTIVITY:writeOut_INDIV'
         writeOut=varargin{1}; % 'paper' (average taskConds - SUIT space - metric file)
@@ -327,7 +417,11 @@ switch what
             switch writeOut,
                 case 'paper'
                     % load in task structure file for paper
+                    D=dload(fullfile(baseDir,'viewer_taskNames.txt'));
+                    
+                    % load in task structure file for paper
                     F=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
+                    F.condNames=D.condNames;
                     
                     % map vol 2 surf
                     S=caret_suit_map2surf(C,'space','SUIT','stats','nanmean','column_names',featNames);  % MK created caret_suit_map2surf to allow for output to be used as input to caret_save
@@ -372,8 +466,89 @@ switch what
             end
             clear Yy C
         end
+    case 'ACTIVITY:maskMaps'
+        toMask=varargin{1}; % 'viewer_maps','website_maps','HCP_maps'
+        type=varargin{2}; % 'contrasts_group','contrasts_individual' or 'parcellation' 'probabilistic_parcellation'
+        
+        switch type,
+            case 'contrasts_individual'
+                for s=1:length(returnSubjs),
+                    
+                    filesToMask=fullfile(baseDir,'website_maps','SUIT_individual_contrasts',subj_name{returnSubjs(s)});
+                    
+                    contrasts=dir(fullfile(filesToMask,'*.nii*'));
+                    cd(filesToMask)
+                    
+                    % mask these files and write them out to new folder
+                    corrected=fullfile(studyDir{1},'suit','anatomicals','cerebellarGreySUIT_corrected.nii');
+                    
+                    for c=1:length(contrasts),
+                        origFile=contrasts(c).name;
+                        new=contrasts(c).name;
+                        cd(filesToMask)
+                        
+                        spm_imcalc({origFile,corrected},new,'i1.*i2');
+                        
+                        % write these masked files to MNI
+                        suit_mni2suit(new,'def','suit2mni');
+                        fprintf('save out vol in MNI %s \n',new)
+                        movefile(sprintf('Ws2m_%s',new),fullfile(baseDir,'website_maps','MNI_individual_contrasts',subj_name{returnSubjs(s)},sprintf('%s',new)))
+                        delete(fullfile(filesToMask,sprintf('Ws2m_%s',new)));
+                    end
+                end
+            case 'contrasts_group'
+                % get SUIT group contrasts
+                filesToMask=fullfile(baseDir,toMask,'SUIT_group_contrasts');
+                outDir=fullfile(baseDir,toMask,'MNI_group_contrasts');
+                
+                contrasts=dir(fullfile(filesToMask,'*.nii*'));
+                cd(filesToMask)
+                
+                % mask these files and write them out to new folder
+                corrected=fullfile(studyDir{1},'suit','anatomicals','cerebellarGreySUIT_corrected.nii');
+                
+                for c=1:length(contrasts),
+                    origFile=contrasts(c).name;
+                    new=contrasts(c).name;
+                    cd(filesToMask)
+                    
+                    spm_imcalc({origFile,corrected},new,'i1.*i2');
+                    
+                    % write these masked files to MNI
+                    suit_mni2suit(new,'def','suit2mni');
+                    fprintf('save out vol in MNI %s \n',new)
+                    movefile(sprintf('Ws2m_%s',new),fullfile(outDir,origFile))
+                    %                     delete(fullfile(filesToMask,sprintf('Ws2m_%s',new),fullfile(outDir,new)));
+                end
+            case 'parcellation'
+                parcellation='MDTB_10_subRegions'; % 'Ji_10Regions' etc
+                filesToMask=fullfile(baseDir,toMask,'SUIT_MDTB');
+                MNIDir=fullfile(baseDir,toMask,'MNI_MDTB');
+                
+                origFile=fullfile(filesToMask,sprintf('%s.nii',parcellation));
+                cd(filesToMask)
+                
+                % mask these files and write them out to new folder
+                corrected=fullfile(studyDir{1},'suit','anatomicals','Ws2m_cerebellarGreySUIT_corrected.nii');
+                
+                spm_imcalc({origFile,corrected},'new.nii','i1.*i2');
+                
+                Vo=spm_vol('new.nii');
+                Vi=spm_read_vols(Vo);
+                Vi=round(Vi);
+                Vo.fname=sprintf('%s_corr.nii',parcellation);
+                Vo.private.dat.fname=sprintf('%s_corr.nii',parcellation);
+                Vo.pinfo=[1 0 0]';
+                Vo.dt=[4 0];
+                spm_write_vol(Vo,Vi)
+                
+                % convert to MNI
+                suit_mni2suit(sprintf('%s_corr.nii',parcellation),'def','suit2mni');
+                movefile(sprintf('Ws2m_%s_corr.nii',parcellation),MNIDir)
+                delete(fullfile(filesToMask,sprintf('Ws2m_%s_corr.nii',parcellation),fullfile(MNIDir,sprintf('%s_corr.nii',parcellation))));
+        end
     case 'ACTIVITY:checkRidge'
-        lambda=varargin{1}; 
+        lambda=varargin{1};
         
         study=[1,2];
         
@@ -393,9 +568,9 @@ switch what
         title('no motor')
         xlabel('Ypred');ylabel('data');text(1,1,sprintf('R^2=%2.3',nanmean(R2_noMotor)));
         
-        fprintf('lambda=%2.2f:average prediction of full model across subjects is %2.4f \n',lambda,nanmean(R2_full)); 
-        fprintf('lambda=%2.2f: average prediction of noMotor model across subjects is %2.4f \n',lambda,nanmean(R2_noMotor)); 
-%          
+        fprintf('lambda=%2.2f:average prediction of full model across subjects is %2.4f \n',lambda,nanmean(R2_full));
+        fprintf('lambda=%2.2f: average prediction of noMotor model across subjects is %2.4f \n',lambda,nanmean(R2_noMotor));
+        %
     case 'ACTIVITY:checkRest_indivSubjects'
         taskConds=[28,31];  % no instruct, no rest
         
@@ -407,7 +582,7 @@ switch what
                 SPM_info=load(fullfile(studyDir{study},'GLM_firstlevel_4',subj_name{returnSubjs(s)},'SPM_info.mat'));
                 
                 % load in betas (resliced into suit space)
-                betaDir=dir(fullfile(studyDir{study},'suit','glm4',subj_name{returnSubjs(s)},'*wdbeta*')); 
+                betaDir=dir(fullfile(studyDir{study},'suit','glm4',subj_name{returnSubjs(s)},'*wdbeta*'));
                 
                 % get task conditions
                 for c=1:taskConds(study),
@@ -416,12 +591,12 @@ switch what
                     taskN=SPM_info.TN{SPM_info.cond==c};
                     
                     cd(fullfile(studyDir{study},'suit','glm4',subj_name{returnSubjs(s)}));
-                   
+                    
                     % make contrast
                     spm_imcalc(Vi,sprintf('wdcon_%s.nii',taskN),'(i1+i2+i3+i4+i5+i6+i7+i8+i9+i10+i11+i12+i13+i14+i15+i16)/16');
                     
                     % store contrast name
-                    conName{c}=sprintf('wdcon_%s.nii',taskN); 
+                    conName{c}=sprintf('wdcon_%s.nii',taskN);
                 end
                 
                 % calculate average across task conditions (must be better
@@ -436,43 +611,41 @@ switch what
                 spm_imcalc('wdcon_taskAvrg.nii','wdcon_rest.nii','i1*-1');
                 
                 % map 2 surf
-                data(indx,:)=suit_map2surf('wdcon_rest.nii'); 
-
+                data(indx,:)=suit_map2surf('wdcon_rest.nii');
+                
                 featNames{indx}=sprintf('sc%d-%s-rest',study,subj_name{returnSubjs(s)});
                 
                 indx=indx+1;
             end
         end
         
-         % map vol 2 surf 
-         S=caret_struct('metric','data',data','column_name',featNames);
-
-         % save out rest metric file (both sc1 and sc2, all subjs)
-         caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','rest_indivSubjs.metric'),S)
-    case 'ACTIVITY:checkRest_avrg_taskSet'     
+        % map vol 2 surf
+        S=caret_struct('metric','data',data','column_name',featNames);
+        
+        % save out rest metric file (both sc1 and sc2, all subjs)
+        caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','rest_indivSubjs.metric'),S)
+    case 'ACTIVITY:checkRest_avrg_taskSet'
         indx=1;
         for study=1:2,
             for s=1:length(returnSubjs),
-                conName{s}=fullfile(studyDir{study},'suit','glm4',subj_name{returnSubjs(s)},'wdcon_rest.nii'); 
+                conName{s}=fullfile(studyDir{study},'suit','glm4',subj_name{returnSubjs(s)},'wdcon_rest.nii');
             end
             cd(fullfile(studyDir{study},'suit','glm4',subj_name{returnSubjs(s)}))
             % average rest across subjects
-                spm_imcalc(conName','wdcon_rest_avrg.nii','(i1+i2+i3+i4+i5+i6+i7+i8+i9+i10+i11+i12+i13+i14+i15+i16+i17+i18+i19+i20+i21+i22+i23+i24)/24');
-                % map 2 surf
-                data(indx,:)=suit_map2surf('wdcon_rest_avrg.nii'); 
-                delete(fullfile(studyDir{study},'suit','glm4',subj_name{returnSubjs(s)},'wdcon_rest_avrg.nii'));
-
-                featNames{indx}=sprintf('sc%d-rest',study);
-                indx=indx+1;
+            spm_imcalc(conName','wdcon_rest_avrg.nii','(i1+i2+i3+i4+i5+i6+i7+i8+i9+i10+i11+i12+i13+i14+i15+i16+i17+i18+i19+i20+i21+i22+i23+i24)/24');
+            % map 2 surf
+            data(indx,:)=suit_map2surf('wdcon_rest_avrg.nii');
+            delete(fullfile(studyDir{study},'suit','glm4',subj_name{returnSubjs(s)},'wdcon_rest_avrg.nii'));
+            
+            featNames{indx}=sprintf('sc%d-rest',study);
+            indx=indx+1;
         end
         
-         % map vol 2 surf 
-         S=caret_struct('metric','data',data','column_name',featNames);
-
-         % save out rest metric file (both sc1 and sc2, all subjs)
-         caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','rest_avrg.metric'),S)
-         
+        % map vol 2 surf
+        S=caret_struct('metric','data',data','column_name',featNames);
         
+        % save out rest metric file (both sc1 and sc2, all subjs)
+        caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','rest_avrg.metric'),S)
     case 'ACTIVITY:reliability_shared'
         glm=varargin{1};
         type=varargin{2}; % 'cerebellum' or 'cortex' 'basalGanglia'
@@ -873,7 +1046,7 @@ switch what
                         D(:,:,s+(se-1)*length(sn))=temp;
                     end;
                 end;
-                C=intersubj_corr(D);
+                C=interSubj_corr(D);
                 R.sess = [ones(1,numSubj) ones(1,numSubj)*2]';
                 R.subj = [1:numSubj 1:numSubj]';
                 R.subj = sn(R.subj);
@@ -919,7 +1092,7 @@ switch what
         
         T=tapply(T,{'subj','freq'},{'withinSubj'},{'betweenSubj'},{'totSS'},'subset',ismember(T.subj,returnSubjs));
         T.freqK = T.freq>0;
-        lineplot([T.freqK T.freq],[T.withinSubj T.betweenSubj],'CAT',CAT,'leg','auto');
+        lineplot([T.freqK T.freq],[T.betweenSubj T.withinSubj],'CAT',CAT,'leg','auto');
         
     case 'REPRESENTATION:get_distances'
         type=varargin{1}; % 'cerebellum'
@@ -1195,12 +1368,17 @@ switch what
         ttest(sqrt(T.within1.*T.within2),T.across,2,'paired');
         
     case 'CONVERT:mni2suit'    % converts from mni image to SUIT (there's also a cifti2nii if image is coming from HCP)
-        inputImages={'N2C_subcortex_atlas_subcortexGSR.nii',...
-            'Buckner2011_7Networks_MNI152_FreeSurferConformed1mm_TightMask.nii'};
+        %         inputImages={'N2C_subcortex_atlas_subcortexGSR.nii',...
+        %             'Buckner2011_7Networks_MNI152_FreeSurferConformed1mm_TightMask.nii'};
         
-        inputDir=which(inputImages{2});
-        cd(fileparts(inputDir))
-        suit_mni2suit(inputImages{2})
+        cd(fullfile(baseDir,'viewer_maps','parcellations'))
+        inputImages = {'Buckner_17Networks_MNI.nii','Buckner_7Networks_MNI.nii','Ji_10Regions_MNI.nii'};
+        
+        %         inputDir=which(inputImages{1});
+        %         cd(fileparts(inputDir))
+        for l=1:length(inputImages),
+            suit_mni2suit(inputImages{l})
+        end
     case 'CONVERT:cifti2suit'  % puts cifti files into nii format (for cerebellum)
         %         inputImages={'subcortex_atlas_subcortexGSR.dlabel.nii'};
         
@@ -1284,13 +1462,14 @@ switch what
         
         cd('/Users/maedbhking/Documents/MATLAB/imaging/Connectome_WorkBench/cifti-matlab-master/@gifti')
         save(S,'tmp.gii');
-    case 'CONVERT:toMNI'
-        inputMap=varargin{1};
+    case 'CONVERT:toMNIorSUIT'
+        mapType=varargin{1};
+        atlasType=varargin{2}; % 'suit2mni' or 'mni2suit'
         
-        fileDir=which(sprintf('%s.nii',inputMap));
-        cd(fileDir);
+        fileDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType));
+        cd(fileDir)
         
-        suit_mni2suit(sprintf('%s.nii',inputMap),'def','suit2mni');
+        suit_mni2suit('map.nii','def',atlasType);
         
     case 'HCP:get_data'
         % load in HCP vol data
@@ -1540,7 +1719,7 @@ switch what
             mapName=sprintf('map_%s.nii',mapType);
         else
             inputDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType));
-            mapName='probAtlas.nii';
+            mapName='map.nii';
         end
         cd(inputDir);
         
@@ -1576,17 +1755,17 @@ switch what
                     
                     % save out paint and area files
                     if exist('sn'),
-                        caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s-subj%d.paint',inputMap,sn)),M);
+                        caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s-subj%d.paint',mapType,sn)),M);
                     else
-                        caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.paint',inputMap)),M);
-                        caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.areacolor',inputMap)),A);
+                        caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.paint',mapType)),M);
+                        caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.areacolor',mapType)),A);
                     end
                 else
                     M=caret_struct('metric','data',M.data);
                     if exist('sn'),
-                        caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s-subj%d.metric',inputMap,sn)),M);
+                        caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s-subj%d.metric',mapType,sn)),M);
                     else
-                        caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.metric',inputMap)),M);
+                        caret_save(fullfile(studyDir{1},caretDir,'suit_flat',sprintf('%s.metric',mapType)),M);
                     end
                 end
             case 'no'
@@ -1652,10 +1831,11 @@ switch what
         % example:sc1_sc2_functionalAtlas('MAP:optimal',<subjNums>,1,6,'group')
         sn=varargin{1};     % 'group' or <subjNum>
         study=varargin{2};  % 1 or 2 or [1,2]
+        K=varargin{3}; % either 7, 10, 17
         
         algorithmString = {'snn','cnvf','ica'}; % Semi-nonengative matrix factorization
         algorithm = 2;
-        K=10; % number of regions
+        %         K=10; % number of regions
         smooth = [];
         G0 = [];          % Starting value for weights
         
@@ -1664,7 +1844,7 @@ switch what
         numCount=5;         % For how many starting values do we need to find the same solution?
         maxIter = 100;      % How many iterations per starting value
         
-        vararginoptions({varargin{3:end}},{'sess','numCount','tol_rand','maxIter','maxStart','algorithm','K','smooth'}); % options
+        vararginoptions({varargin{4:end}},{'sess','numCount','tol_rand','maxIter','maxStart','algorithm','K','smooth'}); % options
         
         % Set the String correctly
         if length(study)>1
@@ -1821,10 +2001,11 @@ switch what
     case 'MAP:visualise'
         sn=varargin{1}; % [2] or 'group'
         study=varargin{2};  % 1 or 2 or [1,2]
+        K=varargin{3}; % 7, 10, or 17
         
         algorithmString = {'snn','cnvf','ica'}; % Semi-nonengative matrix factorization
         algorithm = 2;
-        K=10; % number of regions
+        %         K=10; % number of regions
         
         % Set the String correctly
         if length(study)>1
@@ -1871,8 +2052,7 @@ switch what
         spm_write_vol(X,Vv{1}.dat);
     case 'MAP:RAND_global'  % this function will compute randindex between maps (pairwise if more than 2 maps are provided)
         compare={'groupEval_SC12_cnvf_7','groupEval_SC12_cnvf_10','groupEval_SC12_cnvf_17',...
-            'groupEval_Buckner_7Networks','groupEval_Cole_10Networks','groupEval_Buckner_17Networks',...
-            'groupEval_lob10'};
+            'groupEval_Buckner_7Networks','groupEval_Cole_10Networks','groupEval_Buckner_17Networks'};
         numMaps = length(compare);
         load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));  % Just to get V and volIndex
         clear T;
@@ -1894,20 +2074,23 @@ switch what
                 AR(j,i)=AR(i,j);
             end;
         end;
+        
+        % figure out RI
+        rest=tril(AR(4:6,4:6));
+        task=tril(AR(1:3,1:3));
+        rest_task=tril(AR(1:3,4:6));
+        
+        fprintf('average of rest RI is %2.2f \n',nanmean(rest(rest~=0)));
+        fprintf('average of task RI is %2.2f \n',nanmean(task(task~=0)));
+        fprintf('average of task_rest is %2.2f \n',nanmean(rest_task(rest_task~=0)));
+        
         varargout={AR};
-        colormap(hot);
-        imagesc(AR,[0 0.8]);
-        colorbar;
-        set(gca,'XTickLabel',{'C7','C10','C17','R7','R10','R17'},'YTickLabel',{'C7','C10','C17','R7','R10','R17'});
-        %set(gcf,'PaperPosition',[2 2 4.7 3.8]);
-        % wysiwyg;
-        % axis equal
     case 'MAP:RAND_local'
         type = 'searchlight'; % 'voxelwise','searchlight', or 'searchlightvoxel'
         compare={'groupEval_SC12_cnvf_7','groupEval_SC12_cnvf_10','groupEval_SC12_cnvf_17',...
-            'groupEval_Buckner_7Networks','groupEval_Cole_10Networks','groupEval_Buckner_17Networks'...
+            'groupEval_Cole_10Networks','groupEval_Buckner_17Networks'...
             };
-        compare={'groupEval_Buckner_17Networks'};
+        %         compare={'groupEval_Buckner_17Networks'};
         split = [1 1 1 2 2 2];
         radius = 10;
         vararginoptions(varargin,{'radius','compare','type','split'});
@@ -2062,11 +2245,8 @@ switch what
         studyStr='SC12';
         
         load(fullfile(studyDir{2},'encoding','glm4','cereb_avrgDataStruct.mat'));
+        websiteDir_parcellations=fullfile(baseDir,'website_maps','Parcellations');dircheck(websiteDir_parcellations)
         
-        %         % load in group map
-        %         load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s_%s_%d',studyStr,algorithmString{algorithm},K),...
-        %             sprintf('%s.mat',algorithmString{algorithm})));
-        %         [x,feats_group]=max(bestG,[],2);
         %
         for s=1:length(returnSubjs),
             inDir=fullfile(studyDir{2},encodeDir,'glm4',subj_name{returnSubjs(s)});
@@ -2087,12 +2267,6 @@ switch what
                 prob(p,s)=certainty/size(feats_indiv,2);
             end
         end
-        %
-        %         for p=1:size(feats_indiv,1)
-        %             assignment(p)=mode(feats_indiv(p,:));
-        %             certainty=numel(find(feats_indiv(p,:)==assignment(p)));
-        %             prob(p,:)=certainty/size(feats_indiv,2);
-        %         end
         
         % map to volume
         for s=1:length(returnSubjs),
@@ -2111,8 +2285,12 @@ switch what
             X.fname=sprintf('%s/probAtlas%d.nii',outName,s);
             fileNames_SUIT{s}=X.fname;
             fileNames_MNI{s}=sprintf('%s/Ws2m_probAtlas%d.nii',outName,s);
-            X.private.dat.fname=V.fname;
+            X.private.dat.fname=X.fname;
             spm_write_vol(X,Vv{1}.dat);
+            
+            % mask these files (remove brainstem) and write them out to new folder
+            corrected=fullfile(studyDir{1},'suit','anatomicals','cerebellarGreySUIT_corrected.nii');
+            spm_imcalc({fileNames_SUIT{s},corrected},fileNames_SUIT{s},'i1.*i2');
             
             cd(outName)
             % save out MNI version as well
@@ -2120,13 +2298,140 @@ switch what
         end
         
         % make 4d
-        spmj_make4dnii(sprintf('%s/probAtlas.nii',outName),char(fileNames_SUIT'))
-        spmj_make4dnii(sprintf('%s/Ws2m_probAtlas.nii',outName),char(fileNames_MNI'))
+        spmj_make4dnii(sprintf('%s/SUIT_probabilistic_atlas.nii',websiteDir_parcellations),char(fileNames_SUIT'))
+        spmj_make4dnii(sprintf('%s/MNI_probabilistic_atlas.nii',websiteDir_parcellations),char(fileNames_MNI'))
         
-        %         % map to surface
-        %         M=caret_suit_map2surf(Vv,'space','SUIT');
-        %         M=caret_struct('metric','data',M.data);
-        %         caret_save(fullfile(studyDir{2},caretDir,'suit_flat','glm4','probAtlas.metric'),M);
+        % plot average prob on flatmap
+        spm_imcalc(fileNames_SUIT','average_prob.nii','i1+i2+i3+i4+i5+i6+i7+i8+i9+i10+i11+i12+i13+i14+i15+i16+i17+i18+i19+i20+i21+i22+i23+i24/24')
+        C=suit_map2surf('average_prob.nii');
+        
+        % visualise on flatmap (+ save out as metric file)
+        M=caret_struct('metric','data',C);
+        caret_save('probAtlas.metric',M);
+        
+        suit_plotflatmap(C)
+        
+        for s=1:length(returnSubjs),
+            delete(fileNames_SUIT{s})
+            delete(fileNames_MNI{s})
+        end
+    case 'MAP:Similarity'
+        % Assumes you are in the group-eval directory
+        cd(fullfile(studyDir{2},encodeDir,'glm4','groupEval_SC12_cnvf_10'));
+        %         renumber=[4 8 2 10 9 3 6 7 1 5];  % Proposed numbering scheme
+        renumber=[4 10 3 9 5 8 2 6 7 1];
+        load cnvf.mat; %
+        A=dlmread('colourMap.txt');
+        subplot(1,5,[1:4]);
+        imagesc(corr(bestF(:,renumber)));
+        subplot(1,5,5);
+        image(permute(A(renumber,2:4),[1 3 2])/255);
+        set(gcf,'PaperPosition',[2 2 4 3]);
+        wysiwyg;
+        
+    case 'MAP:fixLabels_MDTB' % changes labels to align with labels assigned in Fig 5 of NN paper
+        mapType='SC12_cnvf_10';
+        mapName=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'map_old.nii');
+        
+        newOrder=[10,7,3,1,5,8,9,6,4,2];
+        labelNames={'No-Value','Region1','Region2','Region3','Region4','Region5','Region6','Region7','Region8','Region9','Region10'};
+        
+        Vo=spm_vol(mapName);
+        Vi=spm_read_vols(Vo);
+        cd(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType)));
+        
+        % load in colours
+        cmap=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'colourMap_old.txt'));
+        cmap=[(cmap(:,2:4)/255),ones(1,length(cmap))'];
+        cmap=[0 0 0 1; cmap];
+        
+        % rename
+        Vo.fname='MDTB_10Regions.nii';
+        Vo.private.dat.fname='MDTB_10Regions.nii';
+        
+        newVi=zeros(1,Vo.dim(1)*Vo.dim(2)*Vo.dim(3));
+        for c=1:length(newOrder),
+            idx=find(Vi==c);
+            newVi(idx)=newOrder(c);
+        end
+        newVi=reshape(newVi,[Vo.dim(1),Vo.dim(2),Vo.dim(3)]);
+        spm_write_vol(Vo,newVi);
+        S=suit_map2surf('MDTB_10Regions.nii','stats','mode');
+        
+        G1=surf_makeLabelGifti(S,'anatomicalStruct','Cerebellum','labelNames',labelNames,'columnNames',{'MDTB_10Regions'},'labelRGBA',cmap);
+        save(G1,'MDTB_10Regions.label.gii');
+    case 'MAP:parcellate_withinRegion' % parcellate the MDTB_10Region into sub-regions
+        funcType='SC12_cnvf_10';
+        lobType='lob10'; % or 'lob26'
+        new_funcType='SC12_cnvf_10_subRegions';
+        
+        % load in V and volIndx
+        load(fullfile(studyDir{2},encodeDir,'glm4','cereb_avrgDataStruct.mat'));
+        
+        % put both atlases into same space
+        [i,j,k]=ind2sub(V.dim,volIndx);
+        [x,y,z]=spmj_affine_transform(i,j,k,V.mat);
+        
+        % lob map
+        VL= spm_vol(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',lobType),'map.nii'));
+        [i1,j1,k1]=spmj_affine_transform(x,y,z,inv(VL.mat));
+        Parcel_Lob=spm_sample_vol(VL,i1,j1,k1,0);
+        
+        % func map
+        VF=spm_vol(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',funcType),'map.nii'));
+        [i1,j1,k1]=spmj_affine_transform(x,y,z,inv(VF.mat));
+        Parcel_Func=spm_sample_vol(VF,i1,j1,k1,0);
+        
+        % find indices for lobules below the horizontal fissure
+        lobIdx=find(Parcel_Lob>=5); % was >=5
+        
+        new_labels=[11:20]; % new labels
+        % make new MDTB_10Region_subReg
+        for f=1:10,
+            funcIdx=(find(Parcel_Func==f));
+            ant_idx=setdiff(funcIdx,lobIdx); % was setdiff(funcIdx,lobIdx): find indices in funcIdx that are not in lobIdx (so post. portion of each func region)
+            Parcel_Func(1,ant_idx)=new_labels(f);
+        end
+        
+        % this is ugly but relabel everything to be 1-20 [not 11-20, 1-10]
+        reMap=[11:20,1:10];
+        for i=1:20,
+            Parcel_remap(Parcel_Func==i)=reMap(i);
+        end
+        Parcel_Func=Parcel_remap;
+        
+        % reconstruct nifti image
+        Yy=zeros(1,V.dim(1)*V.dim(2)*V.dim(3));
+        Yy(1,volIndx)=Parcel_Func;
+        Yy=reshape(Yy,[V.dim(1),V.dim(2),V.dim(3)]);
+        Yy(Yy==0)=NaN;
+        Vv{1}.dat=Yy;
+        Vv{1}.dim=V.dim;
+        Vv{1}.mat=V.mat;
+        
+        % save out vol
+        cd(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',new_funcType)))
+        exampleVol=fullfile(studyDir{2},suitDir,'glm4','s02','wdbeta_0001.nii'); % must be better way ??
+        X=spm_vol(exampleVol);
+        X.fname='map.nii';
+        X.private.dat.fname=V.fname;
+        spm_write_vol(X,Vv{1}.dat);
+        
+        S=suit_map2surf('map.nii','stats','mode');
+        suit_plotflatmap(S)
+        
+        % load in colour
+        %         cmap=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',funcType),'colourMap.txt'));
+        %         cmap=[(cmap(:,2:4)/255)];
+        
+        % make .label.gii file
+    case 'MAP:makeLUT'      % NEEDS MORE WORK
+        mapType='Buckner_17Networks'; % 'Buckner_7Networks','Buckner_17Networks','Ji_10Networks'
+        
+        % load in colours
+        cmap=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'colourMap.txt'));
+        cmap(:,2:4)=cmap(:,2:4)/255;
+        display(cmap(:,2:4))
         
     case 'CORTEX:makeModel'
         study=varargin{1};
@@ -2936,9 +3241,8 @@ switch what
         condType=varargin{5}; % evaluating on 'unique' or 'all' or 'subsets_movies3'
         
         % if getting diff between indiv lob and group lob:
-        % sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',{'lob10','averageLob'},4,'group',1,'unique','snToPred',[26:31])
-        
-        % example: sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',{'SC1_cnvf_10','Buckner_17Networks'},[2 2],'group',1,'subsets_movies3')
+        % example: sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',{'lob10','averageLob'},4,'group',1,'unique','snToPred',[26:31])
+        % example: sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',{'SC1_cnvf_10','Buckner_7Networks'},2,'group',1,'subsets_movies3')
         vararginoptions({varargin{6:end}},{'CAT','sn','snToPred'}); % option if plotting individual map analysis.
         
         % do stats
@@ -3044,7 +3348,7 @@ switch what
         set(gcf,'units','centimeters','position',[5,5,9,12])
         
     case 'reformat:average_maps'
-        mapTypes=varargin{1}; % {'Buckner_17Networks,'Buckner_7Networks'};
+        mapTypes=varargin{1}; % {'Buckner_17Networks,'Buckner_7Networks','Cole_10Networks'};
         outName=varargin{2}; % ex. 'averageRest'
         
         S=[];
@@ -3184,7 +3488,7 @@ switch what
         save(EvalDir,'V','volIndx','Parcel','Cluster','coords','Edge');
     case 'STRENGTH:fullEval'
         mapType = varargin{1};
-        sn      = varargin{2};
+        sn      = varargin{2}; % 'group' or <subjNum>
         
         % figure out if individual or group
         if strcmp(sn,'group'),
@@ -3286,7 +3590,7 @@ switch what
         % group or individual
         if exist('sn')==0,
             EvalDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'boundaries.mat');
-            T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'BoundariesFunc3_all.mat')); % Evaluate the strength of each border
+            T=load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'BoundariesFun3_all.mat')); % Evaluate the strength of each border
             colourDir=fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType));
             % individual analysis
         else
@@ -3361,7 +3665,7 @@ switch what
                 p=plot(Border(b).data(:,1),Border(b).data(:,2),'k.');
                 set(p,'MarkerSize',LineWeight(b));
                 weights(b)=EdgeWeight(b);
-                % plot DCBC of each functional boundary ?
+                %                 plot DCBC of each functional boundary ?
                 %                 p=text(double(Border(b).data(1,1)),double(Border(b).data(1,2)),sprintf('%2.3f',weights(b)));
                 %                 set(p,'FontSize',20);
             end;
@@ -3376,7 +3680,6 @@ switch what
         
         D=dload(fullfile(baseDir,'featureTable_functionalAtlas.txt'));
         
-        %         D=dload(fullfile(baseDir,'featureTable_jd_updated.txt')); % Read feature table - updated with new features "naturalistic bio motion" and "naturalistic scenes"
         S=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt')); % List of task conditions
         
         load(fullfile(studyDir{2},encodeDir,'glm4',sprintf('groupEval_%s',mapType),'cnvf.mat'));
@@ -3391,8 +3694,7 @@ switch what
         D.Saccade    = D.saccades./D.duration;
         
         % remove superfluous
-        D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades','Imagination','LongtermMemory','SceneRecog'});
-        %         D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades'});
+        D=rmfield(D,{'leftHandPresses','rightHandPresses','saccades','Imagination','LongtermMemory','SceneRecog','VisualAttention'});
         
         f=fieldnames(D);
         FeatureNames = f(5:end);
@@ -3772,9 +4074,9 @@ switch what
         sc1_sc2_functionalAtlas('EVAL:PLOT:CURVES',toPlot,4,'group',1,'unique','CAT',CAT);
         
         % Labelling
-        set(gca,'YLim',[0 0.55],'XLim',[0 35],'FontSize',10,'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'}); %
+        set(gca,'YLim',[0 0.6],'XLim',[0 35],'FontSize',10,'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'}); %
         xlabel('Spatial Distances (mm)');
-        ylabel('Activity Correlation (R)');
+        ylabel('Voxel-to-Voxel Correlation');
         %         title(plotName);
         set(gcf,'units','centimeters','position',[5,5,6,6])
         %         axis('auto')
@@ -3845,8 +4147,8 @@ switch what
         CAT.linewidth=3;
         CAT.linestyle={'-','-','-','-','-','-'};
         CAT.linewidth={2, 2, 2, 2, 2, 2};
-        errorcolor={'g','r','b','k','c','y','m'};
-        linecolor={'g','r','b','k','c','y','m'};
+        errorcolor={'g','r','b','c','k','y','m'};
+        linecolor={'g','r','b','c','k','y','m'};
         
         %         errorcolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
         %         linecolor={[0 0 0],[0 50/255 150/255],[44/255 26/255 226/255],[0 150/255 255/255],[185/255 0 54/255],[139/255 0 123/255],[0 158/255 96/255],[0 158/255 96/255]};
@@ -3861,16 +4163,17 @@ switch what
         hold off
         
         % Labelling
-        set(gca,'YLim',[0 0.2],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
+        set(gca,'YLim',[0 0.17],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
         xlabel('Spatial Distances (mm)');
-        ylabel('Difference');
-        set(gcf,'units','centimeters','position',[5,5,9,12])
+        ylabel('DCBC');
+        set(gcf,'units','centimeters','position',[5,5,8,12])
+        
         %         legend(plotName,'Location','NorthWest')
         
         
         % do stats
         %         sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',toPlot,evalNums,'group',1,'unique'); % always take crossval + unique
-    case 'AXES:subsets_curves' % curves for movies or dissimilar task subsets
+    case 'AXES:subsets_diff' % curves for movies or dissimilar task subsets
         mapType=varargin{1};
         data=varargin{2}; % eval. on [1] or [2]
         subset=varargin{3}; % 'movies' or 'dissimilar'
@@ -3901,39 +4204,12 @@ switch what
         % Labelling
         set(gca,'YLim',[0 0.2],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
         xlabel('Spatial Distances (mm)');
-        ylabel('Difference');
-        set(gcf,'units','centimeters','position',[5,5,9,12])
+        ylabel('DCBC');
+        set(gcf,'units','centimeters','position',[5,5,5,7])
         %         legend(plotName,'Location','NorthWest')
         
         % do stats
         %         sc1_sc2_functionalAtlas('EVAL:STATS:DIFF',toPlot,evalNums,'group',1,'unique'); % always take crossval + unique
-    case 'AXES:subsets_diff'
-        mapType=varargin{1}; % {SC2_cnvf_10} for ex.
-        data=varargin{2}; % 1, 2, 4 [1: eval on sc1; 2: eval on sc2; 4: eval on sc1+sc2]
-        numTasks=varargin{3}; % [7] how many tasks are we taking ?
-        
-        crossval=1;
-        subsets={'random'};
-        
-        % aesthetics
-        CAT.errorwidth=.5;
-        CAT.markertype='none';
-        CAT.linewidth=3;
-        CAT.linewidth={2, 2, 2, 2, 2, 2};
-        linestyle={'-','-','-','-','-','-'};
-        errorcolor={'k','b','g','m','y','g'};
-        linecolor={'k','b','g','m','y','g'};
-        
-        CAT.errorcolor=errorcolor;
-        CAT.linecolor=linecolor;
-        CAT.linestyle=linestyle;
-        sc1_sc2_functionalAtlas('EVAL:PLOT:SUBSETS_DIFF',mapType,data,subsets,numTasks,crossval,'CAT',CAT); % always take crossval + unique
-        
-        % Labelling
-        set(gca,'YLim',[0.05 0.13],'FontSize',12,'XLim',[0 21],'xtick',[0 21],'XTickLabel',{'Most Similar','Least Similar'});
-        xlabel(sprintf('Random Task Subsets (%d)',numTasks));
-        ylabel('DCBC');
-        %         set(gcf,'units','centimeters','position',[5,5,9,12])
     case 'AXES:indiv_diff' % make summary graph for diff curves for indiv maps (mostly used for lobular)
         toPlot=varargin{1};% 'lob10'
         evalNum=varargin{2}; % 4
@@ -4007,7 +4283,7 @@ switch what
         set(gca,'YLim',[0 0.22],'FontSize',12,'XLim',[0 35],'xtick',[0:5:35],'XTickLabel',{'0','','','','','','','35'});
         xlabel('Spatial Distances (mm)');
         ylabel('Difference')
-        set(gcf,'units','centimeters','position',[5,5,9,13])
+        set(gcf,'units','centimeters','position',[5,5,8,12])
     case 'AXES:boundary_strength' % makes separate graphs for 'lob10','Buckner_7Networks','Buckner_17Networks','Cole_10Networks','SC12_10cluster'
         toPlot=varargin{1}; % 'lob10','Buckner_7Networks' etc
         toPlotName=varargin{2}; % 'Lobular', 'Buckner7' etc
@@ -4065,15 +4341,31 @@ switch what
         CAT.markercolor={'r','k'};
         CAT.markerfill={'r','k'};
         CAT.errorcolor={'r','k'};
+        CAT.font='myriad pro';
         
         sc1_sc2_functionalAtlas('PLOT:interSubjCorr',CAT)
+        
         xlabels={'overall','0-0.5','0.5-1','1-1.5','1.5-2','>2'};
-        ylabel('Activity Correlation (R)');
+        ylabel('Voxel-to-voxel correlation');
         xlabel('Cycles/cm');
         drawline(0,'dir','horz');
         set(gca,'XTickLabel',xlabels,'FontSize',12);
-        set(gcf,'units','centimeters','position',[5,5,9,13])
+        set(gcf,'units','centimeters','position',[5,5,8,12])
         %         title('Within and Between-subject correlation');
+    case 'AXES:globalRand'
+        
+        AR=sc1_sc2_functionalAtlas('MAP:RAND_global');
+        
+        colormap(hot);
+        imagesc(AR,[0 0.8]);
+        colorbar;
+        set(gca,'YTickLabel',{'MDTB:7','MDTB:10','MDTB:17','Task-Free:7','Task-Free:10','Task-Free:17'},'XTickLabel',{'1','2','3','4','5','6'});
+        set(gcf,'PaperPosition',[5 5 3 3]);
+        wysiwyg;
+        varargout={AR};
+        %         axis equal
+    case 'AXES:mapSimilarity'
+        sc1_sc2_functionalAtlas('MAP:Similarity')
         
     case 'FIGURE2' % Representational Structure
         sc1_sc2_functionalAtlas('AXES:MDS','all')
