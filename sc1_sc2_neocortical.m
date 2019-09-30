@@ -74,7 +74,7 @@ switch(what)
                 end;
             end;
         end
-    case 'SURF:map_con'         % STEP 11.5: Map con / ResMS (.nii) onto surface (.gifti)
+    case 'SURF:map_con'          % 1. Step: Map con / ResMS (.nii) onto surface (.gifti)
         sn    = returnSubjs;     % subjNum
         study = [1 2];
         glm  = 4;     % glmNum
@@ -168,13 +168,13 @@ switch(what)
                 for st=[1 2]
                     G{st}=gifti(fullfile(surfDir,sprintf('%s.%s.%s.con.%s.func.gii',subj_name{s},Hem{h},studyDir{st},resolution)));
                     N=size(G{st}.cdata,1);
-                    wcon{st} = [G{st}.cdata(:,2:end-1) zeros(N,1)]; % Add rest
-                    Ts = getrow(T,T.StudyNum==st);
-                    wcon{st}=bsxfun(@minus,wcon{st},mean(wcon{st}(:,Ts.overlap==1),2));
+                    wcon{st} = [G{st}.cdata(:,2:end-1) zeros(N,1)]; % Throw out instruction and add rest
+                    Ts = getrow(T,T.StudyNum==st);                   % Get info of the contrast for this experiment
+                    wcon{st}=bsxfun(@minus,wcon{st},mean(wcon{st}(:,Ts.overlap==1),2)); % REmovemean of the shared conditions 
                 end;
-                resMS=(G{1}.cdata(:,end)+G{1}.cdata(:,end))/2;
-                W = [wcon{1} wcon{2}];
-                W = bsxfun(@rdivide,W,resMS); % Common noise normalization
+                resMS=(G{1}.cdata(:,end)+G{1}.cdata(:,end))/2;  % Pool the residual mean square variances across experiments 
+                W = [wcon{1} wcon{2}];                          % Concatinate the data 
+                W = bsxfun(@rdivide,W,sqrt(resMS));             % Common noise normalization by sqrt of resMS
                 outfile = fullfile(surfDir,sprintf('%s.%s.wcon.%s.func.gii',subj_name{s},Hem{h},resolution));
                 Go=surf_makeFuncGifti(W,'columnNames',T.condNames,'anatomicalStruct',hemname{h});
                 save(Go,outfile);
@@ -184,7 +184,7 @@ switch(what)
     case 'SURF:groupFiles'
         hemis=[1 2];
         sn = returnSubjs;
-        cd(fullfile(wbDir,'group164k'));
+        cd(fullfile(wbDir,'group32k'));
         for h=hemis
             inputFiles = {};
             for s=1:length(sn)
@@ -367,9 +367,11 @@ switch(what)
             load(fullfile(wbDir,'group32k',distFile));
             
             % Now find the pairs that we care about to safe memory
+            % CHANGE: Exclude only medial walll! 
             vertIdx = find(parcel(:,h)>0);
             avrgDs = avrgDs(vertIdx,vertIdx);
             par    = parcel(vertIdx,h);
+            % END CHANGE 
             
             [row,col,avrgD]=find(avrgDs);
             inSp = sub2ind(size(avrgDs),row,col);
@@ -386,9 +388,14 @@ switch(what)
                         condIdx=D1.condNum;
                 end
                 for s=sn
+                    % CHANGE: This should be re-written to start from the wcon
+                    % data
+                    % Start 
                     A=gifti(fullfile(wbDir,subj_name{s},sprintf('%s.%s.%s.con.%s.func.gii',subj_name{s},Hem{h},studyDir{ts},resolution)));
                     Data = [A.cdata(:,2:end-1) zeros(size(A.cdata,1),1)];
                     Data = bsxfun(@rdivide,Data,sqrt(A.cdata(:,end)));
+                    
+                    % End CHANGE 
                     Data = Data(vertIdx,condIdx); % Take the right subset
                     Data = bsxfun(@minus,Data,mean(Data,2));
                     Data = single(Data');
