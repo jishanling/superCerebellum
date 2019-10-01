@@ -392,8 +392,8 @@ switch(what)
                     % data
                     % Start 
                     A=gifti(fullfile(wbDir,subj_name{s},sprintf('%s.%s.%s.con.%s.func.gii',subj_name{s},Hem{h},studyDir{ts},resolution)));
-                    Data = [A.cdata(:,2:end-1) zeros(size(A.cdata,1),1)];
-                    Data = bsxfun(@rdivide,Data,sqrt(A.cdata(:,end)));
+                    Data = [A.cdata(:,2:end-1) zeros(size(A.cdata,1),1)]; % bRemove intrstuction and add rest 
+                    Data = bsxfun(@rdivide,Data,sqrt(A.cdata(:,end)));      % Noise normalize 
                     
                     % End CHANGE 
                     Data = Data(vertIdx,condIdx); % Take the right subset
