@@ -3,7 +3,8 @@ function varargout=sc1_sc2_neocortical(what,varargin)
 % This is modernized from the analysis in sc1_sc2_imana, in that it uses
 % the new FS_LR template
 
-baseDir    = '/Volumes/MotorControl/data/super_cerebellum_new';
+% baseDir    = '/Volumes/MotorControl/data/super_cerebellum_new';
+baseDir    = 'Z:\data\super_cerebellum_new';
 wbDir      = fullfile(baseDir,'sc1','surfaceWB');
 fsDir      = fullfile(baseDir,'sc1','surfaceFreesurfer');
 atlasDir   = '~/Data/Atlas_templates/standard_mesh';
@@ -188,7 +189,7 @@ switch(what)
         for h=hemis
             inputFiles = {};
             for s=1:length(sn)
-                inputFiles{s}  = fullfile(wbDir, subj_name{sn(s)},sprintf('%s.%s.wcon.func.gii',subj_name{sn(s)},Hem{h}));
+                inputFiles{s}  = fullfile(wbDir, subj_name{sn(s)},sprintf('%s.%s.wcon.32k.func.gii',subj_name{sn(s)},Hem{h}));
                 columnName{s} = subj_name{sn(s)};
             end;
             groupfile=sprintf('group.wcon.%s.func.gii',Hem{h});
@@ -360,15 +361,26 @@ switch(what)
         parcel = [];         % N*2 matrix for both hemispheres
         RR=[];
         distFile = 'distAvrg_sp';
-        vararginoptions(varargin,{'sn','hem','bins','parcel','condType','taskSet','resolution','distFile'});
+        icoRes = 2562;
+        vararginoptions(varargin,{'sn','hem','bins','parcel','condType','taskSet','resolution','distFile','icoRes'});
         D=dload(fullfile(baseDir,'sc1_sc2_taskConds.txt'));
         numBins = numel(bins)-1;
         for h=hem
             load(fullfile(wbDir,'group32k',distFile));
             
-            % Now find the pairs that we care about to safe memory
+            % Now find the pairs that we care about to safe memory 
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             % CHANGE: Exclude only medial walll! 
-            vertIdx = find(parcel(:,h)>0);
+            % The node indices of medial wall are defined by taking the union of seven existing parcellations, including
+            % 'Glasser','Yeo17','Yeo7','Power2011','Yeo2015','Desikan', and 'Dextrieux', which stored as external 
+            % .mat files "medialWallIndex_%hem.mat" for both hems.
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            mw = load(fullfile(wbDir, sprintf('group%s', resolution), sprintf('medialWallIndex_%s.mat', Hem{h})));
+            labels = gifti(fullfile(wbDir, sprintf('group%s', resolution), sprintf('Icosahedron-%d.%s.%s.label.gii',icoRes,resolution,Hem{h})));
+            
+            % Here, we use it to find the union with the label-0 of Icosahedron-(icoRes) as our final medial wall
+            % vertIdx is the indices that we want (without medial wall)
+            vertIdx = setdiff(1:size(avrgDs), union(mw.mwIdx, find(labels.cdata(:,1)==0))); 
             avrgDs = avrgDs(vertIdx,vertIdx);
             par    = parcel(vertIdx,h);
             % END CHANGE 
@@ -388,8 +400,7 @@ switch(what)
                         condIdx=D1.condNum;
                 end
                 for s=sn
-                    % CHANGE: This should be re-written to start from the wcon
-                    % data
+                    % CHANGE: This should be re-written to start from the wcon data
                     % Start 
                     A=gifti(fullfile(wbDir,subj_name{s},sprintf('%s.%s.%s.con.%s.func.gii',subj_name{s},Hem{h},studyDir{ts},resolution)));
                     Data = [A.cdata(:,2:end-1) zeros(size(A.cdata,1),1)]; % bRemove intrstuction and add rest 
